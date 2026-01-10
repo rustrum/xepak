@@ -1,0 +1,6 @@
+[[endpoint]]
+uri = "/user/list"
+
+[endpoint.action]
+type = "sql"
+query = "SQL Query"

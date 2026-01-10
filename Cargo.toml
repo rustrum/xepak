@@ -1,0 +1,20 @@
+[workspace]
+resolver = "3"
+members = ["sql-key-args", "xepak"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+homepage = "https://github.com/rustrum/xepak"
+repository = "https://github.com/rustrum/xepak.git"
+license-file = "LICENSE-TERMS"
+description = "DSL based REST API server will be here"
+keywords = ["api", "rest", "db", "proxy", "sql"]
+
+[workspace.dependencies]
+
+async-lock = { version = "3.4", features = ["std"] }
+env_logger = "0.11"
+rhai = { version = "1.23", features = ["sync", "no_custom_syntax", "serde"] }
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.9"
