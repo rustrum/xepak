@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
-use std::os::unix::raw::mode_t;
+use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -14,16 +14,16 @@ use actix_web::{
 };
 
 use crate::XepakError;
-use crate::cfg::{Endpoint, StorageActionQuery, XepakConf, XepakSpecs};
-use crate::storage::{StorageLink, init_storage_links};
+use crate::cfg::{EndpointSpecs, ResourceSpecs, XepakConf, XepakSpecs};
+use crate::storage::{Storage, init_storage_connectors};
 
 #[derive(Clone)]
 struct XepakAppData {
-    storage_links: HashMap<String, StorageLink>,
+    storage_links: HashMap<String, Storage>,
 }
 
 impl XepakAppData {
-    fn get_data_source(&self, key: &str) -> Option<&StorageLink> {
+    fn get_data_source(&self, key: &str) -> Option<&Storage> {
         self.storage_links.get(key)
     }
 }
@@ -32,14 +32,18 @@ fn init_app_data() -> XepakAppData {
     unimplemented!()
 }
 
-pub async fn init_server(config: XepakConf, specs: XepakSpecs) -> Result<Server, XepakError> {
+pub async fn init_server(
+    conf_dir: PathBuf,
+    config: XepakConf,
+    specs: XepakSpecs,
+) -> Result<Server, XepakError> {
     // if config.specs.deceit.is_empty() {
     //     log::warn!("Starting server without deceits in specs");
     // }
     // let port = config.port;
     let port = 8080;
 
-    let storage_links = init_storage_links(&config.storage).await;
+    let storage_links = init_storage_connectors(&conf_dir, &config.storage).await;
     let app_data = XepakAppData { storage_links };
     // let data: Data<ApateState> = Data::new(config.into_state());
 
@@ -73,7 +77,7 @@ pub async fn init_server(config: XepakConf, specs: XepakSpecs) -> Result<Server,
     Ok(server)
 }
 
-pub fn configure_endpoint_handlers(cfg: &mut ServiceConfig, endpoints: &[Endpoint]) {
+pub fn configure_endpoint_handlers(cfg: &mut ServiceConfig, endpoints: &[EndpointSpecs]) {
     for ep in endpoints {
         cfg.service(EndpointHandler::new(ep.clone()));
     }
@@ -82,11 +86,11 @@ pub fn configure_endpoint_handlers(cfg: &mut ServiceConfig, endpoints: &[Endpoin
 type EndpointHandlerArgs = (HttpRequest, Data<XepakAppData>, Bytes);
 #[derive(Clone)]
 struct EndpointHandler {
-    ep: Arc<Endpoint>,
+    ep: Arc<EndpointSpecs>,
 }
 
 impl EndpointHandler {
-    fn new(ep: Endpoint) -> Self {
+    fn new(ep: EndpointSpecs) -> Self {
         Self { ep: Arc::new(ep) }
     }
 
@@ -97,8 +101,13 @@ impl EndpointHandler {
         _body: Bytes,
     ) -> HttpResponse {
         tracing::debug!("Handler called for {:?}", self.ep);
-        match &self.ep.action {
-            StorageActionQuery::Sql { data_source, query } => {
+        match &self.ep.resource {
+            ResourceSpecs::Sql { data_source, query } => {
+                let ds = state.get_data_source("default").expect("TODO");
+                let result = ds.execute(query).await.expect("TODO QUERY");
+
+
+                return HttpResponse::Ok().body(format!("{:?}", result));
                 // let ds = state.get_data_source(data_source).expect("TODO: fixme");
                 // ds.execute(query).await;
             }

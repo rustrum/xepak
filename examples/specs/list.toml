@@ -1,6 +1,6 @@
 [[endpoint]]
 uri = "/user/list"
 
-[endpoint.action]
+[endpoint.resource]
 type = "sql"
-query = "SQL Query"
+query = "SELECT * FROM users;"

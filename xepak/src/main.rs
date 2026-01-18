@@ -52,7 +52,7 @@ async fn main() -> Result<(), XepakError> {
 
     tracing::debug!("Specs: {xepak_specs:?}");
 
-    let server = init_server(xepak_conf, xepak_specs).await?;
+    let server = init_server(conf_dir, xepak_conf, xepak_specs).await?;
 
     server.await?;
 

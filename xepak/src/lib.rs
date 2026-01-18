@@ -1,6 +1,7 @@
 pub mod cfg;
 pub mod server;
 pub mod storage;
+pub mod types;
 
 use std::{collections::HashMap, default, hash::Hash};
 
@@ -18,7 +19,8 @@ pub enum XepakError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
-    
+    #[error("Decode error error: {0}")]
+    Decode(String)
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

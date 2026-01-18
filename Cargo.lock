@@ -2677,6 +2677,7 @@ dependencies = [
  "getopt3",
  "serde",
  "sqlx",
+ "sqlx-core",
  "thiserror",
  "toml",
  "tracing",

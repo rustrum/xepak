@@ -1,0 +1,4 @@
+[[storage]]
+id = "default"
+type = "sqlite"
+file = "./db.sqlite3"

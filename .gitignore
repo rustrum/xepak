@@ -1,4 +1,5 @@
 .env
+**/db.sqlite3
 
 # Rust
 debug

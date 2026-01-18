@@ -21,6 +21,7 @@ serde.workspace = true
 toml.workspace = true
 
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
+sqlx-core = "0.8"
 thiserror = "2.0"
 
 tracing = "0.1"

@@ -51,7 +51,7 @@ pub struct XepakSpecs {
     #[serde(default)]
     pub script: Vec<RhaiScript>,
     #[serde(default)]
-    pub endpoint: Vec<Endpoint>,
+    pub endpoint: Vec<EndpointSpecs>,
 }
 
 impl XepakSpecs {
@@ -98,9 +98,9 @@ pub struct RhaiScript {
 }
 
 #[derive(Clone, Debug, Deserialize)]
-pub struct Endpoint {
+pub struct EndpointSpecs {
     pub uri: String,
-    pub action: StorageActionQuery,
+    pub resource: ResourceSpecs,
     /// Expected (allowed) input arguments (URI path args already included)
     #[serde(default)]
     pub args: Vec<String>,
@@ -109,7 +109,7 @@ pub struct Endpoint {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum StorageActionQuery {
+pub enum ResourceSpecs {
     Sql {
         // TODO: add read/write attribute here?
         #[serde(default)]
