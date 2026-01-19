@@ -1,4 +1,4 @@
 [[storage]]
-id = "default"
+# id = "default"
 type = "sqlite"
 file = "./db.sqlite3"

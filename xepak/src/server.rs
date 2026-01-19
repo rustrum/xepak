@@ -2,9 +2,12 @@ use std::collections::HashMap;
 use std::net::Ipv4Addr;
 use std::path::PathBuf;
 use std::pin::Pin;
+use std::ptr::addr_eq;
 use std::sync::Arc;
 
+use actix_web::body::BoxBody;
 use actix_web::dev::{HttpServiceFactory, Server};
+use actix_web::http::header::{ACCEPT, CONTENT_TYPE};
 use actix_web::middleware::Logger;
 use actix_web::web::ServiceConfig;
 use actix_web::{App, Handler, HttpResponse};
@@ -12,10 +15,16 @@ use actix_web::{
     HttpRequest, HttpServer,
     web::{self, Bytes, Data},
 };
+use serde::Serialize;
 
 use crate::XepakError;
 use crate::cfg::{EndpointSpecs, ResourceSpecs, XepakConf, XepakSpecs};
 use crate::storage::{Storage, init_storage_connectors};
+
+const OFFSET_HEADER: &str = "X-Offset";
+const LIMIT_HEADER: &str = "X-Limit";
+const CONTENT_TYPE_CBOR: &str = "application/cbor";
+const CONTENT_TYPE_JSON: &str = "application/json";
 
 #[derive(Clone)]
 struct XepakAppData {
@@ -96,23 +105,25 @@ impl EndpointHandler {
 
     async fn handle(
         &self,
-        _req: HttpRequest,
+        req: HttpRequest,
         state: Data<XepakAppData>,
         _body: Bytes,
     ) -> HttpResponse {
         tracing::debug!("Handler called for {:?}", self.ep);
-        match &self.ep.resource {
+        let result = match &self.ep.resource {
             ResourceSpecs::Sql { data_source, query } => {
-                let ds = state.get_data_source("default").expect("TODO");
-                let result = ds.execute(query).await.expect("TODO QUERY");
-
-
-                return HttpResponse::Ok().body(format!("{:?}", result));
-                // let ds = state.get_data_source(data_source).expect("TODO: fixme");
-                // ds.execute(query).await;
+                let ds = state.get_data_source(&data_source).expect("TODO");
+                ds.execute(query).await.expect("TODO QUERY")
             }
+        };
+
+        if let Some(accept) = req.headers().get(ACCEPT)
+            && accept.eq(CONTENT_TYPE_CBOR)
+        {
+            to_cbor_response(&result, 0, 0)
+        } else {
+            to_json_response(&result, 0, 0)
         }
-        HttpResponse::Ok().body(format!("{:?}", self.ep))
     }
 }
 
@@ -149,5 +160,51 @@ impl HttpServiceFactory for EndpointHandler {
         //     // }))
         //     // .route(web::route().to(self))
         //     .register(config);
+    }
+}
+
+fn to_json_response<T: Serialize>(data: &T, offset: usize, limit: usize) -> HttpResponse<BoxBody> {
+    match serde_json::to_string(data) {
+        Ok(body) => {
+            let mut resp = HttpResponse::Ok();
+            resp.append_header((CONTENT_TYPE, CONTENT_TYPE_JSON));
+            if (limit > 0) {
+                resp.append_header((LIMIT_HEADER, limit.to_string()));
+            }
+            if (offset > 0) {
+                resp.append_header((OFFSET_HEADER, offset.to_string()));
+            }
+
+            resp.body(body)
+        }
+        Err(e) => {
+            tracing::error!("Can't serialize response: {e}");
+            HttpResponse::InternalServerError().body(format!("{e}"))
+        }
+    }
+}
+
+fn to_cbor_response<T: minicbor::Encode<()>>(
+    data: &T,
+    offset: usize,
+    limit: usize,
+) -> HttpResponse<BoxBody> {
+    match minicbor::to_vec(data) {
+        Ok(body) => {
+            let mut resp = HttpResponse::Ok();
+            resp.append_header((CONTENT_TYPE, CONTENT_TYPE_CBOR));
+            if (limit > 0) {
+                resp.append_header((LIMIT_HEADER, limit.to_string()));
+            }
+            if (offset > 0) {
+                resp.append_header((OFFSET_HEADER, offset.to_string()));
+            }
+
+            resp.body(body)
+        }
+        Err(e) => {
+            tracing::error!("Can't serialize response: {e}");
+            HttpResponse::InternalServerError().body(format!("{e}"))
+        }
     }
 }

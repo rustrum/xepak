@@ -28,7 +28,7 @@ pub enum XepakType {
     Text,
 }
 
-/// Unified value wrapper for input/output (IDK a better solution expect as a using enum yet).
+/// Unified value wrapper for input/output (IDK a better solution than using enum yet).
 ///
 /// It should be able to serialize into proper JSON/CBOR representation.
 /// Plus it must be compatible with sqlx type system to be used as a query argument.
@@ -82,6 +82,7 @@ where
         Ok(res)
     }
 }
+
 /*
 SQLITE
             DataType::Null => "NULL",
@@ -108,5 +109,20 @@ impl Serialize for XepakValue {
             XepakValue::Integer(v) => ser.serialize_i128(*v),
             XepakValue::Text(v) => ser.serialize_str(v.as_str()),
         }
+    }
+}
+
+impl minicbor::Encode<()> for XepakValue {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        _ctx: &mut (),
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        match self {
+            XepakValue::Null => e.null(),
+            XepakValue::Integer(v) => e.encode(*v as i64),
+            XepakValue::Text(v) => e.encode(v),
+        };
+        Ok(())
     }
 }

@@ -59,6 +59,7 @@ pub async fn init_storage_connectors(
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum StorageSettings {
     Sqlite {
+        #[serde(default)]
         id: String,
         file: String,
         #[serde(default)]
