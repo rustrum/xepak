@@ -12,10 +12,12 @@ description = "DSL based REST API server will be here"
 keywords = ["api", "rest", "db", "proxy", "sql"]
 
 [workspace.dependencies]
+sql-key-args = { path = "./sql-key-args" }
 
 async-lock = { version = "3.4", features = ["std"] }
 env_logger = "0.11"
 rhai = { version = "1.23", features = ["sync", "no_custom_syntax", "serde"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
+serde_urlencoded = "0.7"
 toml = "0.9"

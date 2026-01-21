@@ -19,8 +19,11 @@ pub enum XepakError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
+    #[error("Input error: {0}")]
+    Input(String),
+
     #[error("Decode error error: {0}")]
-    Decode(String)
+    Decode(String),
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

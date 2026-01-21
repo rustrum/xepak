@@ -1,20 +1,8 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fs,
-    path::PathBuf,
-};
+use std::{collections::HashSet, fs, path::PathBuf};
 
 use serde::Deserialize;
 
 use crate::{XepakError, storage::StorageSettings};
-
-fn default_port() -> u16 {
-    8080
-}
-
-fn default_specs_dir() -> PathBuf {
-    PathBuf::from("./specs")
-}
 
 /// Main configuration file that properties could be overwritten via ENV or not ? (TODO).
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -100,11 +88,21 @@ pub struct RhaiScript {
 #[derive(Clone, Debug, Deserialize)]
 pub struct EndpointSpecs {
     pub uri: String,
+
     pub resource: ResourceSpecs,
     /// Expected (allowed) input arguments (URI path args already included)
+
     #[serde(default)]
     pub args: Vec<String>,
     // pub validators: Vec<Validator>,
+    #[serde(default = "default_limit_key")]
+    pub limit_arg: String,
+
+    #[serde(default = "default_limit_max")]
+    pub limit_max: usize,
+
+    #[serde(default = "default_offset_key")]
+    pub offset_arg: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -115,6 +113,12 @@ pub enum ResourceSpecs {
         #[serde(default)]
         data_source: String,
         query: String,
+        /// Add pagination to SQL query offset/limit
+        #[serde(default)]
+        paginated: bool,
+        /// Response will be a single record instead of a list
+        #[serde(default)]
+        one_record: bool,
     },
 }
 
@@ -157,4 +161,24 @@ pub fn load_specs_from_dir(dir_path: PathBuf) -> Result<XepakSpecs, XepakError> 
     let _ = result.validate();
 
     Ok(result)
+}
+
+fn default_port() -> u16 {
+    8080
+}
+
+fn default_specs_dir() -> PathBuf {
+    PathBuf::from("./specs")
+}
+
+fn default_limit_key() -> String {
+    "limit".to_string()
+}
+
+fn default_offset_key() -> String {
+    "offset".to_string()
+}
+
+fn default_limit_max() -> usize {
+    1000
 }

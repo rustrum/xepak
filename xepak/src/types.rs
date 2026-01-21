@@ -25,6 +25,7 @@ impl<'r, DB: sqlx::Database> SqlxValue<'r, DB> {
 pub enum XepakType {
     Null,
     Integer,
+    Float,
     Text,
 }
 
@@ -40,9 +41,12 @@ pub enum XepakValue {
     Null,
     /// Any integer type
     Integer(i128),
+    /// Any float type
+    Float(f64),
     /// Any text type: TEXT, VARCHAR, etc.
     /// It is default type for de/serialization of any unknown data.
     Text(String),
+    //TODO add BLOB
 }
 
 impl XepakValue {
@@ -51,6 +55,7 @@ impl XepakValue {
         match self {
             Self::Null => XepakType::Null,
             Self::Integer(_) => XepakType::Integer,
+            Self::Float(_) => XepakType::Float,
             Self::Text(_) => XepakType::Text,
         }
     }
@@ -59,6 +64,7 @@ impl XepakValue {
 impl<'r, DB: sqlx::Database> TryFrom<SqlxValue<'r, DB>> for XepakValue
 where
     for<'a> i64: sqlx::Decode<'a, DB> + sqlx::Type<DB>,
+    for<'a> f64: sqlx::Decode<'a, DB> + sqlx::Type<DB>,
     for<'a> String: sqlx::Decode<'a, DB> + sqlx::Type<DB>,
 {
     type Error = sqlx::error::BoxDynError;
@@ -69,12 +75,19 @@ where
         // Use the Database's TypeInfo to check column type names
         let type_info = value.type_info();
 
+        //Maybe use type_info.type_compatible(other)
         let res = match type_info.name() {
             "NULL" => Self::Null,
             "INTEGER" | "INT" | "BIGINT" => {
                 // TODO handle unsigned integers better
                 let v: i64 = sqlx::Decode::decode(value)?;
                 Self::Integer(v as i128)
+            }
+            // TODO add BLOB
+            "REAL" => {
+                // TODO handle unsigned integers better
+                let v: f64 = sqlx::Decode::decode(value)?;
+                Self::Float(v)
             }
             _ => Self::Text(sqlx::Decode::decode(value)?),
         };
@@ -107,6 +120,7 @@ impl Serialize for XepakValue {
         match self {
             XepakValue::Null => ser.serialize_none(),
             XepakValue::Integer(v) => ser.serialize_i128(*v),
+            XepakValue::Float(v) => ser.serialize_f64(*v),
             XepakValue::Text(v) => ser.serialize_str(v.as_str()),
         }
     }
@@ -119,9 +133,11 @@ impl minicbor::Encode<()> for XepakValue {
         _ctx: &mut (),
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
         match self {
-            XepakValue::Null => e.null(),
-            XepakValue::Integer(v) => e.encode(*v as i64),
-            XepakValue::Text(v) => e.encode(v),
+            XepakValue::Null => e.null()?,
+            // TODO deal with possible unsigned integers here
+            XepakValue::Integer(v) => e.encode(*v as i64)?,
+            XepakValue::Float(v) => e.encode(v)?,
+            XepakValue::Text(v) => e.encode(v)?,
         };
         Ok(())
     }

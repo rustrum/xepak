@@ -17,11 +17,14 @@ default = ["server"]
 server = ["getopt3"]
 
 [dependencies]
+sql-key-args.workspace = true
+
 serde.workspace = true
 serde_json.workspace = true
+serde_urlencoded.workspace = true
 toml.workspace = true
 
-minicbor = { version = "2.1", features = ["std", "alloc"]}
+minicbor = { version = "2.1", features = ["std", "alloc"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
 sqlx-core = "0.8"
 thiserror = "2.0"

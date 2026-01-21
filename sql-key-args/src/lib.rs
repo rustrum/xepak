@@ -1,29 +1,133 @@
-use std::{
-    mem::offset_of,
-    ops::RangeInclusive,
-    str::{CharIndices, Chars},
-};
+use std::{borrow::Cow, ops::RangeInclusive, str::CharIndices};
 
-pub type KeyArgPosition<'a> = (&'a str, RangeInclusive<usize>);
+pub type KeyArgPositionRef<'a> = (&'a str, RangeInclusive<usize>);
 
-pub struct SqlKpStruct<T> {
-    pub sql: T,
-    pub args: T,
+pub struct ParametrizedQuery {
+    query: String,
+    args: Vec<String>,
+    positions: Vec<RangeInclusive<usize>>,
 }
 
-/// Convert key args query to pos args query.
-///
-/// - `query` query with key arguments
-/// - `pos_arg` positional argument placeholder ("?" for SQL)
-///
-/// Returns pos arg query and list of positional arguments names in order they appear in the query.
-pub fn query_key_to_pos_args(query: &str, pos_arg: &str) -> (String, Vec<String>) {
-    unimplemented!()
+impl ParametrizedQuery {
+    pub fn new(query: String) -> Self {
+        let mut args = Vec::new();
+        let mut positions = Vec::new();
+        for (arg, pos) in SqlLexer::new(&query) {
+            args.push(arg.to_string());
+            positions.push(pos);
+        }
+        Self {
+            query,
+            args,
+            positions,
+        }
+    }
+
+    pub fn has_args(&self) -> bool {
+        !self.args.is_empty()
+    }
+
+    pub fn get_args(&self) -> &[String] {
+        &self.args
+    }
+
+    /// Return original query
+    pub fn get_query(&self) -> &str {
+        &self.query
+    }
+
+    /// Convert key args query to pos args query.
+    ///
+    /// - `query` query with key arguments
+    /// - `pos_arg` positional argument placeholder ("?" for SQL)
+    ///
+    /// Returns original query if no pos args available or query with pos args.
+    pub fn build_query(&self, pos_arg: &str) -> String {
+        build_pos_query(&self.query, &self.positions, pos_arg)
+    }
+}
+
+/// Same as [`ParametrizedQuery`], but with a reference to the SQL string.
+pub struct ParametrizedQueryRef<'a> {
+    query: &'a str,
+    args: Vec<&'a str>,
+    positions: Vec<RangeInclusive<usize>>,
+}
+
+impl<'a> ParametrizedQueryRef<'a> {
+    pub fn new(query: &'a str) -> Self {
+        let mut args = Vec::new();
+        let mut positions = Vec::new();
+        for (arg, pos) in SqlLexer::new(&query) {
+            args.push(arg);
+            positions.push(pos);
+        }
+
+        Self {
+            query,
+            args,
+            positions,
+        }
+    }
+
+    pub fn has_args(&self) -> bool {
+        !self.args.is_empty()
+    }
+
+    pub fn get_args(&self) -> &[&'a str] {
+        &self.args
+    }
+
+    /// Return original query
+    pub fn get_query(&self) -> &'a str {
+        self.query
+    }
+
+    /// Convert key args query to pos args query.
+    ///
+    /// - `query` query with key arguments
+    /// - `pos_arg` positional argument placeholder ("?" for SQL)
+    ///
+    /// Returns original query if no pos args available or query with pos args.
+    pub fn build_query(&self, pos_arg: &str) -> Cow<'a, str> {
+        if self.has_args() {
+            Cow::Owned(build_pos_query(self.query, &self.positions, pos_arg))
+        } else {
+            Cow::Borrowed(self.query)
+        }
+    }
+}
+
+fn build_pos_query(query: &str, ranges: &[RangeInclusive<usize>], pos_arg: &str) -> String {
+    let mut result = String::with_capacity(query.len());
+    let mut last_index = 0;
+
+    for rng in ranges {
+        let start = *rng.start();
+        let end = *rng.end() + 1;
+        // Append the text before the range
+        if start > last_index {
+            result.push_str(&query[last_index..start]);
+        }
+
+        // Append the placeholder
+        result.push_str(pos_arg);
+
+        // Move the cursor forward
+        last_index = last_index.max(end);
+    }
+
+    // Append any remaining text after the last range
+    if last_index < query.len() {
+        result.push_str(&query[last_index..]);
+    }
+
+    result
 }
 
 /// Replace key args with pos args in input.
 /// NOTE `key_args` input expected to be sorted according to appearance in the `query`.
-pub fn query_to_pos_args(query: &str, pos_arg: &str, key_args: &[KeyArgPosition]) -> String {
+pub fn query_to_pos_args(query: &str, pos_arg: &str, key_args: &[KeyArgPositionRef]) -> String {
     let mut result = String::new();
     let mut offset_from = 0;
     for (_, range) in key_args {
@@ -45,7 +149,7 @@ pub struct SqlLexer<'a> {
 }
 
 impl<'a> SqlLexer<'a> {
-    fn new(sql: &'a str) -> Self {
+    pub fn new(sql: &'a str) -> Self {
         Self {
             sql,
             sql_index: sql.char_indices(),
@@ -53,7 +157,7 @@ impl<'a> SqlLexer<'a> {
         }
     }
 
-    pub fn into_key_args(self) -> Vec<KeyArgPosition<'a>> {
+    pub fn into_key_args(self) -> Vec<KeyArgPositionRef<'a>> {
         let mut result = Vec::new();
         for karg in self {
             result.push(karg);
@@ -70,7 +174,7 @@ impl<'a> SqlLexer<'a> {
         }
     }
 
-    pub fn next_key_arg(&mut self) -> Option<KeyArgPosition<'a>> {
+    pub fn next_key_arg(&mut self) -> Option<KeyArgPositionRef<'a>> {
         let mut state = LexerState::Sql;
         while let Some(cur_char) = self.next_char() {
             // DEBUG \(^_^)/
@@ -168,7 +272,7 @@ impl<'a> SqlLexer<'a> {
 }
 
 impl<'a> Iterator for SqlLexer<'a> {
-    type Item = KeyArgPosition<'a>;
+    type Item = KeyArgPositionRef<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.next_key_arg()
@@ -230,20 +334,52 @@ mod tests {
         assert_eq!(range, 22..=29);
 
         let mut lexer =
-            SqlLexer::new("SELECT {{key1}} WHERE x={{key2}} {{notkey1},{notkey2}} y={{key3}}");
+            SqlLexer::new("SELECT {{key1}} WHERE x={{key_2}} {{notkey1},{notkey2}} y={{key-3}}");
 
         let (key, range) = lexer.next_key_arg().unwrap();
         assert_eq!(key, "key1");
         assert_eq!(range, 7..=14);
 
         let (key, range) = lexer.next_key_arg().unwrap();
-        assert_eq!(key, "key2");
-        assert_eq!(range, 24..=31);
+        assert_eq!(key, "key_2");
+        assert_eq!(range, 24..=32);
 
         let (key, range) = lexer.next_key_arg().unwrap();
-        assert_eq!(key, "key3");
-        assert_eq!(range, 57..=64);
+        assert_eq!(key, "key-3");
+        assert_eq!(range, 58..=66);
 
         assert!(lexer.next_key_arg().is_none());
+        
+        let mut lexer =
+            SqlLexer::new("SELECT * FROM users LIMIT {{--LIMIT--}} OFFSET {{__OFFSET__}}");
+
+        let (key, range) = lexer.next_key_arg().unwrap();
+        assert_eq!(key, "--LIMIT--");
+        assert_eq!(range, 26..=38);
+
+        let (key, range) = lexer.next_key_arg().unwrap();
+        assert_eq!(key, "__OFFSET__");
+        assert_eq!(range, 47..=60);
+
+        assert!(lexer.next_key_arg().is_none());
+    }
+
+    #[test]
+    fn parametrized_query() {
+        let query = "SELECT {{key1}} WHERE x={{key2}} {{notkey1},{notkey2}} y={{key3}}";
+        let query_simple = "SELECT * FROM table WHERE id = '1'";
+
+        let qa = ParametrizedQueryRef::new(query);
+        let pos_query = qa.build_query("?");
+
+        assert_eq!(
+            pos_query.to_string(),
+            "SELECT ? WHERE x=? {{notkey1},{notkey2}} y=?"
+        );
+
+        let qa = ParametrizedQueryRef::new(query_simple);
+        let pos_query = qa.build_query("?");
+
+        assert_eq!(pos_query.to_string(), query_simple);
     }
 }

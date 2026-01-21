@@ -3,4 +3,4 @@ uri = "/user/list"
 
 [endpoint.resource]
 type = "sql"
-query = "SELECT * FROM users;"
+query = "SELECT * FROM users LIMIT {{-limit-}} OFFSET {{-offset-}}"

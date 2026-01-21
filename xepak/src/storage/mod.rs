@@ -1,18 +1,16 @@
 use std::collections::HashMap;
-use std::hash::Hash;
-use std::marker::PhantomData;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use crate::XepakError;
 use crate::types::{Record, SqlxValue, XepakValue};
-use serde::de::value;
-use serde::ser::SerializeStruct;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use sql_key_args::{ParametrizedQuery, ParametrizedQueryRef};
 use sqlx::sqlite::SqliteConnectOptions;
-use sqlx::{Database, QueryBuilder, TypeInfo, ValueRef};
 use sqlx::{Row, Sqlite, SqlitePool};
 use sqlx_core::column::Column;
+
+pub const LIMIT_KEY: &str = "-limit-";
+pub const OFFSET_KEY: &str = "-offset-";
 
 pub async fn init_storage_connectors(
     conf_dir: &PathBuf,
@@ -81,15 +79,38 @@ pub struct Storage {
 }
 
 impl Storage {
-    pub async fn execute(&self, query: &str) -> Result<Vec<Record>, XepakError> {
-        // QueryBuilder::with_arguments(init, arguments)
+    pub async fn execute<RA: SqlxRequestArgs>(
+        &self,
+        request: ResourceRequest<'_, RA>,
+    ) -> Result<Vec<Record>, XepakError> {
         let mut connection = self.pool.acquire().await.unwrap();
-        // self.pool.
-        tracing::debug!("Executing query: {}", query);
-        let result = sqlx::query(query)
-            .fetch_all(&mut *connection)
-            .await
-            .expect("TODO");
+
+        let pquery = ParametrizedQueryRef::new(request.query);
+
+        tracing::debug!("Executing query: {}", pquery.get_query());
+
+        let query = pquery.build_query("?");
+
+        tracing::debug!("Executing build: {}", query);
+        let mut sql_query = sqlx::query(query.as_ref());
+
+        tracing::debug!("Query arguments: {:?}", pquery.get_args());
+        for argument_name in pquery.get_args() {
+            let arg = *argument_name;
+            sql_query = match arg {
+                LIMIT_KEY => {
+                    tracing::debug!("Query limit: {}", request.args.get_rows_limit());
+                    sql_query.bind(request.args.get_rows_limit() as i64)
+                }
+                OFFSET_KEY => {
+                    tracing::debug!("Query offset: {}", request.args.get_rows_offset());
+                    sql_query.bind(request.args.get_rows_offset() as i64)
+                }
+                _ => request.args.bind_arg(arg, sql_query)?,
+            };
+        }
+
+        let result = sql_query.fetch_all(&mut *connection).await.expect("TODO");
 
         let mut out = Vec::new();
         for row in result {
@@ -108,7 +129,16 @@ impl Storage {
     }
 }
 
-pub struct ResourceRequest {}
+pub struct ResourceRequest<'a, RA: RequestArgs> {
+    args: &'a RA,
+    query: &'a str,
+}
+
+impl<'a, RA: RequestArgs> ResourceRequest<'a, RA> {
+    pub fn new(query: &'a str, args: &'a RA) -> Self {
+        Self { args, query }
+    }
+}
 
 /// Lightweight schema enforcement.
 /// If field is not provided in schema it's type should be resolved automatically
@@ -119,9 +149,46 @@ pub struct Resource {
 }
 
 impl Resource {
-    pub async fn request(&self, request: &ResourceRequest) -> Result<Vec<Record>, XepakError> {
-        unimplemented!()
-    }
+    // pub async fn request(&self, request: &ResourceRequest) -> Result<Vec<Record>, XepakError> {
+    //     unimplemented!()
+    // }
+}
+
+// impl<'q, DB: Database> Query<'q, DB, <DB as Database>::Arguments<'q>> {
+//     /// Bind a value for use with this SQL query.
+//     ///
+//     /// If the number of times this is called does not match the number of bind parameters that
+//     /// appear in the query (`?` for most SQL flavors, `$1 .. $N` for Postgres) then an error
+//     /// will be returned when this query is executed.
+//     ///
+//     /// There is no validation that the value is of the type expected by the query. Most SQL
+//     /// flavors will perform type coercion (Postgres will return a database error).
+//     ///
+//     /// If encoding the value fails, the error is stored and later surfaced when executing the query.
+//     pub fn bind<T: 'q + Encode<'q, DB> + Type<DB>>(mut self, value: T) -> Self {
+
+//     pub fn query<DB>(sql: &str) -> Query<'_, DB, <DB as Database>::Arguments<'_>>
+// where
+//     DB: Database,
+pub trait RequestArgs {
+    /// Return records fetch limit
+    fn get_rows_limit(&self) -> usize;
+
+    /// Return records fetch offset
+    fn get_rows_offset(&self) -> usize;
+}
+
+/// SQLx related request args bind functionality
+pub trait SqlxRequestArgs: RequestArgs {
+    fn bind_arg<DB>(
+        &self,
+        arg_name: &str,
+        query: sqlx::query::Query<'_, DB, <DB>::Arguments<'_>>,
+    ) -> Result<sqlx::query::Query<'_, DB, <DB>::Arguments<'_>>, XepakError>
+    where
+        DB: sqlx::Database;
+
+    // fn get_offset_limit(&self)
 }
 
 // pub struct Record {}
