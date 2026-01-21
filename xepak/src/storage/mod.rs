@@ -1,12 +1,14 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use crate::XepakError;
 use crate::types::{Record, SqlxValue, XepakValue};
 use serde::Deserialize;
-use sql_key_args::{ParametrizedQuery, ParametrizedQueryRef};
+use sql_key_args::ParametrizedQueryRef;
+use sqlx::any::AnyConnectOptions;
 use sqlx::sqlite::SqliteConnectOptions;
-use sqlx::{Row, Sqlite, SqlitePool};
+use sqlx::{AnyPool, ConnectOptions, Row};
 use sqlx_core::column::Column;
 
 pub const LIMIT_KEY: &str = "-limit-";
@@ -37,10 +39,13 @@ pub async fn init_storage_connectors(
                     options
                 };
 
+                let aco = AnyConnectOptions::from_str(options.to_url_lossy().as_str())
+                    .expect("Query string must be valid but it is not");
+
                 let res = links.insert(
                     id.clone(),
                     Storage {
-                        pool: SqlitePool::connect_lazy_with(options),
+                        pool: AnyPool::connect_lazy_with(aco),
                     },
                 );
 
@@ -75,7 +80,7 @@ impl StorageSettings {
 
 #[derive(Clone)]
 pub struct Storage {
-    pool: SqlitePool,
+    pool: AnyPool,
 }
 
 impl Storage {
@@ -118,7 +123,7 @@ impl Storage {
             let mut out_row = HashMap::new();
             for (idx, c) in cols.iter().enumerate() {
                 let col = row.try_get_raw(idx).expect("TODO");
-                let cval = XepakValue::try_from(SqlxValue::<sqlx::Sqlite>::new(col)).expect("TODO");
+                let cval = XepakValue::try_from(SqlxValue::new(col)).expect("TODO");
 
                 out_row.insert(c.name().to_string(), cval);
             }
@@ -180,13 +185,11 @@ pub trait RequestArgs {
 
 /// SQLx related request args bind functionality
 pub trait SqlxRequestArgs: RequestArgs {
-    fn bind_arg<DB>(
-        &self,
+    fn bind_arg<'a>(
+        &'a self,
         arg_name: &str,
-        query: sqlx::query::Query<'_, DB, <DB>::Arguments<'_>>,
-    ) -> Result<sqlx::query::Query<'_, DB, <DB>::Arguments<'_>>, XepakError>
-    where
-        DB: sqlx::Database;
+        query: sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments<'a>>,
+    ) -> Result<sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments<'a>>, XepakError>;
 
     // fn get_offset_limit(&self)
 }

@@ -4,7 +4,7 @@
 //!  - project input to compatible DB type (String -> something)
 //!  - have some validation logic for input types only
 
-use std::{collections::HashMap, marker::PhantomData};
+use std::collections::HashMap;
 
 use serde::Serialize;
 use sqlx::{TypeInfo, ValueRef as _};
@@ -13,11 +13,11 @@ use sqlx::{TypeInfo, ValueRef as _};
 pub type Record = HashMap<String, XepakValue>;
 
 /// A workaround to fix rust error: `try_from` has an incompatible type for trait.
-pub struct SqlxValue<'r, DB: sqlx::Database>(pub DB::ValueRef<'r>, pub PhantomData<DB>);
+pub struct SqlxValue<'r>(pub sqlx::any::AnyValueRef<'r>);
 
-impl<'r, DB: sqlx::Database> SqlxValue<'r, DB> {
-    pub fn new(value: DB::ValueRef<'r>) -> Self {
-        Self(value, PhantomData)
+impl<'r> SqlxValue<'r> {
+    pub fn new(value: sqlx::any::AnyValueRef<'r>) -> Self {
+        Self(value)
     }
 }
 
@@ -61,15 +61,10 @@ impl XepakValue {
     }
 }
 
-impl<'r, DB: sqlx::Database> TryFrom<SqlxValue<'r, DB>> for XepakValue
-where
-    for<'a> i64: sqlx::Decode<'a, DB> + sqlx::Type<DB>,
-    for<'a> f64: sqlx::Decode<'a, DB> + sqlx::Type<DB>,
-    for<'a> String: sqlx::Decode<'a, DB> + sqlx::Type<DB>,
-{
+impl<'r> TryFrom<SqlxValue<'r>> for XepakValue {
     type Error = sqlx::error::BoxDynError;
 
-    fn try_from(vw: SqlxValue<'r, DB>) -> Result<Self, Self::Error> {
+    fn try_from(vw: SqlxValue<'r>) -> Result<Self, Self::Error> {
         let value = vw.0;
 
         // Use the Database's TypeInfo to check column type names
@@ -80,16 +75,16 @@ where
             "NULL" => Self::Null,
             "INTEGER" | "INT" | "BIGINT" => {
                 // TODO handle unsigned integers better
-                let v: i64 = sqlx::Decode::decode(value)?;
+                let v: i64 = sqlx::Decode::<sqlx::Any>::decode(value)?;
                 Self::Integer(v as i128)
             }
             // TODO add BLOB
             "REAL" => {
                 // TODO handle unsigned integers better
-                let v: f64 = sqlx::Decode::decode(value)?;
+                let v: f64 = sqlx::Decode::<sqlx::Any>::decode(value)?;
                 Self::Float(v)
             }
-            _ => Self::Text(sqlx::Decode::decode(value)?),
+            _ => Self::Text(sqlx::Decode::<sqlx::Any>::decode(value)?),
         };
 
         Ok(res)

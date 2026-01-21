@@ -15,8 +15,6 @@ use actix_web::{
     web::{self, Bytes, Data},
 };
 use serde::Serialize;
-use sql_key_args::{ParametrizedQuery, ParametrizedQueryRef, SqlLexer};
-use tracing_subscriber::fmt::format;
 
 use crate::XepakError;
 use crate::cfg::{EndpointSpecs, ResourceSpecs, XepakConf, XepakSpecs};
@@ -54,6 +52,9 @@ pub async fn init_server(
     // }
     // let port = config.port;
     let port = 8080;
+
+    // Required to use with sqlx::Any connector
+    sqlx::any::install_default_drivers();
 
     let storage_links = init_storage_connectors(&conf_dir, &config.storage).await;
     let app_data = XepakAppData { storage_links };
@@ -189,14 +190,11 @@ impl RequestArgs for RequestInput<'_> {
 }
 
 impl SqlxRequestArgs for RequestInput<'_> {
-    fn bind_arg<DB>(
-        &self,
+    fn bind_arg<'a>(
+        &'a self,
         arg_name: &str,
-        query: sqlx::query::Query<'_, DB, <DB>::Arguments<'_>>,
-    ) -> Result<sqlx::query::Query<'_, DB, <DB>::Arguments<'_>>, XepakError>
-    where
-        DB: sqlx::Database,
-    {
+        query: sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments<'a>>,
+    ) -> Result<sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments<'a>>, XepakError> {
         let Some(value) = self.get_arg_value(arg_name) else {
             return Err(XepakError::Input(format!(
                 "Can't bind argument '{arg_name}' - does not exists in request."
@@ -204,10 +202,7 @@ impl SqlxRequestArgs for RequestInput<'_> {
         };
 
         // TODO should bind with resepect of the schema
-        // Ok(query.bind(value.as_str()))
-        // Ok(query.bind(value.as_str()))
-
-        todo!("FUCK not working implementation")
+        Ok(query.bind(value.as_str()))
     }
 }
 
@@ -231,6 +226,7 @@ impl EndpointHandler {
     ) -> HttpResponse {
         tracing::debug!("Handler called for {:?}", self.ep);
         let mut return_one_record = false;
+        let ri = RequestInput::new(&self.ep, &req);
         let result = match &self.ep.resource {
             ResourceSpecs::Sql {
                 data_source,
@@ -242,7 +238,6 @@ impl EndpointHandler {
 
                 let ds = state.get_data_source(&data_source).expect("TODO");
 
-                let ri = RequestInput::new(&self.ep, &req);
                 let rr = ResourceRequest::new(&query, &ri);
                 ds.execute(rr).await.expect("TODO QUERY")
             }
@@ -251,9 +246,9 @@ impl EndpointHandler {
         if let Some(accept) = req.headers().get(ACCEPT)
             && accept.eq(CONTENT_TYPE_CBOR)
         {
-            to_cbor_response(&result, 0, 0)
+            to_cbor_response(&result, ri.get_limit(), ri.get_offset())
         } else {
-            to_json_response(&result, 0, 0)
+            to_json_response(&result, ri.get_limit(), ri.get_offset())
         }
     }
 }
@@ -294,7 +289,7 @@ impl HttpServiceFactory for EndpointHandler {
     }
 }
 
-fn to_json_response<T: Serialize>(data: &T, offset: usize, limit: usize) -> HttpResponse<BoxBody> {
+fn to_json_response<T: Serialize>(data: &T, limit: usize, offset: usize) -> HttpResponse<BoxBody> {
     match serde_json::to_string(data) {
         Ok(body) => {
             let mut resp = HttpResponse::Ok();
@@ -317,8 +312,8 @@ fn to_json_response<T: Serialize>(data: &T, offset: usize, limit: usize) -> Http
 
 fn to_cbor_response<T: minicbor::Encode<()>>(
     data: &T,
-    offset: usize,
     limit: usize,
+    offset: usize,
 ) -> HttpResponse<BoxBody> {
     match minicbor::to_vec(data) {
         Ok(body) => {

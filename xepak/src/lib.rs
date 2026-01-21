@@ -3,13 +3,8 @@ pub mod server;
 pub mod storage;
 pub mod types;
 
-use std::{collections::HashMap, default, hash::Hash};
-
 use serde::{Deserialize, Serialize};
-use sqlx::{SqlitePool, sqlite::SqliteConnectOptions};
 use thiserror::Error;
-
-use crate::storage::StorageSettings;
 
 #[derive(Error, Debug)]
 pub enum XepakError {
