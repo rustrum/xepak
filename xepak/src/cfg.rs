@@ -98,27 +98,34 @@ pub struct EndpointSpecs {
     #[serde(default = "default_limit_key")]
     pub limit_arg: String,
 
-    #[serde(default = "default_limit_max")]
-    pub limit_max: usize,
+    /// Max limit value for paginated queries
+    #[serde(default)]
+    pub fetch_limit: usize,
 
     #[serde(default = "default_offset_key")]
     pub offset_arg: String,
+
+    /// Response will be a single record instead of a list.
+    /// Will return 404 if no record availableю
+    #[serde(default)]
+    pub single_record_response: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ResourceSpecs {
-    Sql {
-        // TODO: add read/write attribute here?
+    Query {
+        // TODO: add read/write attribute here for DS maybe?
         #[serde(default)]
         data_source: String,
         query: String,
-        /// Add pagination to SQL query offset/limit
+    },
+
+    QueryScript {
+        // TODO: add read/write attribute here for DS maybe?
         #[serde(default)]
-        paginated: bool,
-        /// Response will be a single record instead of a list
-        #[serde(default)]
-        one_record: bool,
+        data_source: String,
+        script: String,
     },
 }
 
@@ -177,8 +184,4 @@ fn default_limit_key() -> String {
 
 fn default_offset_key() -> String {
     "offset".to_string()
-}
-
-fn default_limit_max() -> usize {
-    1000
 }

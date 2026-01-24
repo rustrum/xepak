@@ -1,6 +1,41 @@
 [[endpoint]]
 uri = "/user/list"
+fetch_limit = 20
 
 [endpoint.resource]
-type = "sql"
-query = "SELECT * FROM users LIMIT {{-limit-}} OFFSET {{-offset-}}"
+type = "query_script"
+script = """
+let query = query_builder("SELECT * FROM users");
+
+let parts = [];
+
+if ctx.has_arg("name") {
+    parts.push("username = {{name}}")
+}
+if ctx.has_arg("pass") {
+    parts.push("password = {{pass}}")
+}
+
+query.add_joined_parts("WHERE", parts, "OR", "");
+
+query.add("LIMIT {{-limit-}} OFFSET {{-offset-}}");
+
+return query.build();
+"""
+
+[[endpoint]]
+uri = "/user/{user_id}"
+single_record_response = true
+
+[endpoint.resource]
+type = "query"
+query = "SELECT * FROM users WHERE id={{user_id}}"
+
+
+[[endpoint]]
+uri = "/posts/list"
+fetch_limit = 20
+
+[endpoint.resource]
+type = "query"
+query = "SELECT * FROM posts LIMIT {{-limit-}} OFFSET {{-offset-}}"

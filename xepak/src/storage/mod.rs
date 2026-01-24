@@ -84,7 +84,7 @@ pub struct Storage {
 }
 
 impl Storage {
-    pub async fn execute<RA: SqlxRequestArgs>(
+    pub async fn fetch_records<RA: SqlxRequestArgs>(
         &self,
         request: ResourceRequest<'_, RA>,
     ) -> Result<Vec<Record>, XepakError> {
@@ -134,12 +134,12 @@ impl Storage {
     }
 }
 
-pub struct ResourceRequest<'a, RA: RequestArgs> {
+pub struct ResourceRequest<'a, RA: StorageRequestArgs> {
     args: &'a RA,
     query: &'a str,
 }
 
-impl<'a, RA: RequestArgs> ResourceRequest<'a, RA> {
+impl<'a, RA: StorageRequestArgs> ResourceRequest<'a, RA> {
     pub fn new(query: &'a str, args: &'a RA) -> Self {
         Self { args, query }
     }
@@ -175,7 +175,7 @@ impl Resource {
 //     pub fn query<DB>(sql: &str) -> Query<'_, DB, <DB as Database>::Arguments<'_>>
 // where
 //     DB: Database,
-pub trait RequestArgs {
+pub trait StorageRequestArgs {
     /// Return records fetch limit
     fn get_rows_limit(&self) -> usize;
 
@@ -184,7 +184,7 @@ pub trait RequestArgs {
 }
 
 /// SQLx related request args bind functionality
-pub trait SqlxRequestArgs: RequestArgs {
+pub trait SqlxRequestArgs: StorageRequestArgs {
     fn bind_arg<'a>(
         &'a self,
         arg_name: &str,

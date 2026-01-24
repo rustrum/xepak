@@ -9,6 +9,8 @@ use std::collections::HashMap;
 use serde::Serialize;
 use sqlx::{TypeInfo, ValueRef as _};
 
+use crate::XepakError;
+
 /// Record representation from storage
 pub type Record = HashMap<String, XepakValue>;
 
@@ -58,6 +60,22 @@ impl XepakValue {
             Self::Float(_) => XepakType::Float,
             Self::Text(_) => XepakType::Text,
         }
+    }
+
+    pub fn from_str_as(v: &str, parse_as: XepakType) -> Result<Self, XepakError> {
+        let xv = match parse_as {
+            XepakType::Null => Self::Null,
+            XepakType::Integer => {
+                let parsed = v.parse().map_err(|e| XepakError::Decode(format!("{e}")))?;
+                Self::Integer(parsed)
+            }
+            XepakType::Float => {
+                let parsed = v.parse().map_err(|e| XepakError::Decode(format!("{e}")))?;
+                Self::Float(parsed)
+            }
+            XepakType::Text => Self::Text(v.to_string()),
+        };
+        Ok(xv)
     }
 }
 
