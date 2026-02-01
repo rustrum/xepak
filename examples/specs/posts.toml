@@ -32,8 +32,11 @@ content = { type = "string", apply_to = "all" }
 
 # Access check and cache could also be a processor I guess ?
 [[endpoint.processor]]
-type = "body_to_args"
+type = "parse_body_args"
 
 [endpoint.resource]
 type = "query"
-query = "INSERT INTO posts (title, content) VALUES ({{title}}, {{content}})"
+query = """
+INSERT INTO posts (title, content) VALUES ({{title}}, {{content}})
+RETURNING id
+"""

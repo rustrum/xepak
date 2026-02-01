@@ -10,14 +10,14 @@ use serde::Deserialize;
 use crate::{
     XepakError,
     server::{CONTENT_TYPE_CBOR, RequestArgs, XepakAppData},
-    types::{Schema, XepakValue},
+    types::XepakValue,
 };
 
 /// Define request processors variants.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum PreProcessor {
-    BodyToArgs,
+    ParseBodyArgs,
 }
 
 pub trait PreProcessorHandler {
@@ -92,12 +92,12 @@ impl BodyToArgsProcessor {
         };
 
         for (key, value) in json_object {
-            let xvalue = if value.is_null() {
-                XepakValue::Null
-            } else {
+            let xvalue = if value.is_array() || value.is_object() {
                 return Err(XepakError::Input(format!(
-                    "(๑•̀ᗝ•́)૭ Root JSON must NOT have any nested arrays or objects. See \"{key}\" property."
+                    "(๑•ᗝ•)૭ Root JSON must NOT have any nested arrays or objects. See \"{key}\" property."
                 )));
+            } else {
+                value.try_into()?
             };
 
             input.set_arg_validate(key.clone(), xvalue)?;
@@ -114,6 +114,10 @@ impl PreProcessorHandler for BodyToArgsProcessor {
         body: &Bytes,
         input: &mut RequestArgs,
     ) -> Result<(), XepakError> {
+        if req.method() != Method::POST && req.method() != Method::PUT {
+            return Ok(());
+        }
+
         let cbor_body = if let Some(accept) = req.headers().get(CONTENT_TYPE)
             && accept.eq(CONTENT_TYPE_CBOR)
         {

@@ -76,7 +76,7 @@ impl EndpointHandler {
         // TODO sord pre processors
         for p in &ep.processor {
             match p {
-                PreProcessor::BodyToArgs => processors.push(Box::new(BodyToArgsProcessor {})),
+                PreProcessor::ParseBodyArgs => processors.push(Box::new(BodyToArgsProcessor {})),
             }
         }
 

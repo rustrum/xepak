@@ -4,7 +4,7 @@
 //!  - project input to compatible DB type (String -> something)
 //!  - have some validation logic for input types only
 
-use std::{borrow::Cow, collections::HashMap};
+use std::{any::Any, borrow::Cow, collections::HashMap};
 
 use sqlx::{TypeInfo, ValueRef as _, encode::IsNull};
 use sqlx_core::any::AnyValueKind;
@@ -34,6 +34,7 @@ impl<'r> SqlxValue<'r> {
 #[derive(Clone, Copy, Display, Debug)]
 pub enum XepakType {
     Null,
+    Boolean,
     Integer,
     Float,
     Text,
@@ -49,6 +50,7 @@ pub enum XepakType {
 pub enum XepakValue {
     /// Null/nothing/undefined type
     Null,
+    Boolean(bool),
     /// Any integer type
     Integer(i128),
     /// Any float type
@@ -64,6 +66,7 @@ impl XepakValue {
     pub fn get_type(&self) -> XepakType {
         match self {
             Self::Null => XepakType::Null,
+            Self::Boolean(_) => XepakType::Boolean,
             Self::Integer(_) => XepakType::Integer,
             Self::Float(_) => XepakType::Float,
             Self::Text(_) => XepakType::Text,
@@ -73,6 +76,10 @@ impl XepakValue {
     pub fn from_str_as(v: &str, parse_as: XepakType) -> Result<Self, XepakError> {
         let xv = match parse_as {
             XepakType::Null => Self::Null,
+            XepakType::Boolean => {
+                let parsed = v.parse().map_err(|e| XepakError::Decode(format!("{e}")))?;
+                Self::Boolean(parsed)
+            }
             XepakType::Integer => {
                 let parsed = v.parse().map_err(|e| XepakError::Decode(format!("{e}")))?;
                 Self::Integer(parsed)
@@ -94,6 +101,7 @@ impl XepakValue {
                 TO_TYPE,
                 "Not possible".to_string(),
             )),
+            XepakValue::Boolean(v) => Ok(if *v { 1 } else { 0 }),
             XepakValue::Integer(v) => Ok(*v),
             XepakValue::Float(v) => {
                 if v.fract().abs() > f64::EPSILON {
@@ -128,6 +136,7 @@ impl XepakValue {
     ) -> sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments<'a>> {
         match self {
             XepakValue::Null => query.bind(None::<String>),
+            XepakValue::Boolean(v) => query.bind(*v),
             XepakValue::Integer(v) => query.bind(*v as i64),
             XepakValue::Float(v) => query.bind(v),
             XepakValue::Text(v) => query.bind(v),
@@ -156,6 +165,33 @@ impl From<f64> for XepakValue {
 impl From<i128> for XepakValue {
     fn from(value: i128) -> Self {
         Self::Integer(value)
+    }
+}
+
+impl TryFrom<&serde_json::Value> for XepakValue {
+    type Error = XepakError;
+
+    fn try_from(value: &serde_json::Value) -> Result<Self, Self::Error> {
+        match value {
+            serde_json::Value::Null => Ok(XepakValue::Null),
+            serde_json::Value::Bool(v) => Ok(XepakValue::Boolean(*v)),
+            serde_json::Value::Number(number) => {
+                Ok(if number.is_f64() {
+                    // Should be valid value here
+                    XepakValue::Float(number.as_f64().unwrap_or_default())
+                } else {
+                    // All non f64 Numbers could be converted to i128
+                    XepakValue::Integer(number.as_i128().unwrap_or_default())
+                })
+            }
+            serde_json::Value::String(v) => Ok(XepakValue::Text(v.clone())),
+            serde_json::Value::Array(_values) => {
+                Err(XepakError::Decode(format!("Cant decode from JSON array")))
+            }
+            serde_json::Value::Object(_map) => {
+                Err(XepakError::Decode(format!("Cant decode from JSON object")))
+            }
+        }
     }
 }
 
@@ -205,30 +241,31 @@ SQLITE
             DataType::Datetime => "DATETIME",
 */
 
-impl sqlx::Encode<'_, sqlx::Any> for XepakValue {
-    fn encode_by_ref(
-        &self,
-        buf: &mut <sqlx::Any as sqlx::Database>::ArgumentBuffer<'_>,
-    ) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
-        let res = match self {
-            XepakValue::Null => IsNull::Yes,
-            XepakValue::Integer(v) => {
-                buf.0.push(AnyValueKind::BigInt(*v as i64));
-                IsNull::No
-            }
-            XepakValue::Float(v) => {
-                buf.0.push(AnyValueKind::Double(*v));
-                IsNull::No
-            }
-            XepakValue::Text(v) => {
-                buf.0.push(AnyValueKind::Text(Cow::Owned(v.clone())));
-                IsNull::No
-            }
-        };
+// impl sqlx::Encode<'_, sqlx::Any> for XepakValue {
+//     fn encode_by_ref(
+//         &self,
+//         buf: &mut <sqlx::Any as sqlx::Database>::ArgumentBuffer<'_>,
+//     ) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
+//         let res = match self {
+//             XepakValue::Null => IsNull::Yes,
+//             XepakValue::Integer(v) => {
+//                 buf.0.push(AnyValueKind::BigInt(*v as i64));
+//                 IsNull::No
+//             }
+//             XepakValue::Float(v) => {
+//                 buf.0.push(AnyValueKind::Double(*v));
+//                 IsNull::No
+//             }
+//             XepakValue::Text(v) => {
+//                 buf.0.push(AnyValueKind::Text(Cow::Owned(v.clone())));
+//                 IsNull::No
+//             }
+//             XepakValue::Boolean(_) => todo!(),
+//         };
 
-        Ok(res)
-    }
-}
+//         Ok(res)
+//     }
+// }
 
 impl<'de> serde::Deserialize<'de> for XepakValue {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -248,6 +285,7 @@ impl serde::Serialize for XepakValue {
     {
         match self {
             XepakValue::Null => ser.serialize_none(),
+            XepakValue::Boolean(v) => ser.serialize_bool(*v),
             XepakValue::Integer(v) => ser.serialize_i128(*v),
             XepakValue::Float(v) => ser.serialize_f64(*v),
             XepakValue::Text(v) => ser.serialize_str(v.as_str()),
@@ -263,7 +301,7 @@ impl minicbor::Encode<()> for XepakValue {
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
         match self {
             XepakValue::Null => e.null()?,
-            // TODO deal with possible unsigned integers here
+            XepakValue::Boolean(v) => e.encode(v)?,
             XepakValue::Integer(v) => e.encode(*v as i64)?,
             XepakValue::Float(v) => e.encode(v)?,
             XepakValue::Text(v) => e.encode(v)?,
