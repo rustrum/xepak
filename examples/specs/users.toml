@@ -1,4 +1,12 @@
 [[endpoint]]
+uri = "/user/{user_id:\\d+}"
+single_record_response = true
+
+[endpoint.resource]
+type = "query"
+query = "SELECT * FROM users WHERE id={{user_id}}"
+
+[[endpoint]]
 uri = "/user/list"
 fetch_limit = 20
 
@@ -22,20 +30,3 @@ query.add("LIMIT {{-limit-}} OFFSET {{-offset-}}");
 
 return query.build();
 """
-
-[[endpoint]]
-uri = "/user/{user_id}"
-single_record_response = true
-
-[endpoint.resource]
-type = "query"
-query = "SELECT * FROM users WHERE id={{user_id}}"
-
-
-[[endpoint]]
-uri = "/posts/list"
-fetch_limit = 20
-
-[endpoint.resource]
-type = "query"
-query = "SELECT * FROM posts LIMIT {{-limit-}} OFFSET {{-offset-}}"

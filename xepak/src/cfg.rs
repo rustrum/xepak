@@ -2,7 +2,7 @@ use std::{collections::HashSet, fs, path::PathBuf};
 
 use serde::Deserialize;
 
-use crate::{XepakError, storage::StorageSettings};
+use crate::{XepakError, server::processor::PreProcessor, storage::StorageSettings};
 
 /// Main configuration file that properties could be overwritten via ENV or not ? (TODO).
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -94,6 +94,7 @@ pub struct EndpointSpecs {
 
     #[serde(default)]
     pub args: Vec<String>,
+
     // pub validators: Vec<Validator>,
     #[serde(default = "default_limit_key")]
     pub limit_arg: String,
@@ -106,9 +107,13 @@ pub struct EndpointSpecs {
     pub offset_arg: String,
 
     /// Response will be a single record instead of a list.
-    /// Will return 404 if no record availableю
+    /// Will return 404 if no record available
     #[serde(default)]
     pub single_record_response: bool,
+
+    /// This logic handle requests to extract/validate data
+    #[serde(default)]
+    pub processor: Vec<PreProcessor>,
 }
 
 #[derive(Clone, Debug, Deserialize)]

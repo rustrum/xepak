@@ -4,15 +4,22 @@
 //!  - project input to compatible DB type (String -> something)
 //!  - have some validation logic for input types only
 
-use std::collections::HashMap;
+use std::{borrow::Cow, collections::HashMap};
 
-use serde::Serialize;
-use sqlx::{TypeInfo, ValueRef as _};
+use sqlx::{TypeInfo, ValueRef as _, encode::IsNull};
+use sqlx_core::any::AnyValueKind;
+use strum::Display;
 
 use crate::XepakError;
 
+/// Schema for input/output arguments
+pub type Schema = HashMap<String, ArgSchema>;
+
 /// Record representation from storage
 pub type Record = HashMap<String, XepakValue>;
+
+#[derive(Debug)]
+pub struct ArgSchema {}
 
 /// A workaround to fix rust error: `try_from` has an incompatible type for trait.
 pub struct SqlxValue<'r>(pub sqlx::any::AnyValueRef<'r>);
@@ -24,6 +31,7 @@ impl<'r> SqlxValue<'r> {
 }
 
 /// Represents unified type that is matched with a proper [`XepakValueWrapper`].
+#[derive(Clone, Copy, Display, Debug)]
 pub enum XepakType {
     Null,
     Integer,
@@ -37,7 +45,7 @@ pub enum XepakType {
 /// Plus it must be compatible with sqlx type system to be used as a query argument.
 ///
 /// Deserialization will be a little bit tricky
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum XepakValue {
     /// Null/nothing/undefined type
     Null,
@@ -76,6 +84,78 @@ impl XepakValue {
             XepakType::Text => Self::Text(v.to_string()),
         };
         Ok(xv)
+    }
+
+    pub fn as_integer(&self) -> Result<i128, XepakError> {
+        const TO_TYPE: XepakType = XepakType::Integer;
+        match self {
+            XepakValue::Null => Err(XepakError::Convert(
+                self.get_type(),
+                TO_TYPE,
+                "Not possible".to_string(),
+            )),
+            XepakValue::Integer(v) => Ok(*v),
+            XepakValue::Float(v) => {
+                if v.fract().abs() > f64::EPSILON {
+                    Err(XepakError::Convert(
+                        self.get_type(),
+                        TO_TYPE,
+                        format!("Has fractional part {v}"),
+                    ))
+                } else if *v > i64::MAX as f64 || *v < i64::MIN as f64 {
+                    Err(XepakError::Convert(
+                        self.get_type(),
+                        TO_TYPE,
+                        format!("Out of range {v}"),
+                    ))
+                } else {
+                    Ok(unsafe { v.to_int_unchecked() })
+                }
+            }
+            XepakValue::Text(v) => {
+                let parsed = v
+                    .parse()
+                    .map_err(|e| XepakError::Convert(self.get_type(), TO_TYPE, format!("{e}")))?;
+
+                Ok(parsed)
+            }
+        }
+    }
+
+    pub fn bind_sqlx<'a>(
+        &'a self,
+        query: sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments<'a>>,
+    ) -> sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments<'a>> {
+        match self {
+            XepakValue::Null => query.bind(None::<String>),
+            XepakValue::Integer(v) => query.bind(*v as i64),
+            XepakValue::Float(v) => query.bind(v),
+            XepakValue::Text(v) => query.bind(v),
+        }
+    }
+}
+
+impl From<&str> for XepakValue {
+    fn from(value: &str) -> Self {
+        Self::Text(value.to_string())
+    }
+}
+
+impl From<String> for XepakValue {
+    fn from(value: String) -> Self {
+        Self::Text(value)
+    }
+}
+
+impl From<f64> for XepakValue {
+    fn from(value: f64) -> Self {
+        Self::Float(value)
+    }
+}
+
+impl From<i128> for XepakValue {
+    fn from(value: i128) -> Self {
+        Self::Integer(value)
     }
 }
 
@@ -125,7 +205,43 @@ SQLITE
             DataType::Datetime => "DATETIME",
 */
 
-impl Serialize for XepakValue {
+impl sqlx::Encode<'_, sqlx::Any> for XepakValue {
+    fn encode_by_ref(
+        &self,
+        buf: &mut <sqlx::Any as sqlx::Database>::ArgumentBuffer<'_>,
+    ) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
+        let res = match self {
+            XepakValue::Null => IsNull::Yes,
+            XepakValue::Integer(v) => {
+                buf.0.push(AnyValueKind::BigInt(*v as i64));
+                IsNull::No
+            }
+            XepakValue::Float(v) => {
+                buf.0.push(AnyValueKind::Double(*v));
+                IsNull::No
+            }
+            XepakValue::Text(v) => {
+                buf.0.push(AnyValueKind::Text(Cow::Owned(v.clone())));
+                IsNull::No
+            }
+        };
+
+        Ok(res)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for XepakValue {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+
+        Ok(XepakValue::Text(value))
+    }
+}
+
+impl serde::Serialize for XepakValue {
     fn serialize<S>(&self, ser: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,

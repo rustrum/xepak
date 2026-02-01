@@ -1,0 +1,39 @@
+[[endpoint]]
+uri = "/post/{post_id:\\d+}"
+single_record_response = true
+
+[endpoint.resource]
+type = "query"
+query = "SELECT * FROM posts WHERE id={{post_id}}"
+
+[[endpoint]]
+uri = "/post/list"
+fetch_limit = 20
+
+[endpoint.resource]
+type = "query"
+query = "SELECT * FROM posts LIMIT {{-limit-}} OFFSET {{-offset-}}"
+
+# Create post
+[[endpoint]]
+uri = "/post"
+request_type = "POST"
+# move single record to different level maybe or not ?
+single_record_response = true
+
+# Schema require similar logic as processor
+# combine it ?
+[endpoint.schema]
+id = { type = "int", apply_to = "output" }
+title = { type = "string", apply_to = "input", require_input = true, validate_input = [
+    { for = "length", min = "10", max = "255" },
+] }
+content = { type = "string", apply_to = "all" }
+
+# Access check and cache could also be a processor I guess ?
+[[endpoint.processor]]
+type = "body_to_args"
+
+[endpoint.resource]
+type = "query"
+query = "INSERT INTO posts (title, content) VALUES ({{title}}, {{content}})"

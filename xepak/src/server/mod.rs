@@ -1,31 +1,23 @@
 pub mod handler;
+pub mod processor;
 
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
 use std::path::PathBuf;
-use std::pin::Pin;
 use std::sync::Arc;
 
-use actix_web::body::BoxBody;
-use actix_web::dev::{HttpServiceFactory, Server};
+use actix_web::App;
+use actix_web::dev::Server;
 use actix_web::http::StatusCode;
-use actix_web::http::header::{ACCEPT, CONTENT_TYPE};
 use actix_web::middleware::Logger;
 use actix_web::web::ServiceConfig;
-use actix_web::{App, Handler, HttpResponse, HttpResponseBuilder};
-use actix_web::{
-    HttpRequest, HttpServer,
-    web::{self, Bytes, Data},
-};
-use rhai::{AST, Engine, ParseError};
-use serde::Serialize;
+use actix_web::{HttpRequest, HttpServer, web::Data};
 
 use crate::XepakError;
-use crate::cfg::{EndpointSpecs, ResourceSpecs, XepakConf, XepakSpecs};
+use crate::cfg::{EndpointSpecs, XepakConf, XepakSpecs};
 use crate::server::handler::EndpointHandler;
-use crate::storage::{
-    ResourceRequest, SqlxRequestArgs, Storage, StorageRequestArgs, init_storage_connectors,
-};
+use crate::storage::{SqlxRequestArgs, Storage, StorageRequestArgs, init_storage_connectors};
+use crate::types::{Schema, XepakValue};
 
 const OFFSET_HEADER: &str = "X-Offset";
 const LIMIT_HEADER: &str = "X-Limit";
@@ -33,7 +25,7 @@ const CONTENT_TYPE_CBOR: &str = "application/cbor";
 const CONTENT_TYPE_JSON: &str = "application/json";
 
 #[derive(Clone)]
-struct XepakAppData {
+pub struct XepakAppData {
     storage_links: HashMap<String, Storage>,
 }
 
@@ -105,34 +97,34 @@ pub async fn init_server(
 
 #[derive(Debug, Clone)]
 pub struct RequestArgs {
-    query_args: Arc<HashMap<String, String>>,
-    path_args: Arc<HashMap<String, String>>,
+    /// Arguments parsed from URI (higher priority)
+    path_args: Arc<HashMap<String, XepakValue>>,
+    /// Final input args storage with schema applied
+    args: Arc<HashMap<String, XepakValue>>,
+
+    limit: usize,
+    offset: usize,
 }
 
 impl RequestArgs {
-    pub fn new(uri: &str, req: &HttpRequest) -> Self {
-        let qstring = req.uri().query().unwrap_or_default();
-        let query_args =
-            if let Ok(qa) = serde_urlencoded::from_str::<HashMap<String, String>>(qstring) {
-                qa
-            } else {
-                tracing::warn!("Can't decode query string from URL");
-                Default::default()
-            };
+    pub fn new(uri_pattern: &str, req_path: &str) -> Self {
+        // Todo return result that will validate path_args against schema
 
-        let mut path = actix_router::Path::new(req.path().to_string());
+        let mut path = actix_router::Path::new(req_path);
 
-        let resource = actix_router::ResourceDef::new(uri);
+        let resource = actix_router::ResourceDef::new(uri_pattern);
         resource.capture_match_info(&mut path);
 
         let path_args = path
             .iter()
-            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .map(|(k, v)| (k.to_string(), XepakValue::Text(v.to_string())))
             .collect();
 
         RequestArgs {
-            query_args: Arc::new(query_args),
             path_args: Arc::new(path_args),
+            args: Arc::new(Default::default()),
+            limit: 0,
+            offset: 0,
         }
     }
 
@@ -140,74 +132,79 @@ impl RequestArgs {
         if self.path_args.contains_key(arg_name) {
             return true;
         }
-        return self.query_args.contains_key(arg_name);
+        return self.args.contains_key(arg_name);
     }
 
-    pub fn get_arg_value(&self, argument: &str) -> Option<&String> {
-        let path_arg: Option<&String> = self.path_args.get(argument);
+    pub fn get_arg_value(&self, argument: &str) -> Option<&XepakValue> {
+        let path_arg = self.path_args.get(argument);
         if path_arg.is_none() {
-            self.query_args.get(argument)
+            self.args.get(argument)
         } else {
             path_arg
         }
     }
-}
 
-#[derive(Debug)]
-struct RequestInput<'a> {
-    specs: &'a EndpointSpecs,
-    args: RequestArgs,
-}
+    pub fn get_limit(&self) -> usize {
+        self.limit
+    }
 
-impl<'a> RequestInput<'a> {
-    fn new(specs: &'a EndpointSpecs, req: &HttpRequest) -> Self {
-        Self {
-            args: RequestArgs::new(&specs.uri, req),
-            specs,
+    pub fn get_offset(&self) -> usize {
+        self.offset
+    }
+
+    /// Will try to parse limit/offset from existing arguments if possible.
+    /// Output debug message if parsing failed.
+    pub fn parse_offset_limit(&mut self, offset_arg: &str, limit_arg: &str, limit_max: usize) {
+        if !limit_arg.is_empty() {
+            self.limit = self.parse_usize_from(limit_arg).unwrap_or(limit_max);
+        }
+        if !offset_arg.is_empty() {
+            self.offset = self.parse_usize_from(offset_arg).unwrap_or_default();
         }
     }
 
-    fn get_offset(&self) -> usize {
-        let Some(svalue) = self.args.get_arg_value(&self.specs.offset_arg) else {
-            return 0;
+    fn parse_usize_from(&self, arg_name: &str) -> Option<usize> {
+        let Some(value) = self.get_arg_value(arg_name) else {
+            return None;
         };
-        match svalue.parse() {
+
+        let ivalue = match value.as_integer() {
             Ok(v) => v,
-            Err(_) => {
-                tracing::debug!(
-                    "Can't parse argument \"{}\" value {svalue} as number",
-                    self.specs.offset_arg
-                );
-                0
+            Err(e) => {
+                tracing::debug!("Can't get int from arg {arg_name}: {e}");
+                return None;
             }
-        }
-    }
-
-    fn get_limit(&self) -> usize {
-        let Some(svalue) = self.args.get_arg_value(&self.specs.limit_arg) else {
-            return self.specs.fetch_limit;
         };
 
-        match svalue.parse() {
-            Ok(v) => {
-                if v > self.specs.fetch_limit {
-                    self.specs.fetch_limit
-                } else {
-                    v
-                }
-            }
-            Err(_) => {
-                tracing::debug!(
-                    "Can't parse argument \"{}\" value {svalue} as number",
-                    self.specs.limit_arg
-                );
-                0
-            }
+        if ivalue < 0 || ivalue > usize::MAX as i128 {
+            tracing::debug!("Value not in range for arg {arg_name}: {ivalue}");
+            return None;
         }
+
+        Some(ivalue as usize)
+    }
+
+    /// Could return error if input value can't be converted into proper type according to schema or validated.
+    pub fn set_arg_validate(
+        &mut self,
+        name: String,
+        value: XepakValue,
+        // schema: &Schema,
+    ) -> Result<(), XepakError> {
+        let Some(args) = Arc::get_mut(&mut self.args) else {
+            return Err(XepakError::Unexpected(
+                "Must acquire args &mut reference here by design".to_string(),
+            ));
+        };
+
+        args.insert(name, value);
+        // TODO deal with schema
+        // probably request args must be available for the request schema
+        Ok(())
     }
 }
 
-impl StorageRequestArgs for RequestInput<'_> {
+impl StorageRequestArgs for RequestArgs {
     fn get_rows_limit(&self) -> usize {
         self.get_limit()
     }
@@ -217,20 +214,20 @@ impl StorageRequestArgs for RequestInput<'_> {
     }
 }
 
-impl SqlxRequestArgs for RequestInput<'_> {
+impl SqlxRequestArgs for RequestArgs {
     fn bind_arg<'a>(
         &'a self,
         arg_name: &str,
         query: sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments<'a>>,
     ) -> Result<sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments<'a>>, XepakError> {
-        let Some(value) = self.args.get_arg_value(arg_name) else {
+        let Some(value) = self.get_arg_value(arg_name) else {
             return Err(XepakError::Input(format!(
                 "Can't bind argument '{arg_name}' - does not exists in request."
             )));
         };
 
         // TODO should bind with resepect of the schema
-        Ok(query.bind(value.as_str()))
+        Ok(value.bind_sqlx(query))
     }
 }
 

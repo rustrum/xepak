@@ -24,11 +24,13 @@ serde_json.workspace = true
 serde_urlencoded.workspace = true
 toml.workspace = true
 
+# async-trait = "0.1.89"
 minicbor = { version = "2.1", features = ["std", "alloc"] }
 rhai = { version = "1.23", features = ["sync", "no_custom_syntax"] }
 # rhai = { version = "1.23", features = ["sync", "no_custom_syntax", "serde"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
 sqlx-core = "0.8"
+strum = { version = "0.27", features = ["derive"] }
 thiserror = "2.0"
 
 tracing = "0.1"

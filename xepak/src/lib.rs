@@ -10,6 +10,8 @@ use rhai::ParseError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::types::XepakType;
+
 /*
 
 Think about representing errors in a form of an object like
@@ -33,14 +35,17 @@ pub enum XepakError {
     #[error("Record not found: {0}")]
     NotFound(String),
 
+    #[error("Can't covert type from {0} to {1}: {2}")]
+    Convert(XepakType, XepakType, String),
+
     #[error("Decode error: {0}")]
     Decode(String),
 
     #[error("Script parse error: {0}")]
     ScriptParse(#[from] ParseError),
-    
+
     #[error("Really unexpected error: {0}")]
-    Unexpected(String)
+    Unexpected(String),
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

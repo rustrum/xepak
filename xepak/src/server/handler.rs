@@ -1,4 +1,4 @@
-use std::{pin::Pin, sync::Arc};
+use std::{collections::HashMap, pin::Pin, sync::Arc};
 
 use actix_web::{
     Handler, HttpRequest, HttpResponse, HttpResponseBuilder,
@@ -16,12 +16,15 @@ use serde::Serialize;
 use crate::{
     XepakError,
     cfg::{EndpointSpecs, ResourceSpecs},
-    script::{RhaiRequestContext, init_rhai_script},
+    script::{RhaiRequestContext, build_rhai_ast, build_rhai_engine},
     server::{
-        CONTENT_TYPE_CBOR, CONTENT_TYPE_JSON, LIMIT_HEADER, OFFSET_HEADER, RequestInput,
-        XepakAppData, to_error_object,
+        CONTENT_TYPE_CBOR, CONTENT_TYPE_JSON, LIMIT_HEADER, OFFSET_HEADER, RequestArgs,
+        XepakAppData,
+        processor::{BodyToArgsProcessor, PreProcessor, PreProcessorHandler, QueryArgsProcessor},
+        to_error_object,
     },
     storage::ResourceRequest,
+    types::XepakValue,
 };
 
 /// Return CBOR or JSON representation
@@ -35,24 +38,54 @@ macro_rules! to_http_response {
     }};
 }
 
-pub type EndpointHandlerArgs = (HttpRequest, Data<XepakAppData>, Bytes);
+type EndpointHandlerArgs = (HttpRequest, Data<XepakAppData>, Bytes);
 
 #[derive(Clone)]
 pub struct EndpointHandler {
     ep: Arc<EndpointSpecs>,
-    script_env: Arc<Option<(Engine, AST)>>,
+    rhai_engine: Arc<Option<Engine>>,
+    handler_script: Arc<Option<AST>>,
+    // processor_scrips: Arc<HashMap<usize, AST>>,
+    processors: Arc<Vec<Box<dyn PreProcessorHandler + Send + Sync>>>,
 }
 
 impl EndpointHandler {
     pub fn new(ep: EndpointSpecs) -> Result<Self, XepakError> {
-        let script_env = match &ep.resource {
-            ResourceSpecs::QueryScript { script, .. } => Some(init_rhai_script(script)?),
+        let mut rhai_engine = None;
+
+        let handler_script = match &ep.resource {
+            ResourceSpecs::QueryScript { script, .. } => {
+                if rhai_engine.is_none() {
+                    rhai_engine = Some(build_rhai_engine());
+                }
+
+                let Some(rhai) = &rhai_engine else {
+                    return Err(XepakError::Unexpected(
+                        "Engine must exists here".to_string(),
+                    ));
+                };
+
+                Some(build_rhai_ast(&rhai, script)?)
+            }
             _ => None,
         };
 
+        let mut processors: Vec<Box<dyn PreProcessorHandler + Send + Sync>> =
+            vec![Box::new(QueryArgsProcessor {})];
+
+        // TODO sord pre processors
+        for p in &ep.processor {
+            match p {
+                PreProcessor::BodyToArgs => processors.push(Box::new(BodyToArgsProcessor {})),
+            }
+        }
+
         Ok(Self {
             ep: Arc::new(ep),
-            script_env: Arc::new(script_env),
+            rhai_engine: Arc::new(rhai_engine),
+            handler_script: Arc::new(handler_script),
+            // processor_scrips: Arc::new(Default::default()),
+            processors: Arc::new(processors),
         })
     }
 
@@ -60,55 +93,96 @@ impl EndpointHandler {
         &self,
         req: HttpRequest,
         state: Data<XepakAppData>,
-        _body: Bytes,
+        body: Bytes,
     ) -> HttpResponse {
         tracing::debug!("Handler called for {:?}", self.ep);
-        let ri = RequestInput::new(&self.ep, &req);
-        let result = match &self.ep.resource {
+
+        let mut ri = self
+            .pre_process_request(&req, &state, &body)
+            .await
+            .expect("TODO");
+
+        // Maybe it should be in processors
+        ri.parse_offset_limit(&self.ep.offset_arg, &self.ep.limit_arg, self.ep.fetch_limit);
+
+        let result = self
+            .handle_resource(&ri, &state)
+            .await
+            .expect("TODO error handle");
+
+        self.build_response(&req, &ri, result)
+    }
+
+    async fn pre_process_request(
+        &self,
+        req: &HttpRequest,
+        state: &Data<XepakAppData>,
+        body: &Bytes,
+    ) -> Result<RequestArgs, XepakError> {
+        let mut input = RequestArgs::new(&self.ep.uri, req.path());
+        // let ri = RequestInput::new(&self.ep, &req);
+
+        // let mut rab = RequestArgsBuilder::default();
+
+        for p in self.processors.as_ref() {
+            p.handle(req, state, body, &mut input)?;
+        }
+
+        Ok(input)
+    }
+
+    async fn handle_resource(
+        &self,
+        input: &RequestArgs,
+        state: &Data<XepakAppData>,
+    ) -> Result<Vec<HashMap<String, XepakValue>>, XepakError> {
+        match &self.ep.resource {
             ResourceSpecs::Query { data_source, query } => {
                 let ds = state.get_data_source(&data_source).expect("TODO");
 
-                let rr = ResourceRequest::new(&query, &ri);
-                ds.fetch_records(rr).await.expect("TODO QUERY")
+                let rr = ResourceRequest::new(&query, input);
+                ds.fetch_records(rr).await
             }
-            ResourceSpecs::QueryScript {
-                data_source,
-                script,
-            } => {
+            ResourceSpecs::QueryScript { data_source, .. } => {
                 let ds = state.get_data_source(&data_source).expect("TODO");
-                match self.script_env.as_ref() {
-                    Some((rhai, ast)) => {
-                        let mut scope = Scope::new();
-                        scope.set_value("ctx", RhaiRequestContext::from(ri.args.clone()));
 
-                        let query = match rhai.eval_ast_with_scope::<Dynamic>(&mut scope, ast) {
-                            Ok(result) => {
-                                if result.is_string() {
-                                    result.to_string()
-                                } else {
-                                    tracing::error!(
-                                        "Rhai script must return string instead: {result:?}"
-                                    );
-                                    todo!("TODO")
-                                }
-                            }
-                            Err(e) => {
-                                tracing::error!("{e}");
-                                todo!("TODO deal with errors")
-                            }
-                        };
+                let Some(rhai) = self.rhai_engine.as_ref() else {
+                    todo!("Error");
+                };
+                let Some(ast) = self.handler_script.as_ref() else {
+                    todo!("Error");
+                };
 
-                        let rr = ResourceRequest::new(&query, &ri);
-                        ds.fetch_records(rr).await.expect("TODO QUERY")
+                let mut scope = Scope::new();
+                scope.set_value("ctx", RhaiRequestContext::from(input.clone()));
+
+                let query = match rhai.eval_ast_with_scope::<Dynamic>(&mut scope, ast) {
+                    Ok(result) => {
+                        if result.is_string() {
+                            result.to_string()
+                        } else {
+                            tracing::error!("Rhai script must return string instead: {result:?}");
+                            todo!("TODO errors")
+                        }
                     }
-                    None => {
-                        // XepakError::Unexpected("Script env must be available".to_string())
-                        unimplemented!("TODO implement error handling")
+                    Err(e) => {
+                        tracing::error!("{e}");
+                        todo!("TODO deal with errors")
                     }
-                }
+                };
+
+                let rr = ResourceRequest::new(&query, input);
+                ds.fetch_records(rr).await
             }
-        };
+        }
+    }
 
+    fn build_response(
+        &self,
+        req: &HttpRequest,
+        input: &RequestArgs,
+        result: Vec<HashMap<String, XepakValue>>,
+    ) -> HttpResponse {
         let cbor_response = if let Some(accept) = req.headers().get(ACCEPT)
             && accept.eq(CONTENT_TYPE_CBOR)
         {
@@ -132,8 +206,8 @@ impl EndpointHandler {
                     cbor_response,
                     code,
                     &response,
-                    ri.get_limit(),
-                    ri.get_offset()
+                    input.get_limit(),
+                    input.get_offset()
                 );
             };
 
@@ -141,16 +215,16 @@ impl EndpointHandler {
                 cbor_response,
                 StatusCode::OK,
                 &result,
-                ri.get_limit(),
-                ri.get_offset()
+                input.get_limit(),
+                input.get_offset()
             )
         } else {
             to_http_response!(
                 cbor_response,
                 StatusCode::OK,
                 &result,
-                ri.get_limit(),
-                ri.get_offset()
+                input.get_limit(),
+                input.get_offset()
             )
         }
     }
@@ -170,7 +244,7 @@ impl Handler<EndpointHandlerArgs> for EndpointHandler {
 impl HttpServiceFactory for EndpointHandler {
     fn register(self, config: &mut actix_web::dev::AppService) {
         let name = format!("Entrypoint: {}", self.ep.uri);
-        tracing::debug!("Registering resource: {}", name);
+        tracing::debug!("Registering [{:?}]: {name}", std::thread::current().id());
 
         web::resource(self.ep.uri.clone())
             .route(web::route().to(self))

@@ -92,12 +92,12 @@ pub fn init_rhai_script(script: &str) -> Result<(Engine, AST), XepakError> {
     Ok((rhai, ast))
 }
 
-fn build_rhai_ast(rhai: &Engine, script: &str) -> Result<AST, ParseError> {
+pub fn build_rhai_ast(rhai: &Engine, script: &str) -> Result<AST, ParseError> {
     let ast = rhai.compile(script)?;
     Ok(ast)
 }
 
-fn build_rhai_engine() -> Engine {
+pub fn build_rhai_engine() -> Engine {
     let mut rhai = Engine::new();
     rhai.build_type::<RhaiRequestContext>();
     rhai.build_type::<RhaiQueryBuilder>();
