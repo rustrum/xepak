@@ -1,8 +1,10 @@
-use std::{collections::HashSet, fs, path::PathBuf};
+use std::{collections::HashSet, fs, path::PathBuf, sync::Arc};
 
 use serde::Deserialize;
 
-use crate::{XepakError, server::processor::PreProcessor, storage::StorageSettings};
+use crate::{
+    XepakError, schema::Schema, server::processor::PreProcessor, storage::StorageSettings,
+};
 
 /// Main configuration file that properties could be overwritten via ENV or not ? (TODO).
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -114,6 +116,12 @@ pub struct EndpointSpecs {
     /// This logic handle requests to extract/validate data
     #[serde(default)]
     pub processor: Vec<PreProcessor>,
+
+    #[serde(default)]
+    pub strict_schema: bool,
+
+    #[serde(default)]
+    pub schema: Schema,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -156,7 +164,7 @@ pub fn load_specs_from_dir(dir_path: PathBuf) -> Result<XepakSpecs, XepakError> 
 
     let mut result = XepakSpecs::default();
     for entry in dir_content {
-        let entry = entry?;
+        let entry = entry.map_err(Arc::new)?;
         let path = entry.path();
         if !path.is_file() || path.extension().unwrap_or_default().to_ascii_lowercase() != "toml" {
             continue;

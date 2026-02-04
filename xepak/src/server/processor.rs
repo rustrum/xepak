@@ -9,9 +9,16 @@ use serde::Deserialize;
 
 use crate::{
     XepakError,
+    schema::validate_with_schema,
     server::{CONTENT_TYPE_CBOR, RequestArgs, XepakAppData},
     types::XepakValue,
 };
+
+pub const PRIORITY_FIRST: u16 = 60_000;
+
+pub const PRIORITY_NORMAL: u16 = 30_000;
+
+pub const PRIORITY_LAST: u16 = 1000;
 
 /// Define request processors variants.
 #[derive(Clone, Debug, Deserialize)]
@@ -22,8 +29,8 @@ pub enum PreProcessor {
 
 pub trait PreProcessorHandler {
     /// Handler with higher priority will be processed first
-    fn priority(&self) -> i16 {
-        0
+    fn priority(&self) -> u16 {
+        PRIORITY_NORMAL
     }
 
     fn handle(
@@ -35,11 +42,35 @@ pub trait PreProcessorHandler {
     ) -> Result<(), XepakError>;
 }
 
+/// Execute validation logic for all input arguments according to schema.
+pub struct InputArgsValidator {}
+impl PreProcessorHandler for InputArgsValidator {
+    fn priority(&self) -> u16 {
+        PRIORITY_LAST
+    }
+
+    fn handle(
+        &self,
+        _req: &HttpRequest,
+        _state: &Data<XepakAppData>,
+        _body: &Bytes,
+        input: &mut RequestArgs,
+    ) -> Result<(), XepakError> {
+        validate_with_schema(&input.schema, &input.path_args)?;
+        validate_with_schema(&input.schema, &input.args)?;
+        Ok(())
+    }
+}
+
 /// Handle arguments from query string arguments.
 /// Skip query string args POST/PUT requests (basically anything that have request body)
 pub struct QueryArgsProcessor {}
 
 impl PreProcessorHandler for QueryArgsProcessor {
+    fn priority(&self) -> u16 {
+        PRIORITY_FIRST + 1
+    }
+
     fn handle(
         &self,
         req: &HttpRequest,
@@ -60,7 +91,7 @@ impl PreProcessorHandler for QueryArgsProcessor {
             };
 
         for (k, v) in query_args {
-            input.set_arg_validate(k, v)?;
+            input.set_arg_with_schema(k, v, true)?;
         }
 
         Ok(())
@@ -100,7 +131,7 @@ impl BodyToArgsProcessor {
                 value.try_into()?
             };
 
-            input.set_arg_validate(key.clone(), xvalue)?;
+            input.set_arg_with_schema(key.clone(), xvalue, true)?;
         }
         Ok(())
     }

@@ -2,7 +2,7 @@
 
 current_dir="$(dirname "$0")"
 
-db_file="$current_dir/db.sqlite3"
+db_file="$current_dir/examples/db.sqlite3"
 
 sql_file="$current_dir/examples/db-sqlite.sql"
 

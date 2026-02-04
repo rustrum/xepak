@@ -11,6 +11,7 @@ VALUES
 ('user2', 'password2'),
 ('user3', 'password3');
 
+
 CREATE TABLE IF NOT EXISTS posts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
@@ -26,3 +27,18 @@ VALUES
 ('Post 3', 'Content for Post 3'),
 ('Post 4', 'Content for Post 4'),
 ('Post 5', 'Content for Post 5');
+
+
+CREATE TABLE IF NOT EXISTS payments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    amount REAL NOT NULL,
+    created TEXT NOT NULL DEFAULT current_timestamp,
+    reprocess_trigger TEXT,
+    FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+INSERT INTO payments (user_id, amount)
+VALUES
+(1, 22.3),
+(2, 33.34);

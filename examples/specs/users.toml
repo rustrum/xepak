@@ -13,11 +13,28 @@ fetch_limit = 20
 [endpoint.resource]
 type = "query_script"
 script = """
+
+let args = #{
+    key: "value",
+    key2: "value2",
+};
+
+let count = storage_query_value("SELECT count(*) FROM users", args);
+print(`Users count is ${count}`);
+//if count < 4 {
+//   error_input("Count not OK");
+//}
+
+
 let query = query_builder("SELECT * FROM users");
 
 let parts = [];
 
 if ctx.has_arg("name") {
+    let v = ctx.get_arg("name");
+    if ctx.get_arg("name").len() < 3 {
+        error_input("Input argument 'name' length must be greater than 2");
+    }
     parts.push("username = {{name}}")
 }
 if ctx.has_arg("pass") {

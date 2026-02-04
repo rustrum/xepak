@@ -11,13 +11,14 @@ use actix_web::dev::Server;
 use actix_web::http::StatusCode;
 use actix_web::middleware::Logger;
 use actix_web::web::ServiceConfig;
-use actix_web::{HttpRequest, HttpServer, web::Data};
+use actix_web::{HttpServer, web::Data};
 
 use crate::XepakError;
-use crate::cfg::{EndpointSpecs, XepakConf, XepakSpecs};
+use crate::cfg::{XepakConf, XepakSpecs};
+use crate::schema::{Schema, convert_with_schema};
 use crate::server::handler::EndpointHandler;
 use crate::storage::{SqlxRequestArgs, Storage, StorageRequestArgs, init_storage_connectors};
-use crate::types::{Schema, XepakValue};
+use crate::types::XepakValue;
 
 const OFFSET_HEADER: &str = "X-Offset";
 const LIMIT_HEADER: &str = "X-Limit";
@@ -30,7 +31,7 @@ pub struct XepakAppData {
 }
 
 impl XepakAppData {
-    fn get_data_source(&self, key: &str) -> Option<&Storage> {
+    pub fn get_data_source(&self, key: &str) -> Option<&Storage> {
         self.storage_links.get(key)
     }
 }
@@ -69,7 +70,7 @@ pub async fn init_server(
 
     let mut endpoints = Vec::new();
     for espec in specs.endpoint {
-        endpoints.push(EndpointHandler::new(espec)?);
+        endpoints.push(EndpointHandler::new(espec, &app_data)?);
     }
 
     let server = HttpServer::new(move || {
@@ -88,7 +89,8 @@ pub async fn init_server(
         // app.service()
         app
     })
-    .bind((Ipv4Addr::UNSPECIFIED, port))?
+    .bind((Ipv4Addr::UNSPECIFIED, port))
+    .map_err(Arc::new)?
     .keep_alive(actix_web::http::KeepAlive::Disabled)
     .run();
 
@@ -97,17 +99,24 @@ pub async fn init_server(
 
 #[derive(Debug, Clone)]
 pub struct RequestArgs {
+    pub(crate) schema: Schema,
+
+    /// If true - fail on non existing args
+    strict_schema: bool,
+
     /// Arguments parsed from URI (higher priority)
-    path_args: Arc<HashMap<String, XepakValue>>,
+    pub(crate) path_args: Arc<HashMap<String, XepakValue>>,
+
     /// Final input args storage with schema applied
-    args: Arc<HashMap<String, XepakValue>>,
+    pub(crate) args: Arc<HashMap<String, XepakValue>>,
 
     limit: usize,
+
     offset: usize,
 }
 
 impl RequestArgs {
-    pub fn new(uri_pattern: &str, req_path: &str) -> Self {
+    pub fn new(schema: Schema, strict_schema: bool, uri_pattern: &str, req_path: &str) -> Self {
         // Todo return result that will validate path_args against schema
 
         let mut path = actix_router::Path::new(req_path);
@@ -121,6 +130,8 @@ impl RequestArgs {
             .collect();
 
         RequestArgs {
+            schema,
+            strict_schema,
             path_args: Arc::new(path_args),
             args: Arc::new(Default::default()),
             limit: 0,
@@ -128,11 +139,22 @@ impl RequestArgs {
         }
     }
 
+    pub fn new_in_script(args: HashMap<String, XepakValue>, limit: usize, offset: usize) -> Self {
+        RequestArgs {
+            schema: Schema::default(),
+            strict_schema: false,
+            path_args: Arc::new(Default::default()),
+            args: Arc::new(args),
+            limit,
+            offset,
+        }
+    }
+
     pub fn has_any_arg(&self, arg_name: &str) -> bool {
         if self.path_args.contains_key(arg_name) {
             return true;
         }
-        return self.args.contains_key(arg_name);
+        self.args.contains_key(arg_name)
     }
 
     pub fn get_arg_value(&self, argument: &str) -> Option<&XepakValue> {
@@ -164,11 +186,9 @@ impl RequestArgs {
     }
 
     fn parse_usize_from(&self, arg_name: &str) -> Option<usize> {
-        let Some(value) = self.get_arg_value(arg_name) else {
-            return None;
-        };
+        let value = self.get_arg_value(arg_name)?;
 
-        let ivalue = match value.as_integer() {
+        let ivalue = match value.as_int() {
             Ok(v) => v,
             Err(e) => {
                 tracing::debug!("Can't get int from arg {arg_name}: {e}");
@@ -184,12 +204,13 @@ impl RequestArgs {
         Some(ivalue as usize)
     }
 
-    /// Could return error if input value can't be converted into proper type according to schema or validated.
-    pub fn set_arg_validate(
+    /// Set argument value and apply schema conversion to it if any defined.
+    /// Strict rule does apply only to `from_request = true` arguments.
+    pub fn set_arg_with_schema(
         &mut self,
         name: String,
         value: XepakValue,
-        // schema: &Schema,
+        from_request: bool,
     ) -> Result<(), XepakError> {
         let Some(args) = Arc::get_mut(&mut self.args) else {
             return Err(XepakError::Unexpected(
@@ -197,9 +218,15 @@ impl RequestArgs {
             ));
         };
 
+        let value = convert_with_schema(
+            &self.schema,
+            name.as_str(),
+            value,
+            self.strict_schema && from_request,
+        )?;
+
         args.insert(name, value);
-        // TODO deal with schema
-        // probably request args must be available for the request schema
+
         Ok(())
     }
 }
@@ -226,29 +253,38 @@ impl SqlxRequestArgs for RequestArgs {
             )));
         };
 
-        // TODO should bind with resepect of the schema
+        // TODO should bind with respect to the schema
         Ok(value.bind_sqlx(query))
     }
 }
 
-pub fn to_error_object(err: XepakError) -> (StatusCode, HashMap<String, String>) {
-    let mut result = HashMap::<String, String>::with_capacity(2);
-    let mut code = StatusCode::INTERNAL_SERVER_ERROR;
+pub fn to_error_object(err: XepakError) -> (StatusCode, HashMap<String, XepakValue>) {
+    let mut result = HashMap::<String, XepakValue>::with_capacity(2);
+    let mut code = StatusCode::from_u16(520).expect("Must not fail (^_^)");
     match err {
-        XepakError::Input(msg) => {
-            code = StatusCode::BAD_REQUEST;
-            result.insert("code".to_string(), "bad_request".to_string());
-            result.insert("message".to_string(), msg);
-        }
         XepakError::NotFound(msg) => {
-            result.insert("code".to_string(), "not_found".to_string());
-            result.insert("message".to_string(), msg);
+            result.insert("code".to_string(), "not_found".into());
+            result.insert("message".to_string(), msg.into());
             code = StatusCode::NOT_FOUND;
         }
+        XepakError::Input(msg) => {
+            code = StatusCode::BAD_REQUEST;
+            result.insert("code".to_string(), "bad_request".into());
+            result.insert("message".to_string(), msg.into());
+        }
+        XepakError::Decode(msg) | XepakError::WeScrewed(msg) => {
+            code = StatusCode::INTERNAL_SERVER_ERROR;
+            result.insert("code".to_string(), "internal_error".into());
+            result.insert("message".to_string(), msg.into());
+        }
+        XepakError::Forbidden(msg) => {
+            code = StatusCode::FORBIDDEN;
+            result.insert("code".to_string(), "forbidden".into());
+            result.insert("message".to_string(), msg.into());
+        }
         _ => {
-            result.insert("code".to_string(), "internal_error".to_string());
+            result.insert("code".to_string(), "unknown_error".into());
         }
     }
-
     (code, result)
 }

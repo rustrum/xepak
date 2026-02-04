@@ -349,7 +349,7 @@ mod tests {
         assert_eq!(range, 58..=66);
 
         assert!(lexer.next_key_arg().is_none());
-        
+
         let mut lexer =
             SqlLexer::new("SELECT * FROM users LIMIT {{--LIMIT--}} OFFSET {{__OFFSET__}}");
 

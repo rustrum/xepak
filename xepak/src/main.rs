@@ -1,8 +1,8 @@
-use std::{io, path::PathBuf};
+use std::{io, path::PathBuf, sync::Arc};
 
 use xepak::{
     XepakError,
-    cfg::{XepakConf, load_conf_file, load_specs_from_dir},
+    cfg::{load_conf_file, load_specs_from_dir},
     server::init_server,
 };
 
@@ -12,7 +12,7 @@ const ENV_PATH: &str = "XEPAK_CONFIG";
 
 #[actix_web::main]
 async fn main() -> Result<(), XepakError> {
-    let args = parse_cli_args()?;
+    let args = parse_cli_args().map_err(Arc::new)?;
 
     let args = update_from_env(args);
 
@@ -54,7 +54,7 @@ async fn main() -> Result<(), XepakError> {
 
     let server = init_server(conf_dir, xepak_conf, xepak_specs).await?;
 
-    server.await?;
+    server.await.map_err(Arc::new)?;
 
     Ok(())
 }
@@ -83,7 +83,7 @@ fn parse_cli_args() -> io::Result<AppArgs> {
                 args.log = Some(log_str.clone())
             }
 
-            args.config_file = opts.arguments.iter().next().cloned();
+            args.config_file = opts.arguments.first().cloned();
 
             Ok(args)
         }

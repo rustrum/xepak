@@ -1,0 +1,35 @@
+[[endpoint]]
+uri = "/payments/list"
+fetch_limit = 20
+
+[endpoint.resource]
+type = "query"
+query = "SELECT * FROM payments LIMIT {{-limit-}} OFFSET {{-offset-}}"
+
+
+[[endpoint]]
+uri = "/payment/{payment_id:\\d+}/revalidate"
+single_record_response = true
+
+[endpoint.resource]
+type = "query_script"
+script = """
+// Sqlite returns integer instead boolean so we must deal with that
+let allowed = storage_query_value(
+    "SELECT COALESCE(reprocess_trigger <= datetime('now', '-20 seconds'), 1) FROM payments WHERE id = {{id}}",
+    #{id: ctx.get_arg("payment_id")}
+);
+
+print(`Reprocess trigger allowed value is ${allowed}`);
+
+// And now we could conditionally stop further processing
+if allowed != 1 {
+    error_input("Can't trigger reprocessing more than once in a 20 seconds");
+}
+
+// Main SQL logic
+return #"
+UPDATE payments SET reprocess_trigger = current_timestamp WHERE id = {{payment_id}}
+RETURNING id, reprocess_trigger
+"#;
+"""

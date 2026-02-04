@@ -4,22 +4,16 @@
 //!  - project input to compatible DB type (String -> something)
 //!  - have some validation logic for input types only
 
-use std::{any::Any, borrow::Cow, collections::HashMap};
+use std::collections::HashMap;
 
-use sqlx::{TypeInfo, ValueRef as _, encode::IsNull};
-use sqlx_core::any::AnyValueKind;
+use serde::Deserialize;
+use sqlx::{TypeInfo, ValueRef as _};
 use strum::Display;
 
 use crate::XepakError;
 
-/// Schema for input/output arguments
-pub type Schema = HashMap<String, ArgSchema>;
-
 /// Record representation from storage
 pub type Record = HashMap<String, XepakValue>;
-
-#[derive(Debug)]
-pub struct ArgSchema {}
 
 /// A workaround to fix rust error: `try_from` has an incompatible type for trait.
 pub struct SqlxValue<'r>(pub sqlx::any::AnyValueRef<'r>);
@@ -31,13 +25,17 @@ impl<'r> SqlxValue<'r> {
 }
 
 /// Represents unified type that is matched with a proper [`XepakValueWrapper`].
-#[derive(Clone, Copy, Display, Debug)]
+#[derive(Display, Debug, Default, Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum XepakType {
+    /// By default all inputs are handled as text.
+    #[default]
+    Text,
+    /// Null/Unit type when we know that value is null and have no idea what type it is.
     Null,
     Boolean,
-    Integer,
+    Int,
     Float,
-    Text,
 }
 
 /// Unified value wrapper for input/output (IDK a better solution than using enum yet).
@@ -67,10 +65,14 @@ impl XepakValue {
         match self {
             Self::Null => XepakType::Null,
             Self::Boolean(_) => XepakType::Boolean,
-            Self::Integer(_) => XepakType::Integer,
+            Self::Integer(_) => XepakType::Int,
             Self::Float(_) => XepakType::Float,
             Self::Text(_) => XepakType::Text,
         }
+    }
+
+    pub fn is_null(&self) -> bool {
+        if let Self::Null = self { true } else { false }
     }
 
     pub fn from_str_as(v: &str, parse_as: XepakType) -> Result<Self, XepakError> {
@@ -80,7 +82,7 @@ impl XepakValue {
                 let parsed = v.parse().map_err(|e| XepakError::Decode(format!("{e}")))?;
                 Self::Boolean(parsed)
             }
-            XepakType::Integer => {
+            XepakType::Int => {
                 let parsed = v.parse().map_err(|e| XepakError::Decode(format!("{e}")))?;
                 Self::Integer(parsed)
             }
@@ -93,10 +95,10 @@ impl XepakValue {
         Ok(xv)
     }
 
-    pub fn as_integer(&self) -> Result<i128, XepakError> {
-        const TO_TYPE: XepakType = XepakType::Integer;
+    pub fn as_int(&self) -> Result<i128, XepakError> {
+        const TO_TYPE: XepakType = XepakType::Int;
         match self {
-            XepakValue::Null => Err(XepakError::Convert(
+            XepakValue::Null => Err(XepakError::ConvertValue(
                 self.get_type(),
                 TO_TYPE,
                 "Not possible".to_string(),
@@ -105,13 +107,13 @@ impl XepakValue {
             XepakValue::Integer(v) => Ok(*v),
             XepakValue::Float(v) => {
                 if v.fract().abs() > f64::EPSILON {
-                    Err(XepakError::Convert(
+                    Err(XepakError::ConvertValue(
                         self.get_type(),
                         TO_TYPE,
                         format!("Has fractional part {v}"),
                     ))
                 } else if *v > i64::MAX as f64 || *v < i64::MIN as f64 {
-                    Err(XepakError::Convert(
+                    Err(XepakError::ConvertValue(
                         self.get_type(),
                         TO_TYPE,
                         format!("Out of range {v}"),
@@ -121,13 +123,96 @@ impl XepakValue {
                 }
             }
             XepakValue::Text(v) => {
-                let parsed = v
-                    .parse()
-                    .map_err(|e| XepakError::Convert(self.get_type(), TO_TYPE, format!("{e}")))?;
+                let parsed = v.parse().map_err(|e| {
+                    XepakError::ConvertValue(self.get_type(), TO_TYPE, format!("{e}"))
+                })?;
 
                 Ok(parsed)
             }
         }
+    }
+
+    pub fn as_string(&self) -> Result<String, XepakError> {
+        Ok(match self {
+            XepakValue::Null => "".to_string(),
+            XepakValue::Boolean(v) => v.to_string(),
+            XepakValue::Integer(v) => v.to_string(),
+            XepakValue::Float(v) => v.to_string(),
+            XepakValue::Text(v) => v.clone(),
+        })
+    }
+
+    pub fn as_bool(&self) -> Result<bool, XepakError> {
+        const TO_TYPE: XepakType = XepakType::Boolean;
+        Ok(match self {
+            XepakValue::Null => {
+                return Err(XepakError::ConvertValue(
+                    self.get_type(),
+                    TO_TYPE,
+                    "Not possible".to_string(),
+                ));
+            }
+            XepakValue::Boolean(v) => *v,
+            XepakValue::Integer(v) => {
+                if *v == 0 {
+                    false
+                } else if *v == 1 {
+                    true
+                } else {
+                    return Err(XepakError::ConvertValue(
+                        self.get_type(),
+                        TO_TYPE,
+                        format!("Integer value {} can't be a boolean", v),
+                    ));
+                }
+            }
+            XepakValue::Float(v) => {
+                if *v == 0.0 {
+                    false
+                } else if *v == 1.0 {
+                    true
+                } else {
+                    return Err(XepakError::ConvertValue(
+                        self.get_type(),
+                        TO_TYPE,
+                        format!("Float value {} can't be a boolean", v),
+                    ));
+                }
+            }
+            XepakValue::Text(v) => v.parse().map_err(|e| XepakError::Decode(format!("{e}")))?,
+        })
+    }
+    pub fn as_float(&self) -> Result<f64, XepakError> {
+        const TO_TYPE: XepakType = XepakType::Float;
+        Ok(match self {
+            XepakValue::Null => {
+                return Err(XepakError::ConvertValue(
+                    self.get_type(),
+                    TO_TYPE,
+                    "Not possible".to_string(),
+                ));
+            }
+            XepakValue::Boolean(v) => {
+                if *v {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
+            XepakValue::Integer(v) => {
+                if *v > f64::MAX as i128 || *v < f64::MIN as i128 {
+                    return Err(XepakError::ConvertValue(
+                        self.get_type(),
+                        TO_TYPE,
+                        format!("Out of range value {v}"),
+                    ));
+                } else {
+                    *v as f64
+                }
+            }
+            XepakValue::Float(v) => *v,
+            XepakValue::Text(v) => v.parse().map_err(|e| XepakError::Decode(format!("{e}")))?,
+        })
     }
 
     pub fn bind_sqlx<'a>(
@@ -185,12 +270,12 @@ impl TryFrom<&serde_json::Value> for XepakValue {
                 })
             }
             serde_json::Value::String(v) => Ok(XepakValue::Text(v.clone())),
-            serde_json::Value::Array(_values) => {
-                Err(XepakError::Decode(format!("Cant decode from JSON array")))
-            }
-            serde_json::Value::Object(_map) => {
-                Err(XepakError::Decode(format!("Cant decode from JSON object")))
-            }
+            serde_json::Value::Array(_values) => Err(XepakError::Decode(
+                "Cant decode from JSON array".to_string(),
+            )),
+            serde_json::Value::Object(_map) => Err(XepakError::Decode(
+                "Cant decode from JSON object".to_string(),
+            )),
         }
     }
 }
@@ -213,7 +298,7 @@ impl<'r> TryFrom<SqlxValue<'r>> for XepakValue {
                 Self::Integer(v as i128)
             }
             // TODO add BLOB
-            "REAL" => {
+            "REAL" | "DOUBLE" => {
                 // TODO handle unsigned integers better
                 let v: f64 = sqlx::Decode::<sqlx::Any>::decode(value)?;
                 Self::Float(v)
@@ -240,32 +325,6 @@ SQLITE
             DataType::Time => "TIME",
             DataType::Datetime => "DATETIME",
 */
-
-// impl sqlx::Encode<'_, sqlx::Any> for XepakValue {
-//     fn encode_by_ref(
-//         &self,
-//         buf: &mut <sqlx::Any as sqlx::Database>::ArgumentBuffer<'_>,
-//     ) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
-//         let res = match self {
-//             XepakValue::Null => IsNull::Yes,
-//             XepakValue::Integer(v) => {
-//                 buf.0.push(AnyValueKind::BigInt(*v as i64));
-//                 IsNull::No
-//             }
-//             XepakValue::Float(v) => {
-//                 buf.0.push(AnyValueKind::Double(*v));
-//                 IsNull::No
-//             }
-//             XepakValue::Text(v) => {
-//                 buf.0.push(AnyValueKind::Text(Cow::Owned(v.clone())));
-//                 IsNull::No
-//             }
-//             XepakValue::Boolean(_) => todo!(),
-//         };
-
-//         Ok(res)
-//     }
-// }
 
 impl<'de> serde::Deserialize<'de> for XepakValue {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>

@@ -10,33 +10,25 @@ use actix_web::{
     },
     web::{self, Bytes, Data},
 };
-use rhai::{AST, Dynamic, Engine, Scope};
+use rhai::{AST, Engine};
 use serde::Serialize;
 
 use crate::{
     XepakError,
     cfg::{EndpointSpecs, ResourceSpecs},
-    script::{RhaiRequestContext, build_rhai_ast, build_rhai_engine},
+    script::{build_rhai_ast, build_rhai_engine, execute_script_blocking},
     server::{
         CONTENT_TYPE_CBOR, CONTENT_TYPE_JSON, LIMIT_HEADER, OFFSET_HEADER, RequestArgs,
         XepakAppData,
-        processor::{BodyToArgsProcessor, PreProcessor, PreProcessorHandler, QueryArgsProcessor},
+        processor::{
+            BodyToArgsProcessor, InputArgsValidator, PreProcessor, PreProcessorHandler,
+            QueryArgsProcessor,
+        },
         to_error_object,
     },
     storage::ResourceRequest,
     types::XepakValue,
 };
-
-/// Return CBOR or JSON representation
-macro_rules! to_http_response {
-    ($is_cbor:expr, $status_code:expr, $result:expr, $limit:expr, $offset:expr) => {{
-        if $is_cbor {
-            to_cbor_response($status_code, $result, $limit, $offset)
-        } else {
-            to_json_response($status_code, $result, $limit, $offset)
-        }
-    }};
-}
 
 type EndpointHandlerArgs = (HttpRequest, Data<XepakAppData>, Bytes);
 
@@ -50,13 +42,13 @@ pub struct EndpointHandler {
 }
 
 impl EndpointHandler {
-    pub fn new(ep: EndpointSpecs) -> Result<Self, XepakError> {
+    pub fn new(ep: EndpointSpecs, app: &XepakAppData) -> Result<Self, XepakError> {
         let mut rhai_engine = None;
 
         let handler_script = match &ep.resource {
             ResourceSpecs::QueryScript { script, .. } => {
                 if rhai_engine.is_none() {
-                    rhai_engine = Some(build_rhai_engine());
+                    rhai_engine = Some(build_rhai_engine(app));
                 }
 
                 let Some(rhai) = &rhai_engine else {
@@ -65,20 +57,23 @@ impl EndpointHandler {
                     ));
                 };
 
-                Some(build_rhai_ast(&rhai, script)?)
+                Some(build_rhai_ast(rhai, script)?)
             }
             _ => None,
         };
 
-        let mut processors: Vec<Box<dyn PreProcessorHandler + Send + Sync>> =
-            vec![Box::new(QueryArgsProcessor {})];
+        let mut processors: Vec<Box<dyn PreProcessorHandler + Send + Sync>> = vec![
+            Box::new(QueryArgsProcessor {}),
+            Box::new(InputArgsValidator {}),
+        ];
 
-        // TODO sord pre processors
         for p in &ep.processor {
             match p {
                 PreProcessor::ParseBodyArgs => processors.push(Box::new(BodyToArgsProcessor {})),
             }
         }
+
+        processors.sort_by_key(|b| std::cmp::Reverse(b.priority()));
 
         Ok(Self {
             ep: Arc::new(ep),
@@ -97,20 +92,26 @@ impl EndpointHandler {
     ) -> HttpResponse {
         tracing::debug!("Handler called for {:?}", self.ep);
 
-        let mut ri = self
-            .pre_process_request(&req, &state, &body)
-            .await
-            .expect("TODO");
-
+        let mut ri = match self.pre_process_request(&req, &state, &body).await {
+            Ok(result) => result,
+            Err(err) => {
+                let (status_code, data) = to_error_object(err);
+                return self.data_to_response(&req, None, status_code, &data);
+            }
+        };
         // Maybe it should be in processors
         ri.parse_offset_limit(&self.ep.offset_arg, &self.ep.limit_arg, self.ep.fetch_limit);
 
-        let result = self
-            .handle_resource(&ri, &state)
-            .await
-            .expect("TODO error handle");
+        // TODO rethink this with new storage api for query/query_one
+        let data = match self.handle_resource(&ri, &state).await {
+            Ok(d) => d,
+            Err(err) => {
+                let (status_code, data) = to_error_object(err);
+                return self.data_to_response(&req, None, status_code, &data);
+            }
+        };
 
-        self.build_response(&req, &ri, result)
+        self.build_response(&req, &ri, data)
     }
 
     async fn pre_process_request(
@@ -119,10 +120,12 @@ impl EndpointHandler {
         state: &Data<XepakAppData>,
         body: &Bytes,
     ) -> Result<RequestArgs, XepakError> {
-        let mut input = RequestArgs::new(&self.ep.uri, req.path());
-        // let ri = RequestInput::new(&self.ep, &req);
-
-        // let mut rab = RequestArgsBuilder::default();
+        let mut input = RequestArgs::new(
+            self.ep.schema.clone(),
+            self.ep.strict_schema,
+            &self.ep.uri,
+            req.path(),
+        );
 
         for p in self.processors.as_ref() {
             p.handle(req, state, body, &mut input)?;
@@ -138,51 +141,56 @@ impl EndpointHandler {
     ) -> Result<Vec<HashMap<String, XepakValue>>, XepakError> {
         match &self.ep.resource {
             ResourceSpecs::Query { data_source, query } => {
-                let ds = state.get_data_source(&data_source).expect("TODO");
+                let Some(ds) = state.get_data_source(data_source) else {
+                    return Err(XepakError::Cfg(format!(
+                        "Data source does not exists \"{data_source}\""
+                    )));
+                };
 
-                let rr = ResourceRequest::new(&query, input);
-                ds.fetch_records(rr).await
+                let rr = ResourceRequest::new(query, input);
+                ds.query(rr).await
             }
             ResourceSpecs::QueryScript { data_source, .. } => {
-                let ds = state.get_data_source(&data_source).expect("TODO");
-
-                let Some(rhai) = self.rhai_engine.as_ref() else {
-                    todo!("Error");
-                };
-                let Some(ast) = self.handler_script.as_ref() else {
-                    todo!("Error");
+                let Some(ds) = state.get_data_source(data_source) else {
+                    return Err(XepakError::Cfg(format!(
+                        "Data source does not exists \"{data_source}\""
+                    )));
                 };
 
-                let mut scope = Scope::new();
-                scope.set_value("ctx", RhaiRequestContext::from(input.clone()));
+                let result = execute_script_blocking(
+                    state.clone(),
+                    self.ep.uri.clone(),
+                    self.rhai_engine.clone(),
+                    self.handler_script.clone(),
+                    input.clone(),
+                )
+                .await?;
 
-                let query = match rhai.eval_ast_with_scope::<Dynamic>(&mut scope, ast) {
-                    Ok(result) => {
-                        if result.is_string() {
-                            result.to_string()
-                        } else {
-                            tracing::error!("Rhai script must return string instead: {result:?}");
-                            todo!("TODO errors")
-                        }
-                    }
-                    Err(e) => {
-                        tracing::error!("{e}");
-                        todo!("TODO deal with errors")
-                    }
+                let query = if result.is_string() {
+                    result.to_string()
+                } else {
+                    tracing::error!("Rhai script must return string instead: {result:?}");
+                    return Err(XepakError::Unexpected(format!(
+                        "Rhai script must return string instead: {result:?}"
+                    )));
                 };
 
                 let rr = ResourceRequest::new(&query, input);
-                ds.fetch_records(rr).await
+                ds.query(rr).await
             }
         }
     }
 
-    fn build_response(
+    fn data_to_response<R>(
         &self,
         req: &HttpRequest,
-        input: &RequestArgs,
-        result: Vec<HashMap<String, XepakValue>>,
-    ) -> HttpResponse {
+        input: Option<&RequestArgs>,
+        status_code: StatusCode,
+        data: &R,
+    ) -> HttpResponse
+    where
+        R: Serialize + minicbor::Encode<()>,
+    {
         let cbor_response = if let Some(accept) = req.headers().get(ACCEPT)
             && accept.eq(CONTENT_TYPE_CBOR)
         {
@@ -191,41 +199,41 @@ impl EndpointHandler {
             false
         };
 
+        // TODO should normalize headers output instead providing limit/offset
+        let (limit, offset) = match input {
+            Some(inp) => (inp.get_limit(), inp.get_offset()),
+            None => (0, 0),
+        };
+
+        if cbor_response {
+            to_cbor_response(status_code, data, limit, offset)
+        } else {
+            to_json_response(status_code, data, limit, offset)
+        }
+    }
+    fn build_response(
+        &self,
+        req: &HttpRequest,
+        input: &RequestArgs,
+        data: Vec<HashMap<String, XepakValue>>,
+    ) -> HttpResponse {
         if self.ep.single_record_response {
-            if result.len() > 1 {
+            if data.len() > 1 {
                 tracing::warn!("More than one record returned for URI:{}", req.uri());
             }
 
-            let Some(result) = result.iter().next() else {
-                let (code, response) = to_error_object(XepakError::NotFound(format!(
+            let Some(one_row_data) = data.first() else {
+                let (status_code, err_data) = to_error_object(XepakError::NotFound(format!(
                     "Record not found at URI: {}",
                     req.uri()
                 )));
 
-                return to_http_response!(
-                    cbor_response,
-                    code,
-                    &response,
-                    input.get_limit(),
-                    input.get_offset()
-                );
+                return self.data_to_response(req, Some(input), status_code, &err_data);
             };
 
-            to_http_response!(
-                cbor_response,
-                StatusCode::OK,
-                &result,
-                input.get_limit(),
-                input.get_offset()
-            )
+            self.data_to_response(req, Some(input), StatusCode::OK, &one_row_data)
         } else {
-            to_http_response!(
-                cbor_response,
-                StatusCode::OK,
-                &result,
-                input.get_limit(),
-                input.get_offset()
-            )
+            self.data_to_response(req, Some(input), StatusCode::OK, &data)
         }
     }
 }
@@ -276,10 +284,10 @@ fn to_json_response<T: Serialize>(
         Ok(body) => {
             let mut resp = HttpResponseBuilder::new(code);
             resp.append_header((CONTENT_TYPE, CONTENT_TYPE_JSON));
-            if (limit > 0) {
+            if limit > 0 {
                 resp.append_header((LIMIT_HEADER, limit.to_string()));
             }
-            if (offset > 0) {
+            if offset > 0 {
                 resp.append_header((OFFSET_HEADER, offset.to_string()));
             }
 
