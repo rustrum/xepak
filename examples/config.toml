@@ -2,3 +2,12 @@
 # id = "default"
 type = "sqlite"
 file = "./db.sqlite3"
+
+
+simple_auth = [
+    { id = "boss", key = ";;askdjf", from_env = false, roles = [
+        "ADMIN",
+        "MANAGER",
+    ] },
+    { id = "user", key = ";;askdjf", from_env = false },
+]

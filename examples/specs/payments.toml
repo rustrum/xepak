@@ -6,10 +6,20 @@ fetch_limit = 20
 type = "query"
 query = "SELECT * FROM payments LIMIT {{-limit-}} OFFSET {{-offset-}}"
 
-
 [[endpoint]]
 uri = "/payment/{payment_id:\\d+}/revalidate"
 single_record_response = true
+
+# Access check and cache could also be a processor I guess ?
+[[endpoint.processor]]
+type = "simple_auth"
+allow = [
+    { kind = "id", v = "boss" },
+    { kind = "and", nested = [
+        { kind = "role", v = "ADMIN" },
+        { kind = "role", v = "MANAGER" },
+    ] },
+]
 
 [endpoint.resource]
 type = "query_script"

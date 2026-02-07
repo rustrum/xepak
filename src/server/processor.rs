@@ -8,10 +8,7 @@ use actix_web::{
 use serde::Deserialize;
 
 use crate::{
-    XepakError,
-    schema::validate_with_schema,
-    server::{CONTENT_TYPE_CBOR, RequestArgs, XepakAppData},
-    types::XepakValue,
+    XepakError, auth::CheckAuthConf, schema::validate_with_schema, server::{CONTENT_TYPE_CBOR, RequestArgs, XepakAppData}, types::XepakValue
 };
 
 pub const PRIORITY_FIRST: u16 = 60_000;
@@ -25,6 +22,7 @@ pub const PRIORITY_LAST: u16 = 1000;
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum PreProcessor {
     ParseBodyArgs,
+    CheckAuth { allow: Vec<CheckAuthConf> },
 }
 
 pub trait PreProcessorHandler {

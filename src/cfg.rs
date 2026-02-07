@@ -3,7 +3,8 @@ use std::{collections::HashSet, fs, path::PathBuf, sync::Arc};
 use serde::Deserialize;
 
 use crate::{
-    XepakError, schema::Schema, server::processor::PreProcessor, storage::StorageSettings,
+    XepakError, auth::SimpleAuthSpecs, schema::Schema, server::processor::PreProcessor,
+    storage::StorageSettings,
 };
 
 /// Main configuration file that properties could be overwritten via ENV or not ? (TODO).
@@ -20,6 +21,9 @@ pub struct XepakConf {
     /// Storage connection settings.
     #[serde(default)]
     pub storage: Vec<StorageSettings>,
+
+    #[serde(default)]
+    pub simple_auth: Vec<SimpleAuthSpecs>,
 }
 
 impl XepakConf {

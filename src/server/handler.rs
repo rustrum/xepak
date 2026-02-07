@@ -10,11 +10,13 @@ use actix_web::{
     },
     web::{self, Bytes, Data},
 };
+use getopt3::new;
 use rhai::{AST, Engine};
 use serde::Serialize;
 
 use crate::{
     XepakError,
+    auth::SimpleAuthProcessor,
     cfg::{EndpointSpecs, ResourceSpecs},
     script::{build_rhai_ast, build_rhai_engine, execute_script_blocking},
     server::{
@@ -70,6 +72,9 @@ impl EndpointHandler {
         for p in &ep.processor {
             match p {
                 PreProcessor::ParseBodyArgs => processors.push(Box::new(BodyToArgsProcessor {})),
+                PreProcessor::CheckAuth { allow } => {
+                    processors.push(Box::new(SimpleAuthProcessor::new(allow.as_slice())))
+                }
             }
         }
 

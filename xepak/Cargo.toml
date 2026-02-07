@@ -1,42 +1,8 @@
 [package]
 name = "xepak"
-version.workspace = true
+version = "0.0.2"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
 description.workspace = true
 license-file.workspace = true
-
-[[bin]]
-name = "xepak"
-
-[features]
-# having getopt in lib by default would not harm much
-# but it will be possible to disable default features if required
-default = ["server"]
-server = ["getopt3"]
-
-[dependencies]
-sql-key-args.workspace = true
-
-serde.workspace = true
-serde_json.workspace = true
-serde_urlencoded.workspace = true
-toml.workspace = true
-
-# async-trait = "0.1.89"
-minicbor = { version = "2.1", features = ["std", "alloc"] }
-rhai = { version = "1.23", features = ["sync", "no_custom_syntax"] }
-# rhai = { version = "1.23", features = ["sync", "no_custom_syntax", "serde"] }
-sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
-sqlx-core = "0.8"
-strum = { version = "0.27", features = ["derive"] }
-thiserror = "2.0"
-tokio = { version = "1", features = ["full"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
-
-actix-router = "0.5"
-actix-web = { version = "4.11", features = ["rustls"] }
-
-getopt3 = { version = "2.5.0", optional = true }
