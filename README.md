@@ -2,10 +2,14 @@
 <img src="./xepak-rest.png" alt="REST service for your DB" />
 </p>
 
-I hope it will be an interesting project for you.
-But there are a lot work to do here. 
+This is gonna be DSL based REST service for your DB. Something like PostgRest but not for PostgreSQL and written in Rust instead Haskell.
 
-Please visit this project later in one or two months.
+Right now I'm focusing on Sqlite as a main DB backend, because why not. Later will add all DB that are supported by sqlx library.
+
+
+I hope it will be an interesting project for you. But there is a lot work needed to be done here. Please visit this project later in one or two months.
+
+
 
 ## License
 
