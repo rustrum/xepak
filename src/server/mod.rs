@@ -14,6 +14,7 @@ use actix_web::web::ServiceConfig;
 use actix_web::{HttpServer, web::Data};
 
 use crate::XepakError;
+use crate::auth::{SimpleAuthRegistry, auth_specs_to_registry};
 use crate::cfg::{XepakConf, XepakSpecs};
 use crate::schema::{Schema, convert_with_schema};
 use crate::server::handler::EndpointHandler;
@@ -27,6 +28,7 @@ const CONTENT_TYPE_JSON: &str = "application/json";
 
 #[derive(Clone)]
 pub struct XepakAppData {
+    simple_auth_registry: SimpleAuthRegistry,
     storage_links: HashMap<String, Storage>,
 }
 
@@ -55,7 +57,12 @@ pub async fn init_server(
     sqlx::any::install_default_drivers();
 
     let storage_links = init_storage_connectors(&conf_dir, &config.storage).await;
-    let app_data = XepakAppData { storage_links };
+
+    let simple_auth_registry = auth_specs_to_registry(&config.simple_auth)?;
+    let app_data = XepakAppData {
+        storage_links,
+        simple_auth_registry,
+    };
     // let data: Data<ApateState> = Data::new(config.into_state());
 
     // let mut app = App::new()
