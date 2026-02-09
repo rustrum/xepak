@@ -10,9 +10,11 @@ query = "SELECT * FROM payments LIMIT {{-limit-}} OFFSET {{-offset-}}"
 uri = "/payment/{payment_id:\\d+}/revalidate"
 single_record_response = true
 
-# Access check and cache could also be a processor I guess ?
 [[endpoint.processor]]
 type = "simple_auth"
+
+[[endpoint.processor]]
+type = "authorize"
 allow = [
     { kind = "id", v = "boss" },
     { kind = "and", nested = [

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, default};
 
 use actix_web::{
     HttpRequest,
@@ -8,7 +8,11 @@ use actix_web::{
 use serde::Deserialize;
 
 use crate::{
-    XepakError, auth::CheckAuthConf, schema::validate_with_schema, server::{CONTENT_TYPE_CBOR, RequestArgs, XepakAppData}, types::XepakValue
+    XepakError,
+    auth::CheckAuthConf,
+    schema::validate_with_schema,
+    server::{CONTENT_TYPE_CBOR, RequestInput, XepakAppData},
+    types::XepakValue,
 };
 
 pub const PRIORITY_FIRST: u16 = 60_000;
@@ -22,7 +26,13 @@ pub const PRIORITY_LAST: u16 = 1000;
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum PreProcessor {
     ParseBodyArgs,
-    CheckAuth { allow: Vec<CheckAuthConf> },
+    SimpleAuth {
+        #[serde(default)]
+        allow_no_auth: bool,
+    },
+    Authorize {
+        allow: Vec<CheckAuthConf>,
+    },
 }
 
 pub trait PreProcessorHandler {
@@ -36,7 +46,7 @@ pub trait PreProcessorHandler {
         req: &HttpRequest,
         state: &Data<XepakAppData>,
         body: &Bytes,
-        input: &mut RequestArgs,
+        input: &mut RequestInput,
     ) -> Result<(), XepakError>;
 }
 
@@ -52,7 +62,7 @@ impl PreProcessorHandler for InputArgsValidator {
         _req: &HttpRequest,
         _state: &Data<XepakAppData>,
         _body: &Bytes,
-        input: &mut RequestArgs,
+        input: &mut RequestInput,
     ) -> Result<(), XepakError> {
         validate_with_schema(&input.schema, &input.path_args)?;
         validate_with_schema(&input.schema, &input.args)?;
@@ -74,7 +84,7 @@ impl PreProcessorHandler for QueryArgsProcessor {
         req: &HttpRequest,
         _state: &Data<XepakAppData>,
         _body: &Bytes,
-        input: &mut RequestArgs,
+        input: &mut RequestInput,
     ) -> Result<(), XepakError> {
         if req.method() == Method::PUT || req.method() == Method::POST {
             return Ok(());
@@ -98,10 +108,16 @@ impl PreProcessorHandler for QueryArgsProcessor {
 pub struct BodyToArgsProcessor {}
 
 impl BodyToArgsProcessor {
+    pub fn new_boxed() -> Box<Self> {
+        Box::new(Self {})
+    }
+}
+
+impl BodyToArgsProcessor {
     pub fn handle_cbor_body(
         &self,
         body: &Bytes,
-        input: &mut RequestArgs,
+        input: &mut RequestInput,
     ) -> Result<(), XepakError> {
         todo!("Implement CBOR parsing")
     }
@@ -109,7 +125,7 @@ impl BodyToArgsProcessor {
     pub fn handle_json_body(
         &self,
         body: &Bytes,
-        input: &mut RequestArgs,
+        input: &mut RequestInput,
     ) -> Result<(), XepakError> {
         let json_request: serde_json::Value = serde_json::from_slice(body)
             .map_err(|e| XepakError::Input(format!("Wrong JSON format: {e}")))?;
@@ -141,7 +157,7 @@ impl PreProcessorHandler for BodyToArgsProcessor {
         req: &HttpRequest,
         _state: &Data<XepakAppData>,
         body: &Bytes,
-        input: &mut RequestArgs,
+        input: &mut RequestInput,
     ) -> Result<(), XepakError> {
         if req.method() != Method::POST && req.method() != Method::PUT {
             return Ok(());

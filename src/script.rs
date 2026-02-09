@@ -9,18 +9,18 @@ use tokio::runtime::Handle;
 
 use crate::{
     XepakError,
-    server::{RequestArgs, XepakAppData},
+    server::{RequestInput, XepakAppData},
     storage::ResourceRequest,
     types::XepakValue,
 };
 
 #[derive(Debug, Clone)]
 pub struct RhaiRequestContext {
-    args: RequestArgs,
+    args: RequestInput,
 }
 
-impl From<RequestArgs> for RhaiRequestContext {
-    fn from(args: RequestArgs) -> Self {
+impl From<RequestInput> for RhaiRequestContext {
+    fn from(args: RequestInput) -> Self {
         Self { args }
     }
 }
@@ -200,7 +200,7 @@ pub fn storage_query(
         )));
     };
 
-    let args = RequestArgs::new_in_script(prepare_args(dyn_args)?, 0, 0);
+    let args = RequestInput::new_in_script(prepare_args(dyn_args)?, 0, 0);
 
     let rr = ResourceRequest::new(query, &args);
 
@@ -230,7 +230,7 @@ pub fn storage_query_one(
         )));
     };
 
-    let args = RequestArgs::new_in_script(prepare_args(dyn_args)?, 0, 0);
+    let args = RequestInput::new_in_script(prepare_args(dyn_args)?, 0, 0);
 
     let rr = ResourceRequest::new(query, &args);
 
@@ -256,7 +256,7 @@ pub fn storage_query_value(
         )));
     };
 
-    let args = RequestArgs::new_in_script(prepare_args(dyn_args)?, 0, 0);
+    let args = RequestInput::new_in_script(prepare_args(dyn_args)?, 0, 0);
 
     let rr = ResourceRequest::new(query, &args);
 
@@ -272,7 +272,7 @@ pub async fn execute_script_blocking(
     uri: String,
     rhai: Arc<Option<Engine>>,
     ast: Arc<Option<AST>>,
-    input: RequestArgs,
+    input: RequestInput,
 ) -> Result<Dynamic, XepakError> {
     tokio::task::spawn_blocking(move || {
         let Some(rhai) = rhai.as_ref() else {

@@ -1,7 +1,7 @@
 pub mod handler;
 pub mod processor;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::Ipv4Addr;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -35,6 +35,10 @@ pub struct XepakAppData {
 impl XepakAppData {
     pub fn get_data_source(&self, key: &str) -> Option<&Storage> {
         self.storage_links.get(key)
+    }
+
+    pub fn get_auth_data(&self, api_key: &str) -> Option<&(String, HashSet<String>)> {
+        self.simple_auth_registry.get(api_key)
     }
 }
 
@@ -104,8 +108,11 @@ pub async fn init_server(
     Ok(server)
 }
 
+/// Contains aggregated/formatted input from request that will be used to querying resource.
+/// Input is updated/extended during processors execution.
+/// Also it could be updated from resource script before executing output query.
 #[derive(Debug, Clone)]
-pub struct RequestArgs {
+pub struct RequestInput {
     pub(crate) schema: Schema,
 
     /// If true - fail on non existing args
@@ -117,12 +124,14 @@ pub struct RequestArgs {
     /// Final input args storage with schema applied
     pub(crate) args: Arc<HashMap<String, XepakValue>>,
 
+    auth: Arc<Option<(XepakValue, HashSet<String>)>>,
+
     limit: usize,
 
     offset: usize,
 }
 
-impl RequestArgs {
+impl RequestInput {
     pub fn new(schema: Schema, strict_schema: bool, uri_pattern: &str, req_path: &str) -> Self {
         // Todo return result that will validate path_args against schema
 
@@ -136,9 +145,10 @@ impl RequestArgs {
             .map(|(k, v)| (k.to_string(), XepakValue::Text(v.to_string())))
             .collect();
 
-        RequestArgs {
+        RequestInput {
             schema,
             strict_schema,
+            auth: Arc::new(None),
             path_args: Arc::new(path_args),
             args: Arc::new(Default::default()),
             limit: 0,
@@ -146,8 +156,10 @@ impl RequestArgs {
         }
     }
 
+    /// Used when script is building input for nested queries
     pub fn new_in_script(args: HashMap<String, XepakValue>, limit: usize, offset: usize) -> Self {
-        RequestArgs {
+        RequestInput {
+            auth: Arc::new(None),
             schema: Schema::default(),
             strict_schema: false,
             path_args: Arc::new(Default::default()),
@@ -212,13 +224,15 @@ impl RequestArgs {
     }
 
     /// Set argument value and apply schema conversion to it if any defined.
-    /// Strict rule does apply only to `from_request = true` arguments.
+    /// Strict [`Schema`] rules will apply only if `enforce_schema = true`,
+    /// this is needed to avoid schema.
     pub fn set_arg_with_schema(
         &mut self,
         name: String,
         value: XepakValue,
-        from_request: bool,
+        enforce_schema: bool,
     ) -> Result<(), XepakError> {
+        // TODO skip enforce_schema because we build new RequestInput for sript calls.
         let Some(args) = Arc::get_mut(&mut self.args) else {
             return Err(XepakError::Unexpected(
                 "Must acquire args &mut reference here by design".to_string(),
@@ -229,16 +243,28 @@ impl RequestArgs {
             &self.schema,
             name.as_str(),
             value,
-            self.strict_schema && from_request,
+            self.strict_schema && enforce_schema,
         )?;
 
         args.insert(name, value);
 
         Ok(())
     }
+
+    pub fn set_auth(&mut self, id: String, roles: HashSet<String>) {
+        self.auth = Arc::new(Some((XepakValue::Text(id), roles)))
+    }
+
+    pub fn is_authenticated(&self) -> bool {
+        self.auth.is_some()
+    }
+
+    pub fn get_auth(&self) -> Option<&(XepakValue, HashSet<String>)> {
+        self.auth.as_ref().as_ref()
+    }
 }
 
-impl StorageRequestArgs for RequestArgs {
+impl StorageRequestArgs for RequestInput {
     fn get_rows_limit(&self) -> usize {
         self.get_limit()
     }
@@ -248,7 +274,7 @@ impl StorageRequestArgs for RequestArgs {
     }
 }
 
-impl SqlxRequestArgs for RequestArgs {
+impl SqlxRequestArgs for RequestInput {
     fn bind_arg<'a>(
         &'a self,
         arg_name: &str,

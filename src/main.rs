@@ -1,6 +1,6 @@
 use std::{io, path::PathBuf, sync::Arc};
 
-use xepak::{
+use xepak_rest::{
     XepakError,
     cfg::{load_conf_file, load_specs_from_dir},
     server::init_server,

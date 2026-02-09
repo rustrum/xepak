@@ -16,11 +16,11 @@ use serde::Serialize;
 
 use crate::{
     XepakError,
-    auth::SimpleAuthProcessor,
+    auth::{AuthorizeProcessor, SimpleAuthenticationProcessor},
     cfg::{EndpointSpecs, ResourceSpecs},
     script::{build_rhai_ast, build_rhai_engine, execute_script_blocking},
     server::{
-        CONTENT_TYPE_CBOR, CONTENT_TYPE_JSON, LIMIT_HEADER, OFFSET_HEADER, RequestArgs,
+        CONTENT_TYPE_CBOR, CONTENT_TYPE_JSON, LIMIT_HEADER, OFFSET_HEADER, RequestInput,
         XepakAppData,
         processor::{
             BodyToArgsProcessor, InputArgsValidator, PreProcessor, PreProcessorHandler,
@@ -71,9 +71,12 @@ impl EndpointHandler {
 
         for p in &ep.processor {
             match p {
-                PreProcessor::ParseBodyArgs => processors.push(Box::new(BodyToArgsProcessor {})),
-                PreProcessor::CheckAuth { allow } => {
-                    processors.push(Box::new(SimpleAuthProcessor::new(allow.as_slice())))
+                PreProcessor::ParseBodyArgs => processors.push(BodyToArgsProcessor::new_boxed()),
+                PreProcessor::SimpleAuth { allow_no_auth } => {
+                    processors.push(SimpleAuthenticationProcessor::new_boxed(*allow_no_auth))
+                }
+                PreProcessor::Authorize { allow } => {
+                    processors.push(AuthorizeProcessor::new_boxed(allow.as_slice()))
                 }
             }
         }
@@ -124,8 +127,8 @@ impl EndpointHandler {
         req: &HttpRequest,
         state: &Data<XepakAppData>,
         body: &Bytes,
-    ) -> Result<RequestArgs, XepakError> {
-        let mut input = RequestArgs::new(
+    ) -> Result<RequestInput, XepakError> {
+        let mut input = RequestInput::new(
             self.ep.schema.clone(),
             self.ep.strict_schema,
             &self.ep.uri,
@@ -141,7 +144,7 @@ impl EndpointHandler {
 
     async fn handle_resource(
         &self,
-        input: &RequestArgs,
+        input: &RequestInput,
         state: &Data<XepakAppData>,
     ) -> Result<Vec<HashMap<String, XepakValue>>, XepakError> {
         match &self.ep.resource {
@@ -189,7 +192,7 @@ impl EndpointHandler {
     fn data_to_response<R>(
         &self,
         req: &HttpRequest,
-        input: Option<&RequestArgs>,
+        input: Option<&RequestInput>,
         status_code: StatusCode,
         data: &R,
     ) -> HttpResponse
@@ -219,7 +222,7 @@ impl EndpointHandler {
     fn build_response(
         &self,
         req: &HttpRequest,
-        input: &RequestArgs,
+        input: &RequestInput,
         data: Vec<HashMap<String, XepakValue>>,
     ) -> HttpResponse {
         if self.ep.single_record_response {

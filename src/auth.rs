@@ -7,6 +7,8 @@ use crate::{XepakError, server::processor::PreProcessorHandler};
 
 pub type SimpleAuthRegistry = HashMap<String, (String, HashSet<String>)>;
 
+pub const API_KEY_HEADER: &str = "x-api-key";
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct SimpleAuthSpecs {
     id: String,
@@ -122,43 +124,108 @@ impl CheckAuthConf {
     }
 }
 
-pub struct SimpleAuthProcessor {
-    checks: Vec<CheckAuthConf>,
+pub struct SimpleAuthenticationProcessor {
+    allow_no_auth: bool,
 }
 
-impl SimpleAuthProcessor {
-    pub fn new(checks: &[CheckAuthConf]) -> Self {
-        let normalized = if checks.len() > 1 {
-            vec![
-                CheckAuthConf::Or {
-                    nested: checks.to_vec(),
-                }
-                .normalize(),
-            ]
-        } else {
-            checks.to_vec()
-        };
+impl SimpleAuthenticationProcessor {
+    pub fn new(allow_no_auth: bool) -> Self {
+        Self { allow_no_auth }
+    }
 
-        Self { checks: normalized }
+    pub fn new_boxed(allow_no_auth: bool) -> Box<Self> {
+        Box::new(Self::new(allow_no_auth))
     }
 }
 
-impl PreProcessorHandler for SimpleAuthProcessor {
+impl PreProcessorHandler for SimpleAuthenticationProcessor {
     fn handle(
         &self,
         req: &actix_web::HttpRequest,
         state: &actix_web::web::Data<crate::server::XepakAppData>,
-        body: &actix_web::web::Bytes,
-        input: &mut crate::server::RequestArgs,
-    ) -> Result<(), crate::XepakError> {
-        // get API key value from headers
+        _body: &actix_web::web::Bytes,
+        input: &mut crate::server::RequestInput,
+    ) -> Result<(), XepakError> {
+        if input.is_authenticated() {
+            tracing::warn!("Already authenticated! Why?");
+            return Ok(());
+        }
 
-        // if not throw error
+        let not_auth_err = Err(XepakError::Forbidden("Not authenticated".to_string()));
+
+        // get API key value from headers
+        let Some(api_key_value) = req.headers().get(API_KEY_HEADER) else {
+            return not_auth_err;
+        };
+
+        let api_key = api_key_value
+            .to_str()
+            .map_err(|e| XepakError::Input(format!("Wrong {API_KEY_HEADER} value: {e}")))?;
 
         // check in registry if key exists or error
+        let Some((auth_id, auth_roles)) = state.get_auth_data(api_key) else {
+            return not_auth_err;
+        };
 
-        // Get meta data for key and run is_allowed 
+        input.set_auth(auth_id.to_string(), auth_roles.clone());
 
-        // if fail throw error
+        Ok(())
+    }
+}
+
+pub struct AuthorizeProcessor {
+    check: Option<CheckAuthConf>,
+}
+
+impl AuthorizeProcessor {
+    pub fn new(checks: &[CheckAuthConf]) -> Self {
+        let check = if checks.len() > 1 {
+            Some(
+                CheckAuthConf::Or {
+                    nested: checks.to_vec(),
+                }
+                .normalize(),
+            )
+        } else if checks.len() == 1 {
+            Some(checks[0].clone())
+        } else {
+            None
+        };
+
+        Self { check }
+    }
+
+    pub fn new_boxed(checks: &[CheckAuthConf]) -> Box<Self> {
+        Box::new(Self::new(checks))
+    }
+}
+
+impl PreProcessorHandler for AuthorizeProcessor {
+    fn handle(
+        &self,
+        _req: &actix_web::HttpRequest,
+        _state: &actix_web::web::Data<crate::server::XepakAppData>,
+        _body: &actix_web::web::Bytes,
+        input: &mut crate::server::RequestInput,
+    ) -> Result<(), crate::XepakError> {
+        let Some((id, roles)) = input.get_auth() else {
+            return Err(XepakError::Forbidden("Not authenticated".to_string()));
+        };
+
+        let id = id.as_string();
+
+        let Some(check) = &self.check else {
+            // If no access checks provided it means we only require authenticated requests
+            tracing::debug!("Allowed! No access checks for authenticated id:{id}");
+            return Ok(());
+        };
+
+        if !check.is_allowed(&id, roles) {
+            return Err(XepakError::Forbidden(format!(
+                "Not authorized to perform request! Auth id: {id}"
+            )));
+        }
+
+        Ok(())
     }
 }
