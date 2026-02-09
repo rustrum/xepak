@@ -96,7 +96,7 @@ pub fn convert_with_schema(
                 "Can't convert argument \"{arg_name}\" to Null type! Why are you doing this?"
             )));
         }
-        XepakType::Text => XepakValue::Text(value.as_string()?),
+        XepakType::Text => XepakValue::Text(value.as_string()),
         XepakType::Boolean => XepakValue::Boolean(value.as_bool()?),
         XepakType::Int => XepakValue::Integer(value.as_int()?),
         XepakType::Float => XepakValue::Float(value.as_float()?),

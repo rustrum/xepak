@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["sql-key-args", "xepak"]
+members = ["xepak"]
 
 [workspace.package]
 version = "0.0.1"
@@ -12,8 +12,6 @@ description = "DSL based REST API server will be here"
 keywords = ["api", "rest", "db", "proxy", "sql"]
 
 [workspace.dependencies]
-sql-key-args = { path = "./sql-key-args" }
-
 async-lock = { version = "3.4", features = ["std"] }
 env_logger = "0.11"
 rhai = { version = "1.23", features = ["sync", "no_custom_syntax", "serde"] }
@@ -41,8 +39,6 @@ default = ["server"]
 server = ["getopt3"]
 
 [dependencies]
-sql-key-args.workspace = true
-
 serde.workspace = true
 serde_json.workspace = true
 serde_urlencoded.workspace = true

@@ -44,7 +44,7 @@ pub enum XepakType {
 /// Plus it must be compatible with sqlx type system to be used as a query argument.
 ///
 /// Deserialization will be a little bit tricky
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Display)]
 pub enum XepakValue {
     /// Null/nothing/undefined type
     Null,
@@ -132,14 +132,14 @@ impl XepakValue {
         }
     }
 
-    pub fn as_string(&self) -> Result<String, XepakError> {
-        Ok(match self {
+    pub fn as_string(&self) -> String {
+        match self {
             XepakValue::Null => "".to_string(),
             XepakValue::Boolean(v) => v.to_string(),
             XepakValue::Integer(v) => v.to_string(),
             XepakValue::Float(v) => v.to_string(),
             XepakValue::Text(v) => v.clone(),
-        })
+        }
     }
 
     pub fn as_bool(&self) -> Result<bool, XepakError> {

@@ -2,7 +2,8 @@
 <img src="../xepak-rest.png" alt="REST service for your DB" />
 </p>
 
-This not used meta-package from a project named `xepak-rest` which you can find by [this link](https://github.com/rustrum/xepak).
+This is not used meta-package from a project named `xepak-rest`.
+Which is available by [this link](https://github.com/rustrum/xepak).
 
 
 

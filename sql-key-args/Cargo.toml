@@ -1,7 +1,0 @@
-[package]
-name = "sql-key-args"
-description = "SQL key to pos arguments parser/tokenizer/convertor"
-version.workspace = true
-edition.workspace = true
-
-[dependencies]
