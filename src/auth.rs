@@ -162,11 +162,14 @@ impl PreProcessorHandler for SimpleAuthenticationProcessor {
             .to_str()
             .map_err(|e| XepakError::Input(format!("Wrong {API_KEY_HEADER} value: {e}")))?;
 
+        tracing::debug!("API key found: {api_key}");
+
         // check in registry if key exists or error
         let Some((auth_id, auth_roles)) = state.get_auth_data(api_key) else {
             return not_auth_err;
         };
 
+        tracing::debug!("Authenticate user: {auth_id}");
         input.set_auth(auth_id.to_string(), auth_roles.clone());
 
         Ok(())

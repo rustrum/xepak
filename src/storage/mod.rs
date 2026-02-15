@@ -1,7 +1,8 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::sync::Arc;
 
 use crate::XepakError;
 use crate::sql_key_args::ParametrizedQueryRef;
@@ -10,31 +11,33 @@ use serde::Deserialize;
 use sqlx::any::{AnyArguments, AnyConnectOptions, AnyRow};
 use sqlx::query::Query;
 use sqlx::sqlite::SqliteConnectOptions;
-use sqlx::{Any, AnyPool, ConnectOptions, Row};
+use sqlx::{Any, AnyPool, ConnectOptions, Pool, Row, migrate::Migrator};
 use sqlx_core::column::Column;
 
 pub const LIMIT_KEY: &str = "-limit-";
 pub const OFFSET_KEY: &str = "-offset-";
 
 pub async fn init_storage_connectors(
-    conf_dir: &PathBuf,
+    conf_dir: &Path,
     storages: &[StorageSettings],
-) -> HashMap<String, Storage> {
+) -> Result<HashMap<String, Storage>, XepakError> {
     let mut links = HashMap::new();
 
     for store_settings in storages {
         match store_settings {
-            StorageSettings::Sqlite { id, file, wal } => {
-                let file_path = PathBuf::from(file);
+            StorageSettings::Sqlite {
+                id,
+                file,
+                wal,
+                migrations_dir,
+                create_db,
+            } => {
+                let db_file = normalize_config_path(conf_dir, file);
+                tracing::info!("Init sqlite storage \"{id}\" using path \"{db_file:?}\"");
 
-                let file = if file_path.is_absolute() {
-                    file_path
-                } else {
-                    conf_dir.join(file_path)
-                };
-
-                tracing::info!("Init sqlite storage \"{id}\" using path \"{file:?}\"");
-                let options = SqliteConnectOptions::new().filename(file);
+                let options = SqliteConnectOptions::new()
+                    .filename(db_file)
+                    .create_if_missing(*create_db);
                 let options = if *wal {
                     options.journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
                 } else {
@@ -44,12 +47,14 @@ pub async fn init_storage_connectors(
                 let aco = AnyConnectOptions::from_str(options.to_url_lossy().as_str())
                     .expect("Query string must be valid but it is not");
 
-                let res = links.insert(
-                    id.clone(),
-                    Storage {
-                        pool: AnyPool::connect_lazy_with(aco),
-                    },
-                );
+                let pool = AnyPool::connect_lazy_with(aco);
+
+                if !migrations_dir.is_empty() {
+                    tracing::info!("Applying migrations from: {migrations_dir}");
+                    let migrations_path = normalize_config_path(conf_dir, migrations_dir);
+                    migrate_stroage(&pool, &migrations_path).await?;
+                }
+                let res = links.insert(id.clone(), Storage { pool });
 
                 if res.is_some() {
                     tracing::warn!("Duplicate key \"{id}\" found for storage configuration");
@@ -57,7 +62,30 @@ pub async fn init_storage_connectors(
             }
         }
     }
-    links
+    Ok(links)
+}
+
+pub fn normalize_config_path(work_dir: &Path, path: &str) -> PathBuf {
+    let file_path = PathBuf::from(path);
+
+    if file_path.is_absolute() {
+        file_path
+    } else {
+        work_dir.join(file_path)
+    }
+}
+
+pub async fn migrate_stroage(pool: &Pool<Any>, dir: &Path) -> Result<(), XepakError> {
+    let migrator = Migrator::new(dir)
+        .await
+        .map_err(|e| XepakError::Other(Arc::new(e.into())))?;
+
+    migrator
+        .run(pool)
+        .await
+        .map_err(|e| XepakError::Other(Arc::new(e.into())))?;
+
+    Ok(())
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -68,7 +96,11 @@ pub enum StorageSettings {
         id: String,
         file: String,
         #[serde(default)]
+        create_db: bool,
+        #[serde(default)]
         wal: bool,
+        #[serde(default)]
+        migrations_dir: String,
     },
 }
 

@@ -10,7 +10,6 @@ use actix_web::{
     },
     web::{self, Bytes, Data},
 };
-use getopt3::new;
 use rhai::{AST, Engine};
 use serde::Serialize;
 
@@ -69,6 +68,10 @@ impl EndpointHandler {
             Box::new(InputArgsValidator {}),
         ];
 
+        if app.simple_auth_required {
+            processors.push(SimpleAuthenticationProcessor::new_boxed(false));
+        }
+
         for p in &ep.processor {
             match p {
                 PreProcessor::ParseBodyArgs => processors.push(BodyToArgsProcessor::new_boxed()),
@@ -98,7 +101,7 @@ impl EndpointHandler {
         state: Data<XepakAppData>,
         body: Bytes,
     ) -> HttpResponse {
-        tracing::debug!("Handler called for {:?}", self.ep);
+        tracing::debug!("Handler called for {:?}", self.ep.uri);
 
         let mut ri = match self.pre_process_request(&req, &state, &body).await {
             Ok(result) => result,

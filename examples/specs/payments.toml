@@ -26,20 +26,30 @@ allow = [
 [endpoint.resource]
 type = "query_script"
 script = """
-// Sqlite returns integer instead boolean so we must deal with that
+// Just reusing existing input context where 'payment_id' argument exists.
+let allowed = storage_query_value(
+    "SELECT COALESCE(reprocess_trigger <= datetime('now', '-20 seconds'), 1) FROM payments WHERE id = {{payment_id}}",
+    ctx.load_input()
+);
+
+
+/*
+// Alternative example. Building custom query arguments dict.
 let allowed = storage_query_value(
     "SELECT COALESCE(reprocess_trigger <= datetime('now', '-20 seconds'), 1) FROM payments WHERE id = {{id}}",
     #{id: ctx.get_arg("payment_id")}
 );
+*/
 
 print(`Reprocess trigger allowed value is ${allowed}`);
 
 // And now we could conditionally stop further processing
+// NOTE: sqlite returns integer instead boolean and it is not auto converted in Rhai
 if allowed != 1 {
     error_input("Can't trigger reprocessing more than once in a 20 seconds");
 }
 
-// Main SQL logic
+// Returning the query to be executed by endpoint handler.
 return #"
 UPDATE payments SET reprocess_trigger = current_timestamp WHERE id = {{payment_id}}
 RETURNING id, reprocess_trigger

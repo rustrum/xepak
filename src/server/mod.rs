@@ -28,6 +28,8 @@ const CONTENT_TYPE_JSON: &str = "application/json";
 
 #[derive(Clone)]
 pub struct XepakAppData {
+    /// Enforce simple auth for all endpoints
+    simple_auth_required: bool,
     simple_auth_registry: SimpleAuthRegistry,
     storage_links: HashMap<String, Storage>,
 }
@@ -60,12 +62,16 @@ pub async fn init_server(
     // Required to use with sqlx::Any connector
     sqlx::any::install_default_drivers();
 
-    let storage_links = init_storage_connectors(&conf_dir, &config.storage).await;
+    let storage_links = init_storage_connectors(&conf_dir, &config.storage).await?;
 
     let simple_auth_registry = auth_specs_to_registry(&config.simple_auth)?;
+
+    tracing::debug!("Simple auth registry {simple_auth_registry:?}");
+
     let app_data = XepakAppData {
         storage_links,
         simple_auth_registry,
+        simple_auth_required: config.simple_auth_require,
     };
     // let data: Data<ApateState> = Data::new(config.into_state());
 

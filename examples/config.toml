@@ -1,13 +1,22 @@
-[[storage]]
-# id = "default"
-type = "sqlite"
-file = "./db.sqlite3"
-
+# in future it has to be some require_auth = "auth_type"
+simple_auth_require = false
 
 simple_auth = [
-    { id = "boss", key = ";;askdjf", from_env = false, roles = [
+    { id = "boss", key = "BossKEY", from_env = false, roles = [
         "ADMIN",
         "MANAGER",
     ] },
-    { id = "user", key = ";;askdjf", from_env = false },
+    { id = "manager", key = "ManagerKEY", from_env = false, roles = [
+        "MANAGER",
+    ] },
+    { id = "user", key = "UserKEY", from_env = false },
 ]
+
+[[storage]]
+# id = "default"
+type = "sqlite"
+# file = "./db.sqlite3"
+file = "sqlite/db.sqlite3"
+create_db = true
+wal = true
+migrations_dir = "sqlite/migrations"

@@ -4,7 +4,6 @@ use actix_web::web::Data;
 use rhai::{
     AST, CustomType, Dynamic, Engine, EvalAltResult, NativeCallContext, ParseError, Position, Scope,
 };
-use sqlx_core::logger;
 use tokio::runtime::Handle;
 
 use crate::{
@@ -16,33 +15,59 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct RhaiRequestContext {
-    args: RequestInput,
+    input: RequestInput,
 }
 
 impl From<RequestInput> for RhaiRequestContext {
     fn from(args: RequestInput) -> Self {
-        Self { args }
+        Self { input: args }
     }
 }
 
 impl RhaiRequestContext {
+    pub fn load_input(&mut self) -> RequestInput {
+        self.input.clone()
+    }
+
     pub fn has_arg(&mut self, arg_name: &str) -> bool {
-        self.args.has_any_arg(arg_name)
+        self.input.has_any_arg(arg_name)
     }
 
     pub fn get_arg(&mut self, arg_name: &str) -> Dynamic {
-        match self.args.get_arg_value(arg_name).cloned() {
+        match self.input.get_arg_value(arg_name).cloned() {
             Some(v) => xepak_to_dynamic(&v),
             None => Dynamic::UNIT,
         }
+    }
+
+    pub fn set_arg(
+        &mut self,
+        ctx: &NativeCallContext,
+        arg_name: String,
+        value: &Dynamic,
+    ) -> Result<(), Box<EvalAltResult>> {
+        let xvalue =
+            dynamic_to_xepak(&value).map_err(|err| to_eval_alt_result_ctx(err, Some(ctx)))?;
+
+        self.input
+            .set_arg_with_schema(arg_name, xvalue, true)
+            .map_err(|err| to_eval_alt_result_ctx(err, Some(ctx)).into())
     }
 }
 
 impl CustomType for RhaiRequestContext {
     fn build(mut builder: rhai::TypeBuilder<Self>) {
         builder.with_name("RhaiRequestContext");
+        builder.with_fn("load_input", Self::load_input);
         builder.with_fn("has_arg", Self::has_arg);
         builder.with_fn("get_arg", Self::get_arg);
+        builder.with_fn("set_arg", Self::set_arg);
+    }
+}
+
+impl CustomType for RequestInput {
+    fn build(mut builder: rhai::TypeBuilder<Self>) {
+        builder.with_name("RequestInput");
     }
 }
 
@@ -123,9 +148,7 @@ pub fn build_rhai_ast(rhai: &Engine, script: &str) -> Result<AST, ParseError> {
     Ok(ast)
 }
 
-pub fn build_rhai_engine(state: &XepakAppData) -> Engine {
-    let handle = Handle::current();
-
+pub fn build_rhai_engine(app_state: &XepakAppData) -> Engine {
     let mut rhai = Engine::new();
 
     rhai.on_print(|s| {
@@ -137,6 +160,7 @@ pub fn build_rhai_engine(state: &XepakAppData) -> Engine {
     });
 
     rhai.build_type::<RhaiRequestContext>();
+    rhai.build_type::<RequestInput>();
     rhai.build_type::<RhaiQueryBuilder>();
     rhai.build_type::<XepakValue>();
     rhai.register_fn("error_input", error_input);
@@ -144,37 +168,73 @@ pub fn build_rhai_engine(state: &XepakAppData) -> Engine {
     rhai.register_fn("error_not_found", error_not_found);
     rhai.register_fn("error_forbidden", error_forbidden);
 
-    let f_state = state.clone();
+    register_db_functions(&mut rhai, app_state);
+
+    rhai
+}
+
+fn register_db_functions(rhai: &mut Engine, app_state: &XepakAppData) {
+    let handle = Handle::current();
+
+    let f_state = app_state.clone();
     let f_handle = handle.clone();
     rhai.register_fn(
         "storage_query",
         move |ctx: NativeCallContext, query: &str, args: rhai::Map| {
             storage_query(&f_state, &f_handle, "", query, args)
-                .map_err(|err| to_eval_alt_result_ctx(err, Some(ctx)))
+                .map_err(|err| to_eval_alt_result_ctx(err, Some(&ctx)))
         },
     );
 
-    let f_state = state.clone();
+    let f_state = app_state.clone();
+    let f_handle = handle.clone();
+    rhai.register_fn(
+        "storage_query",
+        move |ctx: NativeCallContext, query: &str, input: RequestInput| {
+            storage_query_rs(&f_state, &f_handle, "", query, &input)
+                .map_err(|err| to_eval_alt_result_ctx(err, Some(&ctx)))
+        },
+    );
+
+    let f_state = app_state.clone();
     let f_handle = handle.clone();
     rhai.register_fn(
         "storage_query_one",
         move |ctx: NativeCallContext, query: &str, args: rhai::Map| {
             storage_query_one(&f_state, &f_handle, "", query, args)
-                .map_err(|err| to_eval_alt_result_ctx(err, Some(ctx)))
+                .map_err(|err| to_eval_alt_result_ctx(err, Some(&ctx)))
         },
     );
 
-    let f_state = state.clone();
+    let f_state = app_state.clone();
+    let f_handle = handle.clone();
+    rhai.register_fn(
+        "storage_query_one",
+        move |ctx: NativeCallContext, query: &str, input: RequestInput| {
+            storage_query_one_rs(&f_state, &f_handle, "", query, &input)
+                .map_err(|err| to_eval_alt_result_ctx(err, Some(&ctx)))
+        },
+    );
+
+    let f_state = app_state.clone();
     let f_handle = handle.clone();
     rhai.register_fn(
         "storage_query_value",
         move |ctx: NativeCallContext, query: &str, args: rhai::Map| {
             storage_query_value(&f_state, &f_handle, "", query, args)
-                .map_err(|err| to_eval_alt_result_ctx(err, Some(ctx)))
+                .map_err(|err| to_eval_alt_result_ctx(err, Some(&ctx)))
         },
     );
 
-    rhai
+    let f_state = app_state.clone();
+    let f_handle = handle.clone();
+    rhai.register_fn(
+        "storage_query_value",
+        move |ctx: NativeCallContext, query: &str, input: RequestInput| {
+            storage_query_value_rs(&f_state, &f_handle, "", query, &input)
+                .map_err(|err| to_eval_alt_result_ctx(err, Some(&ctx)))
+        },
+    );
 }
 
 fn prepare_args(args_in: rhai::Map) -> Result<HashMap<String, XepakValue>, XepakError> {
@@ -194,15 +254,24 @@ pub fn storage_query(
     query: &str,
     dyn_args: rhai::Map,
 ) -> Result<Dynamic, XepakError> {
+    let input = RequestInput::new_in_script(prepare_args(dyn_args)?, 0, 0);
+    storage_query_rs(state, handle, ds_name, query, &input)
+}
+
+fn storage_query_rs(
+    state: &XepakAppData,
+    handle: &Handle,
+    ds_name: &str,
+    query: &str,
+    input: &RequestInput,
+) -> Result<Dynamic, XepakError> {
     let Some(ds) = state.get_data_source(ds_name) else {
         return Err(XepakError::Cfg(format!(
             "Data source does not exists \"{ds_name}\""
         )));
     };
 
-    let args = RequestInput::new_in_script(prepare_args(dyn_args)?, 0, 0);
-
-    let rr = ResourceRequest::new(query, &args);
+    let rr = ResourceRequest::new(query, input);
 
     let result = handle
         .block_on(async { ds.query(rr).await })?
@@ -224,15 +293,24 @@ pub fn storage_query_one(
     query: &str,
     dyn_args: rhai::Map,
 ) -> Result<Dynamic, XepakError> {
+    let input = RequestInput::new_in_script(prepare_args(dyn_args)?, 0, 0);
+    storage_query_one_rs(state, handle, ds_name, query, &input)
+}
+
+pub fn storage_query_one_rs(
+    state: &XepakAppData,
+    handle: &Handle,
+    ds_name: &str,
+    query: &str,
+    input: &RequestInput,
+) -> Result<Dynamic, XepakError> {
     let Some(ds) = state.get_data_source(ds_name) else {
         return Err(XepakError::Cfg(format!(
             "Data source does not exists \"{ds_name}\""
         )));
     };
 
-    let args = RequestInput::new_in_script(prepare_args(dyn_args)?, 0, 0);
-
-    let rr = ResourceRequest::new(query, &args);
+    let rr = ResourceRequest::new(query, input);
 
     let result = handle.block_on(async { ds.query_one(rr).await })?.map(|v| {
         v.into_iter()
@@ -250,15 +328,25 @@ pub fn storage_query_value(
     query: &str,
     dyn_args: rhai::Map,
 ) -> Result<Dynamic, XepakError> {
+    let input = RequestInput::new_in_script(prepare_args(dyn_args)?, 0, 0);
+
+    storage_query_value_rs(state, handle, ds_name, query, &input)
+}
+
+pub fn storage_query_value_rs(
+    state: &XepakAppData,
+    handle: &Handle,
+    ds_name: &str,
+    query: &str,
+    input: &RequestInput,
+) -> Result<Dynamic, XepakError> {
     let Some(ds) = state.get_data_source(ds_name) else {
         return Err(XepakError::Cfg(format!(
             "Data source does not exists \"{ds_name}\""
         )));
     };
 
-    let args = RequestInput::new_in_script(prepare_args(dyn_args)?, 0, 0);
-
-    let rr = ResourceRequest::new(query, &args);
+    let rr = ResourceRequest::new(query, input);
 
     let result = handle.block_on(async { ds.query_value(rr).await })?;
 
@@ -379,7 +467,7 @@ pub fn to_eval_alt_result(err: XepakError) -> Box<EvalAltResult> {
 
 pub fn to_eval_alt_result_ctx(
     err: XepakError,
-    ctx: Option<NativeCallContext>,
+    ctx: Option<&NativeCallContext>,
 ) -> Box<EvalAltResult> {
     let pos = ctx.map(|c| c.call_position()).unwrap_or(Position::NONE);
     Box::new(EvalAltResult::ErrorRuntime(Dynamic::from(err), pos))

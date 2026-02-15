@@ -23,6 +23,9 @@ pub struct XepakConf {
     pub storage: Vec<StorageSettings>,
 
     #[serde(default)]
+    pub simple_auth_require: bool,
+
+    #[serde(default)]
     pub simple_auth: Vec<SimpleAuthSpecs>,
 }
 
