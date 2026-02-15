@@ -1,3 +1,3 @@
 [env]
-RUST_LOG = "info,xepak=debug"
+RUST_LOG = "info,xepak_rest=debug"
 XEPAK_CONFIG = "./examples/config.toml"
