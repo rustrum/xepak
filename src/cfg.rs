@@ -135,14 +135,18 @@ pub struct EndpointSpecs {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ResourceSpecs {
     Query {
-        // TODO: add read/write attribute here for DS maybe?
         #[serde(default)]
         data_source: String,
         query: String,
     },
 
-    QueryScript {
-        // TODO: add read/write attribute here for DS maybe?
+    QueryScriptRhai {
+        #[serde(default)]
+        data_source: String,
+        script: String,
+    },
+
+    QueryScriptLua {
         #[serde(default)]
         data_source: String,
         script: String,

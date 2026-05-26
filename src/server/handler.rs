@@ -10,6 +10,7 @@ use actix_web::{
     },
     web::{self, Bytes, Data},
 };
+use mlua::Function;
 use rhai::{AST, Engine};
 use serde::Serialize;
 
@@ -17,7 +18,8 @@ use crate::{
     XepakError,
     auth::{AuthorizeProcessor, SimpleAuthenticationProcessor},
     cfg::{EndpointSpecs, ResourceSpecs},
-    script::{build_rhai_ast, build_rhai_engine, execute_script_blocking},
+    script_lua::{build_lua_function, execute_lua_script, lua_load_engine},
+    script_rhai::{build_rhai_ast, build_rhai_engine, execute_script_blocking},
     server::{
         CONTENT_TYPE_CBOR, CONTENT_TYPE_JSON, LIMIT_HEADER, OFFSET_HEADER, RequestInput,
         XepakAppData,
@@ -37,8 +39,8 @@ type EndpointHandlerArgs = (HttpRequest, Data<XepakAppData>, Bytes);
 pub struct EndpointHandler {
     ep: Arc<EndpointSpecs>,
     rhai_engine: Arc<Option<Engine>>,
-    handler_script: Arc<Option<AST>>,
-    // processor_scrips: Arc<HashMap<usize, AST>>,
+    handler_rhai: Arc<Option<AST>>,
+    handler_lua: Arc<Option<Function>>,
     processors: Arc<Vec<Box<dyn PreProcessorHandler + Send + Sync>>>,
 }
 
@@ -46,8 +48,8 @@ impl EndpointHandler {
     pub fn new(ep: EndpointSpecs, app: &XepakAppData) -> Result<Self, XepakError> {
         let mut rhai_engine = None;
 
-        let handler_script = match &ep.resource {
-            ResourceSpecs::QueryScript { script, .. } => {
+        let handler_rhai = match &ep.resource {
+            ResourceSpecs::QueryScriptRhai { script, .. } => {
                 if rhai_engine.is_none() {
                     rhai_engine = Some(build_rhai_engine(app));
                 }
@@ -59,6 +61,15 @@ impl EndpointHandler {
                 };
 
                 Some(build_rhai_ast(rhai, script)?)
+            }
+            _ => None,
+        };
+
+        let handler_lua = match &ep.resource {
+            ResourceSpecs::QueryScriptLua { script, .. } => {
+                let lua = lua_load_engine(app)?;
+                let luafn = build_lua_function(&lua, script)?;
+                Some(luafn)
             }
             _ => None,
         };
@@ -89,8 +100,8 @@ impl EndpointHandler {
         Ok(Self {
             ep: Arc::new(ep),
             rhai_engine: Arc::new(rhai_engine),
-            handler_script: Arc::new(handler_script),
-            // processor_scrips: Arc::new(Default::default()),
+            handler_rhai: Arc::new(handler_rhai),
+            handler_lua: Arc::new(handler_lua),
             processors: Arc::new(processors),
         })
     }
@@ -161,7 +172,7 @@ impl EndpointHandler {
                 let rr = ResourceRequest::new(query, input);
                 ds.query(rr).await
             }
-            ResourceSpecs::QueryScript { data_source, .. } => {
+            ResourceSpecs::QueryScriptRhai { data_source, .. } => {
                 let Some(ds) = state.get_data_source(data_source) else {
                     return Err(XepakError::Cfg(format!(
                         "Data source does not exists \"{data_source}\""
@@ -172,7 +183,7 @@ impl EndpointHandler {
                     state.clone(),
                     self.ep.uri.clone(),
                     self.rhai_engine.clone(),
-                    self.handler_script.clone(),
+                    self.handler_rhai.clone(),
                     input.clone(),
                 )
                 .await?;
@@ -185,6 +196,24 @@ impl EndpointHandler {
                         "Rhai script must return string instead: {result:?}"
                     )));
                 };
+
+                let rr = ResourceRequest::new(&query, input);
+                ds.query(rr).await
+            }
+            ResourceSpecs::QueryScriptLua { data_source, .. } => {
+                let Some(ds) = state.get_data_source(data_source) else {
+                    return Err(XepakError::Cfg(format!(
+                        "Data source does not exists \"{data_source}\""
+                    )));
+                };
+
+                let query = execute_lua_script(
+                    state.clone(),
+                    self.ep.uri.clone(),
+                    self.handler_lua.clone(),
+                    input.clone(),
+                )
+                .await?;
 
                 let rr = ResourceRequest::new(&query, input);
                 ds.query(rr).await
