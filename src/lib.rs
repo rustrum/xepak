@@ -1,7 +1,8 @@
 pub mod auth;
 pub mod cfg;
 pub mod schema;
-pub mod script;
+pub mod script_lua;
+pub mod script_rhai;
 pub mod server;
 mod sql_key_args;
 pub mod storage;
@@ -59,6 +60,9 @@ pub enum XepakError {
 
     #[error("Script execution error: {0}")]
     Script(#[from] Arc<EvalAltResult>),
+
+    #[error("Lua script error: {0}")]
+    LuaScript(String),
 
     #[error("Inconsistency found: {0}")]
     NotConsistent(String),
