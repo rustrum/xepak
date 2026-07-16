@@ -24,7 +24,7 @@ allow = [
 ]
 
 [endpoint.resource]
-type = "query_script"
+type = "query_script_rhai"
 script = """
 // Just reusing existing input context where 'payment_id' argument exists.
 let allowed = storage_query_value(

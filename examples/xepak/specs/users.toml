@@ -6,12 +6,53 @@ single_record_response = true
 type = "query"
 query = "SELECT * FROM users WHERE id={{user_id}}"
 
+
 [[endpoint]]
-uri = "/user/list"
+uri = "/user/lua/list"
 fetch_limit = 20
 
 [endpoint.resource]
-type = "query_script"
+type = "query_script_lua"
+script = """
+
+local args = {
+    key = "value",
+    key2 = "value2"
+};
+
+local count = storage_query_value("SELECT count(*) FROM users", args);
+
+log_info("Users count is " .. count);
+log_debug(string.format("I said users count is %d", count));
+
+local query = query_builder("SELECT * FROM users");
+
+local parts = {};
+if ctx:has_arg("name") then
+    local v = ctx:get_arg("name")
+    if #v < 3 then
+        error_input("Input argument 'name' length must be greater than 2")
+    end
+    table.insert(parts, "username = {{name}}")
+end
+
+if ctx:has_arg("pass") then
+    table.insert(parts, "password = {{pass}}")
+end
+
+query:add_joined_parts("WHERE", parts, "OR", "");
+
+query:add("LIMIT {{-limit-}} OFFSET {{-offset-}}");
+
+return query:build();
+"""
+
+[[endpoint]]
+uri = "/user/rhai/list"
+fetch_limit = 20
+
+[endpoint.resource]
+type = "query_script_rhai"
 script = """
 
 let args = #{
@@ -47,3 +88,5 @@ query.add("LIMIT {{-limit-}} OFFSET {{-offset-}}");
 
 return query.build();
 """
+
+

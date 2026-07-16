@@ -1,5 +1,6 @@
 use std::{collections::HashSet, fs, path::PathBuf, sync::Arc};
 
+use bon::Builder;
 use serde::Deserialize;
 
 use crate::{
@@ -8,7 +9,7 @@ use crate::{
 };
 
 /// Main configuration file that properties could be overwritten via ENV or not ? (TODO).
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Builder, Clone, Debug, Default, Deserialize)]
 pub struct XepakConf {
     /// Port to listen on.
     #[serde(default = "default_port")]
@@ -41,7 +42,7 @@ impl XepakConf {
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Builder, Clone, Debug, Default, Deserialize)]
 pub struct XepakSpecs {
     #[serde(default)]
     pub auth: Option<XepakAuthSpecs>,
@@ -85,7 +86,7 @@ impl XepakSpecs {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Builder, Clone, Debug, Deserialize)]
 pub struct XepakAuthSpecs {}
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -94,7 +95,7 @@ pub struct RhaiScript {
     pub script: String,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Builder, Clone, Debug, Deserialize)]
 pub struct EndpointSpecs {
     pub uri: String,
 

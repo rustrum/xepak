@@ -155,6 +155,7 @@ impl IntoLua for XepakValue {
             XepakValue::Integer(v) => Ok(Value::Integer(v as i64)),
             XepakValue::Float(v) => Ok(Value::Number(v)),
             XepakValue::Text(v) => Ok(Value::String(lua.create_string(&v)?)),
+            XepakValue::Blob(v) => Ok(Value::String(lua.create_string(&v)?)),
         }
     }
 }
@@ -171,6 +172,7 @@ impl FromLua for XepakValue {
                     .map_err(|e| LuaError::runtime(e.to_string()))?
                     .to_owned(),
             )),
+            // TODO lua handles bytes as string so it is not possible to explicitly convert back to Blob
             other => Err(LuaError::runtime(format!(
                 "{} not compatible with XepakValue",
                 other.type_name()
@@ -325,21 +327,29 @@ fn row_to_lua_table(lua: &Lua, row: HashMap<String, XepakValue>) -> mlua::Result
 pub async fn execute_lua_script(
     state: Data<XepakAppData>,
     uri: String,
-    lua_fn: Arc<Option<Function>>,
+    lua_env: Arc<Option<(Lua, Function)>>,
     input: RequestInput,
 ) -> Result<String, XepakError> {
     tokio::task::spawn_local(async move {
-        let Some(lua_fn) = lua_fn.as_ref() else {
+        let Some((lua, lua_fn)) = lua_env.as_ref() else {
             return Err(XepakError::Unexpected(format!(
                 "Query script AST must already exists for handler {uri}"
             )));
         };
 
-        let lua = lua_load_engine(state.get_ref())?;
-        lua.globals().set("ctx", LuaRequestContext::from(input))?;
+        let request_env = lua.create_table()?;
+        request_env.set("ctx", LuaRequestContext::from(input))?;
+
+        let globals = lua.globals();
+        let meta = lua.create_table()?;
+        meta.set("__index", globals)?;
+        request_env.set_metatable(Some(meta))?;
+
+        let isolated_fn = lua_fn.clone();
+        isolated_fn.set_environment(request_env)?;
 
         // TODO: redo error handling later (may add line numbers logs if possible)
-        match lua_fn.call_async::<String>(()).await {
+        match isolated_fn.call_async::<String>(()).await {
             Ok(result) => Ok(result),
             Err(e) => {
                 Err(if let Some(xerror) = extract_xepak_from_lua_error(&e) {

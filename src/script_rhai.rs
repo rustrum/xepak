@@ -408,6 +408,7 @@ pub fn xepak_to_dynamic(value: &XepakValue) -> Dynamic {
         XepakValue::Integer(v) => Dynamic::from_int(*v as i64),
         XepakValue::Float(v) => Dynamic::from_float(*v),
         XepakValue::Text(v) => Dynamic::from(v.clone()),
+        XepakValue::Blob(v) => Dynamic::from(v.clone()),
     }
 }
 
@@ -430,6 +431,12 @@ pub fn dynamic_to_xepak(v: &Dynamic) -> Result<XepakValue, XepakError> {
         XepakValue::Float(
             v.as_float()
                 .map_err(|e| XepakError::Unexpected(e.to_string()))?,
+        )
+    } else if v.is_blob() {
+        XepakValue::Blob(
+            v.as_blob_ref()
+                .map_err(|e| XepakError::Unexpected(e.to_string()))?
+                .clone(),
         )
     } else {
         return Err(XepakError::Convert(format!(

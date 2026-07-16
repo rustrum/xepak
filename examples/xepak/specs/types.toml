@@ -1,0 +1,17 @@
+[[endpoint]]
+uri = "/typecheck/list"
+fetch_limit = 20
+
+[endpoint.resource]
+type = "query"
+query = "SELECT * FROM typecheck LIMIT {{-limit-}} OFFSET {{-offset-}}"
+
+
+[[endpoint]]
+uri = "/typecheck/{type_id:\\d+}"
+single_record_response = true
+
+[endpoint.resource]
+type = "query"
+query = "SELECT * FROM typecheck WHERE id={{type_id}}"
+

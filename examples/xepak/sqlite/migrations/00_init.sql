@@ -11,7 +11,6 @@ CREATE TABLE IF NOT EXISTS posts (
     content TEXT NOT NULL
 );
 
-
 CREATE TABLE IF NOT EXISTS typecheck (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     type_text TEXT,
@@ -19,5 +18,3 @@ CREATE TABLE IF NOT EXISTS typecheck (
     type_real REAL,
     type_blob BLOB
 );
-
-

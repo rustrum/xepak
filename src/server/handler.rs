@@ -10,7 +10,7 @@ use actix_web::{
     },
     web::{self, Bytes, Data},
 };
-use mlua::Function;
+use mlua::{Function, Lua};
 use rhai::{AST, Engine};
 use serde::Serialize;
 
@@ -40,7 +40,7 @@ pub struct EndpointHandler {
     ep: Arc<EndpointSpecs>,
     rhai_engine: Arc<Option<Engine>>,
     handler_rhai: Arc<Option<AST>>,
-    handler_lua: Arc<Option<Function>>,
+    handler_lua: Arc<Option<(Lua, Function)>>,
     processors: Arc<Vec<Box<dyn PreProcessorHandler + Send + Sync>>>,
 }
 
@@ -69,7 +69,7 @@ impl EndpointHandler {
             ResourceSpecs::QueryScriptLua { script, .. } => {
                 let lua = lua_load_engine(app)?;
                 let luafn = build_lua_function(&lua, script)?;
-                Some(luafn)
+                Some((lua, luafn))
             }
             _ => None,
         };
