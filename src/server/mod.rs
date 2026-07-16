@@ -56,8 +56,7 @@ pub async fn init_server(
     // if config.specs.deceit.is_empty() {
     //     log::warn!("Starting server without deceits in specs");
     // }
-    // let port = config.port;
-    let port = 8080;
+    let port = config.port;
 
     // Required to use with sqlx::Any connector
     sqlx::any::install_default_drivers();

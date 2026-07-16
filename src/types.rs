@@ -6,6 +6,8 @@
 
 use std::collections::HashMap;
 
+use base64::Engine;
+use rhai::Blob;
 use serde::Deserialize;
 use sqlx::{TypeInfo, ValueRef as _};
 use strum::Display;
@@ -36,6 +38,7 @@ pub enum XepakType {
     Boolean,
     Int,
     Float,
+    Blob,
 }
 
 /// Unified value wrapper for input/output (IDK a better solution than using enum yet).
@@ -56,7 +59,8 @@ pub enum XepakValue {
     /// Any text type: TEXT, VARCHAR, etc.
     /// It is default type for de/serialization of any unknown data.
     Text(String),
-    //TODO add BLOB
+    /// Some kind of a binary blob
+    Blob(Vec<u8>),
 }
 
 impl XepakValue {
@@ -68,6 +72,7 @@ impl XepakValue {
             Self::Integer(_) => XepakType::Int,
             Self::Float(_) => XepakType::Float,
             Self::Text(_) => XepakType::Text,
+            Self::Blob(_) => XepakType::Blob,
         }
     }
 
@@ -91,6 +96,7 @@ impl XepakValue {
                 Self::Float(parsed)
             }
             XepakType::Text => Self::Text(v.to_string()),
+            XepakType::Blob => unimplemented!(),
         };
         Ok(xv)
     }
@@ -98,7 +104,7 @@ impl XepakValue {
     pub fn as_int(&self) -> Result<i128, XepakError> {
         const TO_TYPE: XepakType = XepakType::Int;
         match self {
-            XepakValue::Null => Err(XepakError::ConvertValue(
+            XepakValue::Null | XepakValue::Blob(_) => Err(XepakError::ConvertValue(
                 self.get_type(),
                 TO_TYPE,
                 "Not possible".to_string(),
@@ -139,13 +145,14 @@ impl XepakValue {
             XepakValue::Integer(v) => v.to_string(),
             XepakValue::Float(v) => v.to_string(),
             XepakValue::Text(v) => v.clone(),
+            XepakValue::Blob(v) => base64::engine::general_purpose::STANDARD.encode(v),
         }
     }
 
     pub fn as_bool(&self) -> Result<bool, XepakError> {
         const TO_TYPE: XepakType = XepakType::Boolean;
         Ok(match self {
-            XepakValue::Null => {
+            XepakValue::Null | XepakValue::Blob(_) => {
                 return Err(XepakError::ConvertValue(
                     self.get_type(),
                     TO_TYPE,
@@ -182,10 +189,11 @@ impl XepakValue {
             XepakValue::Text(v) => v.parse().map_err(|e| XepakError::Decode(format!("{e}")))?,
         })
     }
+
     pub fn as_float(&self) -> Result<f64, XepakError> {
         const TO_TYPE: XepakType = XepakType::Float;
         Ok(match self {
-            XepakValue::Null => {
+            XepakValue::Null | XepakValue::Blob(_) => {
                 return Err(XepakError::ConvertValue(
                     self.get_type(),
                     TO_TYPE,
@@ -215,6 +223,27 @@ impl XepakValue {
         })
     }
 
+    pub fn as_blob(&self) -> Result<Vec<u8>, XepakError> {
+        const TO_TYPE: XepakType = XepakType::Blob;
+        Ok(match self {
+            XepakValue::Null => vec![],
+            XepakValue::Blob(v) => v.clone(),
+            XepakValue::Text(v) => {
+                let value = base64::engine::general_purpose::STANDARD
+                    .decode(v)
+                    .map_err(|e| XepakError::Decode(format!("{e}")))?;
+                value
+            }
+            _ => {
+                return Err(XepakError::ConvertValue(
+                    self.get_type(),
+                    TO_TYPE,
+                    "Not possible".to_string(),
+                ));
+            }
+        })
+    }
+
     pub fn bind_sqlx<'a>(
         &'a self,
         query: sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments<'a>>,
@@ -225,6 +254,7 @@ impl XepakValue {
             XepakValue::Integer(v) => query.bind(*v as i64),
             XepakValue::Float(v) => query.bind(v),
             XepakValue::Text(v) => query.bind(v),
+            XepakValue::Blob(v) => query.bind(v),
         }
     }
 }
@@ -297,11 +327,14 @@ impl<'r> TryFrom<SqlxValue<'r>> for XepakValue {
                 let v: i64 = sqlx::Decode::<sqlx::Any>::decode(value)?;
                 Self::Integer(v as i128)
             }
-            // TODO add BLOB
             "REAL" | "DOUBLE" => {
                 // TODO handle unsigned integers better
                 let v: f64 = sqlx::Decode::<sqlx::Any>::decode(value)?;
                 Self::Float(v)
+            }
+            "BLOB" => {
+                let b: Vec<u8> = sqlx::Decode::<sqlx::Any>::decode(value)?;
+                Self::Blob(b)
             }
             _ => Self::Text(sqlx::Decode::<sqlx::Any>::decode(value)?),
         };
@@ -348,6 +381,11 @@ impl serde::Serialize for XepakValue {
             XepakValue::Integer(v) => ser.serialize_i128(*v),
             XepakValue::Float(v) => ser.serialize_f64(*v),
             XepakValue::Text(v) => ser.serialize_str(v.as_str()),
+            XepakValue::Blob(v) => {
+                // By default Blob is saved as b64 string
+                let str_value = base64::engine::general_purpose::STANDARD.encode(v);
+                ser.serialize_str(str_value.as_str())
+            }
         }
     }
 }
@@ -364,6 +402,7 @@ impl minicbor::Encode<()> for XepakValue {
             XepakValue::Integer(v) => e.encode(*v as i64)?,
             XepakValue::Float(v) => e.encode(v)?,
             XepakValue::Text(v) => e.encode(v)?,
+            XepakValue::Blob(v) => e.encode(v)?,
         };
         Ok(())
     }
