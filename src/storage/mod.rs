@@ -32,22 +32,39 @@ pub async fn init_storage_connectors(
                 migrations_dir,
                 create_db,
             } => {
-                let db_file = normalize_config_path(conf_dir, file);
-                tracing::info!("Init sqlite storage \"{id}\" using path \"{db_file:?}\"");
+                let pool = if file.is_empty() {
+                    let aco = AnyConnectOptions::from_str(
+                        "sqlite:///file:inmem?mode=memory&cache=shared",
+                    )
+                    .expect("Must be valid");
 
-                let options = SqliteConnectOptions::new()
-                    .filename(db_file)
-                    .create_if_missing(*create_db);
-                let options = if *wal {
-                    options.journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
+                    tracing::info!("Using SQLite in-memory DB");
+
+                    sqlx::any::AnyPoolOptions::new()
+                        .max_connections(1)
+                        .min_connections(1)
+                        .connect_with(aco)
+                        .await
+                        .expect("Must work for in memory")
                 } else {
-                    options
+                    let db_file = normalize_config_path(conf_dir, file);
+                    tracing::info!("Init sqlite storage \"{id}\" using path \"{db_file:?}\"");
+
+                    let options = SqliteConnectOptions::new()
+                        .filename(db_file)
+                        .create_if_missing(*create_db);
+
+                    let options = if *wal {
+                        options.journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
+                    } else {
+                        options
+                    };
+
+                    let aco = AnyConnectOptions::from_str(options.to_url_lossy().as_str())
+                        .expect("Query string must be valid but it is not");
+
+                    AnyPool::connect_lazy_with(aco)
                 };
-
-                let aco = AnyConnectOptions::from_str(options.to_url_lossy().as_str())
-                    .expect("Query string must be valid but it is not");
-
-                let pool = AnyPool::connect_lazy_with(aco);
 
                 if !migrations_dir.is_empty() {
                     tracing::info!("Applying migrations from: {migrations_dir}");
