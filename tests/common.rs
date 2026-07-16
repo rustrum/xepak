@@ -2,20 +2,28 @@ use std::{fs, path::PathBuf, str::FromStr};
 
 use actix_web::dev::ServerHandle;
 
-use xepak_rest::{cfg::*, server::init_server, storage::StorageSettings};
+use xepak_rest::{cfg::*, server::init_server};
 
 pub const DEFAULT_TEST_PORT: u16 = 4321;
 
 pub const INIT_DELAY_DEFAULT: usize = 1;
 
 /// Directory with basic test configuration
-pub const CONFIG_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/examples/xepak");
+pub const CONFIG_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/config");
 
 /// Default configuration file
-pub const CONFIG_FILE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/examples/xepak/config.toml");
+pub const CONFIG_FILE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/config/tests_cfg.toml");
 
 /// Default test specs directory
-pub const SPECS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/examples/xepak/specs");
+pub const SPECS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/config/specs");
+
+pub fn init_logger() {
+    let filter = tracing_subscriber::EnvFilter::builder()
+        .with_default_directive(tracing::level_filters::LevelFilter::DEBUG.into())
+        .parse("debug")
+        .unwrap();
+    tracing_subscriber::fmt().with_env_filter(filter).init();
+}
 
 pub fn get_target_test_dir() -> PathBuf {
     let cargo_target = match std::env::var("CARGO_TARGET_DIR") {
@@ -56,44 +64,8 @@ pub fn clean_directory_files(dir_path: &PathBuf) -> std::io::Result<()> {
     Ok(())
 }
 
-#[allow(irrefutable_let_patterns)]
-pub fn build_xepak_config(config_file: &str) -> XepakConf {
-    let mut config = load_conf_file(config_file).expect("Should have valid config");
-
-    config.port = DEFAULT_TEST_PORT;
-
-    let target_test_dir = get_target_test_dir();
-    clean_directory_files(&target_test_dir).expect("Must be done");
-
-    // Reconfigure DB here
-    let storage_settings = config.storage[0].clone();
-    config.storage[0] = if let StorageSettings::Sqlite {
-        id,
-        create_db,
-        wal,
-        migrations_dir,
-        ..
-    } = storage_settings
-    {
-        StorageSettings::Sqlite {
-            id,
-            file: target_test_dir
-                .join("test_db.sqlite3")
-                .to_string_lossy()
-                .to_string(),
-            create_db,
-            wal,
-            migrations_dir,
-        }
-    } else {
-        panic!("Do not expect other test config here");
-    };
-
-    config
-}
-
 pub async fn init_default_test_server(delay_ms: usize) -> XepakTestServer {
-    let config = build_xepak_config(CONFIG_FILE);
+    let config = load_conf_file(CONFIG_FILE).expect("Should have valid config");
     let specs_dir = PathBuf::from_str(SPECS_DIR).expect("Specs dir must exists");
     let specs = load_specs_from_dir(specs_dir).expect("Should have valid specs");
 

@@ -1,0 +1,22 @@
+[[endpoint]]
+uri = "/script/lua/err"
+fetch_limit = 20
+
+[endpoint.resource]
+type = "query_script_lua"
+script = """
+if ctx:has_arg("etype") then
+    local et = ctx:get_arg("etype")
+    if et == "in" then
+        error_input("Input error from LUA")
+    elseif et == "nf" then
+        error_not_found("Not found error from LUA")
+    elseif et == "fb" then
+        error_forbidden("Forbidden error from LUA")
+    elseif et == "srv" then
+        error_server("Server error from LUA")
+    end
+end
+
+return "SELECT * FROM users WHERE 1=0";
+"""
