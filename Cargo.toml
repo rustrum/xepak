@@ -48,7 +48,7 @@ base64 = "0.22.1"
 bon = "3.9.1"
 # async-trait = "0.1.89"
 mlua = { version = "0.11", features = ["lua55", "vendored", "async", "send"] }
-minicbor = { version = "2.1", features = ["std", "alloc"] }
+minicbor = { version = "2.2.2", features = ["std", "alloc"] }
 rhai = { version = "1.23", features = ["sync", "no_custom_syntax"] }
 # rhai = { version = "1.23", features = ["sync", "no_custom_syntax", "serde"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
@@ -65,6 +65,7 @@ actix-web = { version = "4.11", features = ["rustls"] }
 getopt3 = { version = "2.5.0", optional = true }
 
 [dev-dependencies]
+cbor2 = "1.1.4"
 maplit = "1.0"
 reqwest = { version = "0.13", features = ["json"] }
 serial_test = "3"

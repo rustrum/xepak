@@ -1,6 +1,5 @@
 mod common;
 
-use base64::Engine;
 use common::*;
 use reqwest::StatusCode;
 use serde_json::Value as JsonValue;
