@@ -128,18 +128,75 @@ impl XepakTestServer {
     }
 }
 
+// {
+//     if deserializer.is_human_readable() {
+//         let s = String::deserialize(deserializer)?;
+
+//         engine::general_purpose::STANDARD
+//             .decode(s)
+//             .map_err(serde::de::Error::custom)
+//     } else {
+//         Vec::<u8>::deserialize(deserializer)
+//     }
+// }
+
+pub mod domain {
+    use base64::{Engine as _, engine};
+    use serde::{Deserialize, Deserializer};
+
+    #[derive(Deserialize, Debug, PartialEq)]
+    pub struct TypesRecord {
+        pub id: u64,
+        #[serde(default)]
+        pub type_text: Option<String>,
+        #[serde(default)]
+        pub type_int: Option<i64>,
+        #[serde(default)]
+        pub type_real: Option<f64>,
+        #[serde(deserialize_with = "deserialize_blob", default)]
+        pub type_blob: Option<Vec<u8>>,
+    }
+
+    pub fn deserialize_blob<'de, D>(deserializer: D) -> Result<Option<Vec<u8>>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum StringOrBytes {
+            String(String),
+            Bytes(Vec<u8>),
+        }
+
+        let opt: Option<StringOrBytes> = Option::deserialize(deserializer)?;
+
+        let data = match opt {
+            Some(val) => val,
+            None => return Ok(None),
+        };
+
+        match data {
+            StringOrBytes::String(s) => {
+                let bytes = engine::general_purpose::STANDARD
+                    .decode(s)
+                    .map_err(serde::de::Error::custom)?;
+                Ok(Some(bytes))
+            }
+            StringOrBytes::Bytes(b) => Ok(Some(b)),
+        }
+    }
+}
+
 pub mod client {
 
     use reqwest::{
-        Response,
+        Response, StatusCode,
         header::{HeaderMap, HeaderName, HeaderValue},
     };
     use serde_json::Value;
-    use std::fmt::Display;
+    use std::{collections::HashMap, fmt::Display};
     use url::form_urlencoded;
-    use xepak_rest::types::XepakValue;
-
-    use sqlx_core::HashMap;
+    use xepak_rest::{server::CONTENT_TYPE_CBOR, types::XepakValue};
 
     use super::*;
 
@@ -201,10 +258,10 @@ pub mod client {
         response
     }
 
-    pub async fn response_json(response: Response) -> reqwest::Result<Value> {
-        let jv: Value = response.json().await?;
-        // Vec<XepakValue>::
-        Ok(jv)
+    pub fn cbor_headers() -> HashMap<String, String> {
+        let mut h = HashMap::new();
+        h.insert("accept".to_string(), CONTENT_TYPE_CBOR.to_string());
+        h
     }
 
     pub async fn post_resource<T: Display>(
@@ -222,5 +279,39 @@ pub mod client {
         }
 
         let response = client.get(uri).send().await.expect("Request failed");
+    }
+
+    pub async fn extract_from_json<V: serde::de::DeserializeOwned>(
+        response: Response,
+        expect: Option<StatusCode>,
+    ) -> V {
+        if let Some(code) = expect {
+            assert_eq!(
+                code,
+                response.status(),
+                "Response must have provided status code"
+            );
+        }
+
+        response
+            .json()
+            .await
+            .expect("Should parse response as JSON")
+    }
+
+    pub async fn extract_from_cbor<V>(response: Response, expect: Option<StatusCode>) -> V
+    where
+        V: for<'b> serde::de::Deserialize<'b>,
+    {
+        if let Some(code) = expect {
+            assert_eq!(
+                code,
+                response.status(),
+                "Response must have provided status code"
+            );
+        }
+
+        let bytes = response.bytes().await.expect("Should read response bytes");
+        cbor2::from_slice(&bytes).expect("Should be able to parse into CBOR")
     }
 }

@@ -23,8 +23,8 @@ use crate::types::XepakValue;
 
 const OFFSET_HEADER: &str = "X-Offset";
 const LIMIT_HEADER: &str = "X-Limit";
-const CONTENT_TYPE_CBOR: &str = "application/cbor";
-const CONTENT_TYPE_JSON: &str = "application/json";
+pub const CONTENT_TYPE_CBOR: &str = "application/cbor";
+pub const CONTENT_TYPE_JSON: &str = "application/json";
 
 #[derive(Clone)]
 pub struct XepakAppData {
@@ -203,6 +203,9 @@ impl RequestInput {
     pub fn parse_offset_limit(&mut self, offset_arg: &str, limit_arg: &str, limit_max: usize) {
         if !limit_arg.is_empty() {
             self.limit = self.parse_usize_from(limit_arg).unwrap_or(limit_max);
+            if self.limit > limit_max {
+                self.limit = limit_max;
+            }
         }
         if !offset_arg.is_empty() {
             self.offset = self.parse_usize_from(offset_arg).unwrap_or_default();

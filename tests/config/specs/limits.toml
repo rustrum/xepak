@@ -1,0 +1,24 @@
+[[endpoint]]
+uri = "/limits"
+fetch_limit = 4
+
+[endpoint.resource]
+type = "query"
+query = """
+SELECT * FROM alltypes LIMIT {{-limit-}} OFFSET {{-offset-}}
+"""
+
+[[endpoint]]
+uri = "/limits/lua"
+fetch_limit = 4
+
+[endpoint.resource]
+type = "query_script_lua"
+script = """
+local query = query_builder("SELECT * FROM alltypes");
+query:add("LIMIT {{-limit-}} OFFSET {{-offset-}}");
+return query:build();
+"""
+
+
+
