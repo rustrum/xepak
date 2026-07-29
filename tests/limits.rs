@@ -19,7 +19,7 @@ fn get_header_value(key: &str, response: &Response) -> String {
 async fn limits_test_template(uri: &str) {
     let _server = init_default_test_server(INIT_DELAY_DEFAULT).await;
 
-    let response = client::get(&format!("{uri}")).await;
+    let response = client::get(uri).await;
 
     let limit_h = get_header_value("x-limit", &response);
     assert_eq!("4", limit_h);
