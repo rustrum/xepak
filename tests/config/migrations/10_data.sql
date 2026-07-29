@@ -23,5 +23,6 @@ INSERT INTO posts
 (user_id, title, content)
 VALUES 
 (1, 'Post from user1', 'user1 is cool agent'),
+(1, 'Post about user1', 'I am the best'),
 (2, 'Post from user2', 'user2 is even better AI agent'),
 (3, 'Post from user3', 'user3 is better than all of you');

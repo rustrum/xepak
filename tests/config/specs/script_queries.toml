@@ -1,0 +1,25 @@
+[[endpoint]]
+uri = "/script/lua/query/posts/{username:\\w+}"
+fetch_limit = 20
+
+[endpoint.resource]
+type = "query_script_lua"
+script = """
+local query_args = {
+    user_name = ctx:get_arg("username")
+}
+
+local user_query = query_builder("SELECT * FROM users WHERE username={{user_name}}")
+
+local user = storage_query_one(user_query:build(), query_args)
+if not user then
+    error_input(string.format("Can't find user by name = %s ", ctx:get_arg("username")))
+else
+    log_info("User " .. user.username .. " found with id " .. user.id)
+end
+
+ctx:set_arg("user_id", user.id)
+
+return "SELECT * FROM posts WHERE user_id = {{user_id}}"
+"""
+

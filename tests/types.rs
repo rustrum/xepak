@@ -14,7 +14,7 @@ use serial_test::serial;
 // #[test]
 #[tokio::test]
 #[serial]
-async fn return_null_types() {
+async fn check_null_values_response() {
     let _server = init_default_test_server(INIT_DELAY_DEFAULT).await;
 
     let response = client::get("/alltypes/1").await;
@@ -38,7 +38,7 @@ async fn return_null_types() {
 
 #[tokio::test]
 #[serial]
-async fn non_null_types() {
+async fn check_not_null_values_response() {
     let _server = init_default_test_server(INIT_DELAY_DEFAULT).await;
 
     let response = client::get("/alltypes/2").await;
@@ -71,7 +71,7 @@ async fn non_null_types() {
 
 #[tokio::test]
 #[serial]
-async fn return_json_cbor() {
+async fn same_response_json_cbor() {
     let _server = init_default_test_server(INIT_DELAY_DEFAULT).await;
 
     let response = client::get("/alltypes/3").await;
@@ -97,7 +97,7 @@ async fn return_json_cbor() {
 
 #[tokio::test]
 #[serial]
-async fn json_cbor_nulls() {
+async fn response_json_cbor_with_nulls() {
     let _server = init_default_test_server(INIT_DELAY_DEFAULT).await;
 
     // JSON

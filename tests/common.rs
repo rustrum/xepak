@@ -17,6 +17,7 @@ pub const CONFIG_FILE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/config
 /// Default test specs directory
 pub const SPECS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/config/specs");
 
+/// Cal this at the beggining of the test to enable logging
 pub fn init_logger() {
     let filter = tracing_subscriber::EnvFilter::builder()
         .with_default_directive(tracing::level_filters::LevelFilter::DEBUG.into())
@@ -128,18 +129,6 @@ impl XepakTestServer {
     }
 }
 
-// {
-//     if deserializer.is_human_readable() {
-//         let s = String::deserialize(deserializer)?;
-
-//         engine::general_purpose::STANDARD
-//             .decode(s)
-//             .map_err(serde::de::Error::custom)
-//     } else {
-//         Vec::<u8>::deserialize(deserializer)
-//     }
-// }
-
 pub mod domain {
     use base64::{Engine as _, engine};
     use serde::{Deserialize, Deserializer};
@@ -155,6 +144,14 @@ pub mod domain {
         pub type_real: Option<f64>,
         #[serde(deserialize_with = "deserialize_blob", default)]
         pub type_blob: Option<Vec<u8>>,
+    }
+
+    #[derive(Deserialize, Debug)]
+    pub struct PostsRecord {
+        pub id: u64,
+        pub user_id: u64,
+        pub title: String,
+        pub content: String,
     }
 
     pub fn deserialize_blob<'de, D>(deserializer: D) -> Result<Option<Vec<u8>>, D::Error>
@@ -189,16 +186,15 @@ pub mod domain {
 
 pub mod client {
 
+    use super::*;
+
     use reqwest::{
         Response, StatusCode,
         header::{HeaderMap, HeaderName, HeaderValue},
     };
-    use serde_json::Value;
     use std::{collections::HashMap, fmt::Display};
     use url::form_urlencoded;
-    use xepak_rest::{server::CONTENT_TYPE_CBOR, types::XepakValue};
-
-    use super::*;
+    use xepak_rest::server::CONTENT_TYPE_CBOR;
 
     fn api_url(uri: &str) -> String {
         format!("http://localhost:{DEFAULT_TEST_PORT}{uri}")
