@@ -66,7 +66,7 @@ impl LuaRequestContext {
     }
 
     fn get_arg(lua: &Lua, this: &Self, arg_name: String) -> mlua::Result<Value> {
-        match this.input.get_arg_value(&arg_name).cloned() {
+        match this.input.get_arg_value(&arg_name) {
             Some(v) => v.into_lua(lua),
             None => Ok(Value::Nil),
         }
@@ -254,6 +254,7 @@ fn prepare_args(lua: &Lua, args: Value) -> mlua::Result<RequestInput> {
     }
 }
 
+/// Return multiple rows query result as a table.
 async fn storage_query(lua: Lua, (query, args): (String, Value)) -> mlua::Result<Table> {
     let input = prepare_args(&lua, args)?;
     let state = {
@@ -268,6 +269,7 @@ async fn storage_query(lua: Lua, (query, args): (String, Value)) -> mlua::Result
     rows_to_lua_table(&lua, rows)
 }
 
+/// Returns single row from DB or a LUA nill value.
 async fn storage_query_one(lua: Lua, (query, args): (String, Value)) -> mlua::Result<Value> {
     let input = prepare_args(&lua, args)?;
     let state = {
@@ -288,6 +290,7 @@ async fn storage_query_one(lua: Lua, (query, args): (String, Value)) -> mlua::Re
     }
 }
 
+///Returns only a single value from a DB query.
 async fn storage_query_value(lua: Lua, (query, args): (String, Value)) -> mlua::Result<Value> {
     let input = prepare_args(&lua, args)?;
     let state = {
@@ -325,7 +328,7 @@ fn row_to_lua_table(lua: &Lua, row: HashMap<String, XepakValue>) -> mlua::Result
 /// thread cannot share or corrupt the `ctx` global. Analogous to execute_script_blocking
 /// for rhai but fully async — no blocking threads or handle.block_on calls.
 pub async fn execute_lua_script(
-    state: Data<XepakAppData>,
+    _state: Data<XepakAppData>,
     uri: String,
     lua_env: Arc<Option<(Lua, Function)>>,
     input: RequestInput,

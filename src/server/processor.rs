@@ -1,4 +1,4 @@
-use std::{collections::HashMap, default};
+use std::collections::HashMap;
 
 use actix_web::{
     HttpRequest,
@@ -64,8 +64,8 @@ impl PreProcessorHandler for InputArgsValidator {
         _body: &Bytes,
         input: &mut RequestInput,
     ) -> Result<(), XepakError> {
-        validate_with_schema(&input.schema, &input.path_args)?;
-        validate_with_schema(&input.schema, &input.args)?;
+        validate_with_schema(&input.schema, &input.path_args.lock().unwrap())?;
+        validate_with_schema(&input.schema, &input.args.lock().unwrap())?;
         Ok(())
     }
 }
@@ -116,8 +116,8 @@ impl BodyToArgsProcessor {
 impl BodyToArgsProcessor {
     pub fn handle_cbor_body(
         &self,
-        body: &Bytes,
-        input: &mut RequestInput,
+        _body: &Bytes,
+        _input: &mut RequestInput,
     ) -> Result<(), XepakError> {
         todo!("Implement CBOR parsing")
     }

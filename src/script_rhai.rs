@@ -34,7 +34,7 @@ impl RhaiRequestContext {
     }
 
     pub fn get_arg(&mut self, arg_name: &str) -> Dynamic {
-        match self.input.get_arg_value(arg_name).cloned() {
+        match self.input.get_arg_value(arg_name) {
             Some(v) => xepak_to_dynamic(&v),
             None => Dynamic::UNIT,
         }
@@ -356,7 +356,7 @@ pub fn storage_query_value_rs(
 }
 
 pub async fn execute_script_blocking(
-    state: Data<XepakAppData>,
+    _state: Data<XepakAppData>,
     uri: String,
     rhai: Arc<Option<Engine>>,
     ast: Arc<Option<AST>>,
