@@ -9,7 +9,6 @@ use serde::Deserialize;
 
 use crate::{
     XepakError,
-    auth::CheckAuthConf,
     schema::validate_with_schema,
     server::{CONTENT_TYPE_CBOR, RequestInput, XepakAppData},
     types::XepakValue,
@@ -31,7 +30,7 @@ pub enum PreProcessor {
         allow_no_auth: bool,
     },
     Authorize {
-        allow: Vec<CheckAuthConf>,
+        rules: String,
     },
 }
 

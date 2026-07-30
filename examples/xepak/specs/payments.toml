@@ -15,13 +15,7 @@ type = "simple_auth"
 
 [[endpoint.processor]]
 type = "authorize"
-allow = [
-    { kind = "id", v = "boss" },
-    { kind = "and", nested = [
-        { kind = "role", v = "ADMIN" },
-        { kind = "role", v = "MANAGER" },
-    ] },
-]
+rules = "#boss OR (ADMIN AND MANAGER)"
 
 [endpoint.resource]
 type = "query_script_rhai"

@@ -4,7 +4,7 @@ pub mod processor;
 use std::collections::{HashMap, HashSet};
 use std::net::Ipv4Addr;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex};
 
 use actix_web::App;
 use actix_web::dev::Server;
@@ -12,7 +12,6 @@ use actix_web::http::StatusCode;
 use actix_web::middleware::Logger;
 use actix_web::web::ServiceConfig;
 use actix_web::{HttpServer, web::Data};
-use tokio::sync::MappedMutexGuard;
 
 use crate::XepakError;
 use crate::auth::{SimpleAuthRegistry, auth_specs_to_registry};
@@ -43,10 +42,6 @@ impl XepakAppData {
     pub fn get_auth_data(&self, api_key: &str) -> Option<&(String, HashSet<String>)> {
         self.simple_auth_registry.get(api_key)
     }
-}
-
-fn init_app_data() -> XepakAppData {
-    unimplemented!()
 }
 
 pub async fn init_server(
