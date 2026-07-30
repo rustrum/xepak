@@ -5,7 +5,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::XepakError;
-use crate::sql_key_args::ParametrizedQueryRef;
+use crate::sql_key_args::ParametrizedQuery;
 use crate::types::{Record, SqlxValue, XepakValue};
 use serde::Deserialize;
 use sqlx::any::{AnyArguments, AnyConnectOptions, AnyRow};
@@ -142,7 +142,7 @@ impl Storage {
     ) -> Result<Vec<Record>, XepakError> {
         let mut connection = self.pool.acquire().await.unwrap();
 
-        let pquery = ParametrizedQueryRef::new(request.query);
+        let pquery = ParametrizedQuery::new(request.query);
         let query = pquery.build_query("?");
         let sql_query = self.prepare_query(&request, &pquery, &query)?;
 
@@ -164,7 +164,7 @@ impl Storage {
     ) -> Result<Option<Record>, XepakError> {
         let mut connection = self.pool.acquire().await.unwrap();
 
-        let pquery = ParametrizedQueryRef::new(request.query);
+        let pquery = ParametrizedQuery::new(request.query);
         let query = pquery.build_query("?");
         let sql_query = self.prepare_query(&request, &pquery, &query)?;
 
@@ -209,7 +209,7 @@ impl Storage {
     fn prepare_query<'q, RA: SqlxRequestArgs>(
         &self,
         request: &'q ResourceRequest<'q, RA>,
-        pquery: &'q ParametrizedQueryRef<'q>,
+        pquery: &'q ParametrizedQuery<'q>,
         query: &'q Cow<'q, str>,
     ) -> Result<Query<'q, Any, AnyArguments<'q>>, XepakError> {
         tracing::debug!("Executing query: {}", pquery.get_query());
