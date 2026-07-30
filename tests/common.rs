@@ -1,3 +1,5 @@
+#![allow(dead_code)] // Better to use AI later to check what shared parts are used in the code
+
 use std::{fs, path::PathBuf, str::FromStr};
 
 use actix_web::dev::ServerHandle;
@@ -269,7 +271,7 @@ pub mod client {
     pub async fn post_resource<T: Display>(
         uri: &str,
         query_args: HashMap<String, T>,
-        headers: HashMap<String, T>,
+        _headers: HashMap<String, T>,
     ) {
         let client = reqwest::Client::new();
 
@@ -280,7 +282,7 @@ pub mod client {
             uri = format!("{uri}?{qs}");
         }
 
-        let response = client.get(uri).send().await.expect("Request failed");
+        let _response = client.get(uri).send().await.expect("Request failed");
     }
 
     pub async fn extract_from_json<V: serde::de::DeserializeOwned>(
