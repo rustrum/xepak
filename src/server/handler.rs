@@ -89,8 +89,8 @@ impl EndpointHandler {
                 PreProcessor::SimpleAuth { allow_no_auth } => {
                     processors.push(SimpleAuthenticationProcessor::new_boxed(*allow_no_auth))
                 }
-                PreProcessor::Authorize { allow } => {
-                    processors.push(AuthorizeProcessor::new_boxed(allow.as_slice()))
+                PreProcessor::Authorize { rules } => {
+                    processors.push(AuthorizeProcessor::new_boxed(rules.as_ref())?)
                 }
             }
         }

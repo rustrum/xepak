@@ -1,9 +1,11 @@
+pub mod rules;
+
 use std::collections::HashSet;
 
 use serde::Deserialize;
 use sqlx_core::HashMap;
 
-use crate::{XepakError, server::processor::PreProcessorHandler};
+use crate::{XepakError, auth::rules::RulesParser, server::processor::PreProcessorHandler};
 
 pub type SimpleAuthRegistry = HashMap<String, (String, HashSet<String>)>;
 
@@ -79,6 +81,24 @@ pub enum CheckAuthConf {
     },
 }
 
+impl PartialEq for CheckAuthConf {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (CheckAuthConf::Role { v: a_v }, CheckAuthConf::Role { v: b_v }) => a_v == b_v,
+            (CheckAuthConf::Id { v: a_v }, CheckAuthConf::Id { v: b_v }) => a_v == b_v,
+            (CheckAuthConf::And { nested: a_n }, CheckAuthConf::And { nested: b_n }) => {
+                a_n.len() == b_n.len() && a_n.iter().zip(b_n).all(|(a, b)| a == b)
+            }
+            (CheckAuthConf::Or { nested: a_n }, CheckAuthConf::Or { nested: b_n }) => {
+                a_n.len() == b_n.len() && a_n.iter().zip(b_n).all(|(a, b)| a == b)
+            }
+            _ => false,
+        }
+    }
+}
+
+impl Eq for CheckAuthConf {}
+
 impl CheckAuthConf {
     /// We just make all roles uppercase
     fn normalize(&self) -> Self {
@@ -125,12 +145,15 @@ impl CheckAuthConf {
 }
 
 pub struct SimpleAuthenticationProcessor {
-    allow_no_auth: bool,
+    /// TODO: Maybe should remove this flag?
+    _allow_no_auth: bool,
 }
 
 impl SimpleAuthenticationProcessor {
     pub fn new(allow_no_auth: bool) -> Self {
-        Self { allow_no_auth }
+        Self {
+            _allow_no_auth: allow_no_auth,
+        }
     }
 
     pub fn new_boxed(allow_no_auth: bool) -> Box<Self> {
@@ -177,29 +200,22 @@ impl PreProcessorHandler for SimpleAuthenticationProcessor {
 }
 
 pub struct AuthorizeProcessor {
-    check: Option<CheckAuthConf>,
+    checks: Option<CheckAuthConf>,
 }
 
 impl AuthorizeProcessor {
-    pub fn new(checks: &[CheckAuthConf]) -> Self {
-        let check = if checks.len() > 1 {
-            Some(
-                CheckAuthConf::Or {
-                    nested: checks.to_vec(),
-                }
-                .normalize(),
-            )
-        } else if checks.len() == 1 {
-            Some(checks[0].clone())
-        } else {
+    pub fn new(rules_expr: &str) -> Result<Self, XepakError> {
+        let checks = if rules_expr.trim().is_empty() {
             None
+        } else {
+            Some(RulesParser::new(rules_expr).parse()?.normalize())
         };
 
-        Self { check }
+        Ok(Self { checks })
     }
 
-    pub fn new_boxed(checks: &[CheckAuthConf]) -> Box<Self> {
-        Box::new(Self::new(checks))
+    pub fn new_boxed(rules_expr: &str) -> Result<Box<Self>, XepakError> {
+        Ok(Box::new(Self::new(rules_expr)?))
     }
 }
 
@@ -217,7 +233,7 @@ impl PreProcessorHandler for AuthorizeProcessor {
 
         let id = id.as_string();
 
-        let Some(check) = &self.check else {
+        let Some(check) = &self.checks else {
             // If no access checks provided it means we only require authenticated requests
             tracing::debug!("Allowed! No access checks for authenticated id:{id}");
             return Ok(());

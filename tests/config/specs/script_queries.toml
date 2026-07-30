@@ -23,3 +23,36 @@ ctx:set_arg("user_id", user.id)
 return "SELECT * FROM posts WHERE user_id = {{user_id}}"
 """
 
+# In future need to upgrade it to use custom response
+# instead custom error return strings
+[[endpoint]]
+uri = "/script/lua/query/check/{user_id}/{tt}"
+fetch_limit = 20
+
+[endpoint.resource]
+type = "query_script_lua"
+script = """
+local query_args = {
+    user_id = ctx:get_arg("user_id")
+}
+local tt = ctx:get_arg("tt")
+
+if tt == "query" then
+    local result = storage_query("SELECT * FROM POSTS WHERE user_id = {{user_id}}", query_args)
+    error_not_found("!rows_count:" .. #result)
+elseif tt == "query_one" then
+    local result = storage_query_one("SELECT * FROM POSTS WHERE user_id = {{user_id}} ORDER BY id ASC", query_args)
+    if not result.id then
+        error_input("No id in result")
+    end
+    error_not_found("!post_id:" .. result.id)
+elseif tt == "query_value" then
+    local result = storage_query_value("SELECT COUNT(*) FROM POSTS WHERE user_id = {{user_id}}", query_args)
+    error_not_found("!count:" .. result)
+else
+    error_input("Input 'tt' value is not correct: " .. tt)
+end
+
+return ""
+"""
+

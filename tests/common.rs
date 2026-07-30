@@ -154,6 +154,12 @@ pub mod domain {
         pub content: String,
     }
 
+    #[derive(Deserialize, Debug, PartialEq)]
+    pub struct ErrorResponse {
+        pub code: String,
+        pub message: String,
+    }
+
     pub fn deserialize_blob<'de, D>(deserializer: D) -> Result<Option<Vec<u8>>, D::Error>
     where
         D: Deserializer<'de>,
