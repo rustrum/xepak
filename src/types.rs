@@ -7,7 +7,6 @@
 use std::collections::HashMap;
 
 use base64::Engine;
-use rhai::Blob;
 use serde::Deserialize;
 use sqlx::{TypeInfo, ValueRef as _};
 use strum::Display;
@@ -245,13 +244,13 @@ impl XepakValue {
     }
 
     pub fn bind_sqlx<'a>(
-        &'a self,
+        self,
         query: sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments<'a>>,
     ) -> sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments<'a>> {
         match self {
             XepakValue::Null => query.bind(None::<String>),
-            XepakValue::Boolean(v) => query.bind(*v),
-            XepakValue::Integer(v) => query.bind(*v as i64),
+            XepakValue::Boolean(v) => query.bind(v),
+            XepakValue::Integer(v) => query.bind(v as i64),
             XepakValue::Float(v) => query.bind(v),
             XepakValue::Text(v) => query.bind(v),
             XepakValue::Blob(v) => query.bind(v),

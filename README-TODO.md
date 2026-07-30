@@ -1,7 +1,14 @@
 # Optimization 
 
-## RequestInput
-I do not like idea of mutex inside it but I must mutate it's inner state inside script.
-Probably I would require RequestInput after script execution for post processing.
-Maybe I can consume RequestInput while executing script and then return updated version?
-Need to test peformance first with heavy usage in scripting.
+## RequestInput optimizations or not
+Execution inside script require additional clone/+Arch reference.
+Thus I can not mutate RequestInput via set_arg from script.
+
+Initially It was possible to use Arc<HashMap> and return underlying values by reference.
+Now it is Arch<Mutex<Map>>.
+Access to RequestInput shold be sequential, read only for most cases.
+
+So it is not clear should I optimize somthing here or not.
+
+I was thinking about using ArcSwap instead but it could be overkill.
+MutexGuard also does not look as a reasonable solution.

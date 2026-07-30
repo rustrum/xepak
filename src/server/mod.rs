@@ -4,7 +4,7 @@ pub mod processor;
 use std::collections::{HashMap, HashSet};
 use std::net::Ipv4Addr;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use actix_web::App;
 use actix_web::dev::Server;
@@ -12,6 +12,7 @@ use actix_web::http::StatusCode;
 use actix_web::middleware::Logger;
 use actix_web::web::ServiceConfig;
 use actix_web::{HttpServer, web::Data};
+use tokio::sync::MappedMutexGuard;
 
 use crate::XepakError;
 use crate::auth::{SimpleAuthRegistry, auth_specs_to_registry};
@@ -91,7 +92,7 @@ pub async fn init_server(
 
     let server = HttpServer::new(move || {
         let ep_config = endpoints.clone();
-        let mut app = App::new()
+        let app = App::new()
             .app_data(Data::new(app_data.clone()))
             // .service(web::scope("/") ...
             .configure(|cfg: &mut ServiceConfig| {
@@ -124,10 +125,10 @@ pub struct RequestInput {
     strict_schema: bool,
 
     /// Arguments parsed from URI (higher priority)
-    pub(crate) path_args: Arc<HashMap<String, XepakValue>>,
+    pub(crate) path_args: Arc<Mutex<HashMap<String, XepakValue>>>,
 
     /// Final input args storage with schema applied
-    pub(crate) args: Arc<HashMap<String, XepakValue>>,
+    pub(crate) args: Arc<Mutex<HashMap<String, XepakValue>>>,
 
     auth: Arc<Option<(XepakValue, HashSet<String>)>>,
 
@@ -154,8 +155,8 @@ impl RequestInput {
             schema,
             strict_schema,
             auth: Arc::new(None),
-            path_args: Arc::new(path_args),
-            args: Arc::new(Default::default()),
+            path_args: Arc::new(Mutex::new(path_args)),
+            args: Arc::new(Mutex::new(Default::default())),
             limit: 0,
             offset: 0,
         }
@@ -167,24 +168,24 @@ impl RequestInput {
             auth: Arc::new(None),
             schema: Schema::default(),
             strict_schema: false,
-            path_args: Arc::new(Default::default()),
-            args: Arc::new(args),
+            path_args: Arc::new(Mutex::new(Default::default())),
+            args: Arc::new(Mutex::new(args)),
             limit,
             offset,
         }
     }
 
     pub fn has_any_arg(&self, arg_name: &str) -> bool {
-        if self.path_args.contains_key(arg_name) {
+        if self.path_args.lock().unwrap().contains_key(arg_name) {
             return true;
         }
-        self.args.contains_key(arg_name)
+        self.args.lock().unwrap().contains_key(arg_name)
     }
 
-    pub fn get_arg_value(&self, argument: &str) -> Option<&XepakValue> {
-        let path_arg = self.path_args.get(argument);
+    pub fn get_arg_value(&self, argument: &str) -> Option<XepakValue> {
+        let path_arg = self.path_args.lock().unwrap().get(argument).cloned();
         if path_arg.is_none() {
-            self.args.get(argument)
+            self.args.lock().unwrap().get(argument).cloned()
         } else {
             path_arg
         }
@@ -240,22 +241,13 @@ impl RequestInput {
         value: XepakValue,
         enforce_schema: bool,
     ) -> Result<(), XepakError> {
-        // TODO skip enforce_schema because we build new RequestInput for sript calls.
-        let Some(args) = Arc::get_mut(&mut self.args) else {
-            return Err(XepakError::Unexpected(
-                "Must acquire args &mut reference here by design".to_string(),
-            ));
-        };
-
         let value = convert_with_schema(
             &self.schema,
             name.as_str(),
             value,
             self.strict_schema && enforce_schema,
         )?;
-
-        args.insert(name, value);
-
+        self.args.lock().unwrap().insert(name, value);
         Ok(())
     }
 
@@ -294,7 +286,6 @@ impl SqlxRequestArgs for RequestInput {
             )));
         };
 
-        // TODO should bind with respect to the schema
         Ok(value.bind_sqlx(query))
     }
 }
