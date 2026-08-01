@@ -1,5 +1,91 @@
-use crate::{XepakError, auth::CheckAuthConf};
+use std::collections::HashSet;
 
+use crate::XepakError;
+
+/// Authorization rules parsed from rules expression
+#[derive(Debug, Clone)]
+pub enum AuthRules {
+    Role {
+        v: String,
+    },
+
+    Id {
+        v: String,
+    },
+
+    /// Combine nested conditions via logical AND (all must succeed)
+    And {
+        nested: Vec<AuthRules>,
+    },
+
+    /// Combine nested conditions via logical OR (at least one must succeed)
+    Or {
+        nested: Vec<AuthRules>,
+    },
+}
+
+impl PartialEq for AuthRules {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (AuthRules::Role { v: a_v }, AuthRules::Role { v: b_v }) => a_v == b_v,
+            (AuthRules::Id { v: a_v }, AuthRules::Id { v: b_v }) => a_v == b_v,
+            (AuthRules::And { nested: a_n }, AuthRules::And { nested: b_n }) => {
+                a_n.len() == b_n.len() && a_n.iter().zip(b_n).all(|(a, b)| a == b)
+            }
+            (AuthRules::Or { nested: a_n }, AuthRules::Or { nested: b_n }) => {
+                a_n.len() == b_n.len() && a_n.iter().zip(b_n).all(|(a, b)| a == b)
+            }
+            _ => false,
+        }
+    }
+}
+
+impl Eq for AuthRules {}
+
+impl AuthRules {
+    /// Just make all roles uppercase
+    pub fn normalize(&self) -> Self {
+        match self {
+            AuthRules::Role { v } => Self::Role {
+                v: v.clone().to_uppercase(),
+            },
+            AuthRules::Id { .. } => self.clone(),
+            AuthRules::And { nested } => Self::And {
+                nested: nested.iter().cloned().map(|v| v.normalize()).collect(),
+            },
+            AuthRules::Or { nested } => Self::And {
+                nested: nested.iter().cloned().map(|v| v.normalize()).collect(),
+            },
+        }
+    }
+
+    pub fn is_allowed(&self, id: &str, roles: &HashSet<String>) -> bool {
+        match self {
+            AuthRules::Role { v } => roles.contains(v),
+            AuthRules::Id { v } => id == v,
+            AuthRules::And { nested } => {
+                let mut check = true;
+                for c in nested {
+                    if !c.is_allowed(id, roles) {
+                        check = false;
+                        break;
+                    }
+                }
+                check
+            }
+            AuthRules::Or { nested } => {
+                let mut check = false;
+                for c in nested {
+                    if c.is_allowed(id, roles) {
+                        check = true;
+                        break;
+                    }
+                }
+                check
+            }
+        }
+    }
+}
 pub struct RulesParser<'a> {
     input: &'a str,
     scopes: Vec<Scope>,
@@ -19,7 +105,7 @@ impl<'a> RulesParser<'a> {
         }
     }
 
-    pub fn parse(&mut self) -> Result<CheckAuthConf, XepakError> {
+    pub fn parse(&mut self) -> Result<AuthRules, XepakError> {
         for (idx, ch) in self.input.char_indices() {
             self.pos = idx;
             self.process_char(ch)?;
@@ -141,7 +227,7 @@ impl<'a> RulesParser<'a> {
             if matches!(scope.op, OpKind::Empty) && !scope.items.is_empty() {
                 return Err(parse_err("expected operator between operands", idx));
             }
-            scope.items.push(CheckAuthConf::Role {
+            scope.items.push(AuthRules::Role {
                 v: word.to_string(),
             });
             scope.op = scope.op.on_operand();
@@ -157,7 +243,7 @@ impl<'a> RulesParser<'a> {
         if matches!(scope.op, OpKind::Empty) && !scope.items.is_empty() {
             return Err(parse_err("expected operator between operands", idx));
         }
-        scope.items.push(CheckAuthConf::Id {
+        scope.items.push(AuthRules::Id {
             v: word.to_string(),
         });
         scope.op = scope.op.on_operand();
@@ -222,7 +308,7 @@ impl OpKind {
 }
 
 struct Scope {
-    items: Vec<CheckAuthConf>,
+    items: Vec<AuthRules>,
     op: OpKind,
 }
 
@@ -234,13 +320,13 @@ impl Scope {
         }
     }
 
-    fn combine(self) -> CheckAuthConf {
+    fn combine(self) -> AuthRules {
         match self.items.len() {
             0 => unreachable!(),
             1 => self.items.into_iter().next().unwrap(),
             _ => match self.op {
-                OpKind::And | OpKind::AndExpecting => CheckAuthConf::And { nested: self.items },
-                OpKind::Or | OpKind::OrExpecting => CheckAuthConf::Or { nested: self.items },
+                OpKind::And | OpKind::AndExpecting => AuthRules::And { nested: self.items },
+                OpKind::Or | OpKind::OrExpecting => AuthRules::Or { nested: self.items },
                 OpKind::Empty => unreachable!(),
             },
         }
@@ -273,9 +359,7 @@ fn classify_keyword(word: &str, pos: usize) -> Result<Option<OpKind>, XepakError
 
 #[cfg(test)]
 mod tests {
-    use crate::auth::CheckAuthConf;
-
-    use super::RulesParser;
+    use super::*;
 
     #[test]
     fn test_role_simple() {
@@ -283,7 +367,7 @@ mod tests {
         let conf = parser.parse().expect("should parse");
         assert_eq!(
             conf,
-            CheckAuthConf::Role {
+            AuthRules::Role {
                 v: "user".to_string()
             }
         );
@@ -295,7 +379,7 @@ mod tests {
         let conf = parser.parse().expect("should parse");
         assert_eq!(
             conf,
-            CheckAuthConf::Id {
+            AuthRules::Id {
                 v: "boss".to_string()
             }
         );
@@ -307,12 +391,12 @@ mod tests {
         let conf = parser.parse().expect("should parse");
         assert_eq!(
             conf,
-            CheckAuthConf::And {
+            AuthRules::And {
                 nested: vec![
-                    CheckAuthConf::Role {
+                    AuthRules::Role {
                         v: "manager".to_string()
                     },
-                    CheckAuthConf::Role {
+                    AuthRules::Role {
                         v: "billing".to_string()
                     }
                 ]
@@ -326,15 +410,15 @@ mod tests {
         let conf = parser.parse().expect("should parse");
         assert_eq!(
             conf,
-            CheckAuthConf::And {
+            AuthRules::And {
                 nested: vec![
-                    CheckAuthConf::Role {
+                    AuthRules::Role {
                         v: "manager".to_string()
                     },
-                    CheckAuthConf::Role {
+                    AuthRules::Role {
                         v: "billing".to_string()
                     },
-                    CheckAuthConf::Role {
+                    AuthRules::Role {
                         v: "accounting".to_string()
                     }
                 ]
@@ -348,12 +432,12 @@ mod tests {
         let conf = parser.parse().expect("should parse");
         assert_eq!(
             conf,
-            CheckAuthConf::And {
+            AuthRules::And {
                 nested: vec![
-                    CheckAuthConf::Role {
+                    AuthRules::Role {
                         v: "admin".to_string()
                     },
-                    CheckAuthConf::Id {
+                    AuthRules::Id {
                         v: "superID".to_string()
                     }
                 ]
@@ -367,12 +451,12 @@ mod tests {
         let conf = parser.parse().expect("should parse");
         assert_eq!(
             conf,
-            CheckAuthConf::Or {
+            AuthRules::Or {
                 nested: vec![
-                    CheckAuthConf::Role {
+                    AuthRules::Role {
                         v: "manager".to_string()
                     },
-                    CheckAuthConf::Role {
+                    AuthRules::Role {
                         v: "billing".to_string()
                     }
                 ]
@@ -386,15 +470,15 @@ mod tests {
         let conf = parser.parse().expect("should parse");
         assert_eq!(
             conf,
-            CheckAuthConf::Or {
+            AuthRules::Or {
                 nested: vec![
-                    CheckAuthConf::Role {
+                    AuthRules::Role {
                         v: "billing".to_string()
                     },
-                    CheckAuthConf::Role {
+                    AuthRules::Role {
                         v: "accounting".to_string()
                     },
-                    CheckAuthConf::Id {
+                    AuthRules::Id {
                         v: "super_manager_id".to_string()
                     }
                 ]
@@ -408,19 +492,19 @@ mod tests {
         let conf = parser.parse().expect("should parse");
         assert_eq!(
             conf,
-            CheckAuthConf::Or {
+            AuthRules::Or {
                 nested: vec![
-                    CheckAuthConf::And {
+                    AuthRules::And {
                         nested: vec![
-                            CheckAuthConf::Role {
+                            AuthRules::Role {
                                 v: "manager".to_string()
                             },
-                            CheckAuthConf::Role {
+                            AuthRules::Role {
                                 v: "billing".to_string()
                             }
                         ]
                     },
-                    CheckAuthConf::Id {
+                    AuthRules::Id {
                         v: "boss".to_string()
                     }
                 ]
@@ -435,27 +519,27 @@ mod tests {
         let conf = parser.parse().expect("should parse");
         assert_eq!(
             conf,
-            CheckAuthConf::Or {
+            AuthRules::Or {
                 nested: vec![
-                    CheckAuthConf::And {
+                    AuthRules::And {
                         nested: vec![
-                            CheckAuthConf::Role {
+                            AuthRules::Role {
                                 v: "manager".to_string()
                             },
-                            CheckAuthConf::Role {
+                            AuthRules::Role {
                                 v: "billing".to_string()
                             },
-                            CheckAuthConf::Role {
+                            AuthRules::Role {
                                 v: "accounting".to_string()
                             }
                         ]
                     },
-                    CheckAuthConf::And {
+                    AuthRules::And {
                         nested: vec![
-                            CheckAuthConf::Role {
+                            AuthRules::Role {
                                 v: "admin".to_string()
                             },
-                            CheckAuthConf::Role {
+                            AuthRules::Role {
                                 v: "super".to_string()
                             }
                         ]
@@ -471,22 +555,22 @@ mod tests {
         let conf = parser.parse().expect("should parse");
         assert_eq!(
             conf,
-            CheckAuthConf::Or {
+            AuthRules::Or {
                 nested: vec![
-                    CheckAuthConf::Role {
+                    AuthRules::Role {
                         v: "admin".to_string()
                     },
-                    CheckAuthConf::And {
+                    AuthRules::And {
                         nested: vec![
-                            CheckAuthConf::Role {
+                            AuthRules::Role {
                                 v: "manager".to_string()
                             },
-                            CheckAuthConf::Or {
+                            AuthRules::Or {
                                 nested: vec![
-                                    CheckAuthConf::Role {
+                                    AuthRules::Role {
                                         v: "billing".to_string()
                                     },
-                                    CheckAuthConf::Id {
+                                    AuthRules::Id {
                                         v: "superID".to_string()
                                     }
                                 ]
@@ -505,20 +589,20 @@ mod tests {
         let conf = parser.parse().expect("should parse");
         assert_eq!(
             conf,
-            CheckAuthConf::And {
+            AuthRules::And {
                 nested: vec![
-                    CheckAuthConf::Role {
+                    AuthRules::Role {
                         v: "manager".to_string()
                     },
-                    CheckAuthConf::Or {
+                    AuthRules::Or {
                         nested: vec![
-                            CheckAuthConf::Role {
+                            AuthRules::Role {
                                 v: "billing".to_string()
                             },
-                            CheckAuthConf::Role {
+                            AuthRules::Role {
                                 v: "accounting".to_string()
                             },
-                            CheckAuthConf::Id {
+                            AuthRules::Id {
                                 v: "super_manager_id".to_string()
                             }
                         ]
@@ -534,7 +618,7 @@ mod tests {
         let conf = parser.parse().expect("should parse");
         assert_eq!(
             conf,
-            CheckAuthConf::Role {
+            AuthRules::Role {
                 v: "user".to_string()
             }
         );
@@ -546,7 +630,7 @@ mod tests {
         let conf = parser.parse().expect("should parse");
         assert_eq!(
             conf,
-            CheckAuthConf::Id {
+            AuthRules::Id {
                 v: "super_manager_id".to_string()
             }
         );
@@ -558,12 +642,12 @@ mod tests {
         let conf = parser.parse().expect("should parse");
         assert_eq!(
             conf,
-            CheckAuthConf::And {
+            AuthRules::And {
                 nested: vec![
-                    CheckAuthConf::Role {
+                    AuthRules::Role {
                         v: "super_manager".to_string()
                     },
-                    CheckAuthConf::Role {
+                    AuthRules::Role {
                         v: "billing".to_string()
                     }
                 ]
@@ -577,12 +661,12 @@ mod tests {
         let conf = parser.parse().expect("should parse");
         assert_eq!(
             conf,
-            CheckAuthConf::And {
+            AuthRules::And {
                 nested: vec![
-                    CheckAuthConf::Role {
+                    AuthRules::Role {
                         v: "manager".to_string()
                     },
-                    CheckAuthConf::Role {
+                    AuthRules::Role {
                         v: "billing".to_string()
                     }
                 ]
@@ -596,22 +680,22 @@ mod tests {
         let conf = parser.parse().expect("should parse");
         assert_eq!(
             conf,
-            CheckAuthConf::Or {
+            AuthRules::Or {
                 nested: vec![
-                    CheckAuthConf::Role {
+                    AuthRules::Role {
                         v: "admin".to_string()
                     },
-                    CheckAuthConf::And {
+                    AuthRules::And {
                         nested: vec![
-                            CheckAuthConf::Role {
+                            AuthRules::Role {
                                 v: "manager".to_string()
                             },
-                            CheckAuthConf::Or {
+                            AuthRules::Or {
                                 nested: vec![
-                                    CheckAuthConf::Role {
+                                    AuthRules::Role {
                                         v: "billing".to_string()
                                     },
-                                    CheckAuthConf::Id {
+                                    AuthRules::Id {
                                         v: "superID".to_string()
                                     }
                                 ]

@@ -9,31 +9,20 @@ Right now I'm focusing on Sqlite as a main DB backend, because why not. Later wi
 
 I hope it will be an interesting project for you. But there is a lot work needed to be done here. Please visit this project later in one or two months.
 
+##
 
-## TODO things
+## Scripting support
 
- - Authorize processor should use role expression string like:
-   - "manager OR admin OR (office AND billing)" -> (or (or (name manager) (name admin)) (and (name office) (name billing)))
-   - "manager || admin || (office && billing)"
-   - "OR(manager admin AND(office billing))"
+Right now Xepak supports two scripting languages.
 
+- **LUA** is the main scripting language.
+- **Rhai** is an optional scripting lanuage.
 
-## Scripting consideration Rhai vs Lua ?
-
-### Rhai pros
-
-Already integrated in XepakREST, good Rust interop, similar syntax, more advanced type system that could be used to process storage outputs in script and not only.
-
-### Lua pros
-
-Well known syntax, could pass types in script by ref instead clone, support async, could be faster if jitted.
-
-### Performance issues considerations ...
+### Performance considerations
 
 Now it is impossible to determine will Rhai be slower in real world scenarios or not.
 There are many factors that would affect final performance expect script execution speed.
-Need to wait for real Rhai usage examples in production
-and only then considering Lua scripting feature and comparisons tests.
+But if LUA will outperform Rhai in tests then Rhai will be dismissed.
 
 
 ## License
