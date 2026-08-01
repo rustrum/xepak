@@ -125,6 +125,8 @@ pub struct RequestInput {
     /// Final input args storage with schema applied
     pub(crate) args: Arc<Mutex<HashMap<String, XepakValue>>>,
 
+    /// Authentication data for current request.
+    /// Shold be provided by an appropriate pre-processor.
     auth: Arc<Option<(XepakValue, HashSet<String>)>>,
 
     limit: usize,
