@@ -1,4 +1,5 @@
 pub mod rules;
+pub mod token;
 
 use std::collections::HashSet;
 
@@ -8,16 +9,16 @@ use sqlx_core::HashMap;
 use crate::{
     XepakError,
     auth::rules::{AuthRules, RulesParser},
-    server::processor::PreProcessorHandler,
+    server::processor::{PRIORITY_NORMAL, PreProcessorHandler, adjust_priority},
 };
 
-pub type SimpleAuthRegistry = HashMap<String, (String, HashSet<String>)>;
+pub type ShallowAuthRegistry = HashMap<String, (String, HashSet<String>)>;
 
 pub const API_KEY_HEADER: &str = "x-api-key";
 
 /// The most simple toml based auth configuration.
 #[derive(Clone, Debug, Deserialize)]
-pub struct SimpleAuthSpecs {
+pub struct ShallowAuthSpecs {
     id: String,
 
     key: String,
@@ -29,8 +30,8 @@ pub struct SimpleAuthSpecs {
     roles: Vec<String>,
 }
 
-impl SimpleAuthSpecs {
-    fn put_to_registry(&self, registry: &mut SimpleAuthRegistry) -> Result<(), XepakError> {
+impl ShallowAuthSpecs {
+    fn put_to_registry(&self, registry: &mut ShallowAuthRegistry) -> Result<(), XepakError> {
         let api_key = if self.from_env {
             match std::env::var(&self.key) {
                 Ok(v) => v,
@@ -53,8 +54,10 @@ impl SimpleAuthSpecs {
     }
 }
 
-pub fn auth_specs_to_registry(specs: &[SimpleAuthSpecs]) -> Result<SimpleAuthRegistry, XepakError> {
-    let mut registry: SimpleAuthRegistry = Default::default();
+pub fn auth_specs_to_registry(
+    specs: &[ShallowAuthSpecs],
+) -> Result<ShallowAuthRegistry, XepakError> {
+    let mut registry: ShallowAuthRegistry = Default::default();
 
     for s in specs {
         s.put_to_registry(&mut registry)?;
@@ -64,24 +67,26 @@ pub fn auth_specs_to_registry(specs: &[SimpleAuthSpecs]) -> Result<SimpleAuthReg
 }
 
 /// Authenticates requests using [`SimpleAuthSpecs`].
-pub struct SimpleAuthenticationProcessor {
+pub struct ShallowAuthenticationProcessor {
+    priority: u16,
     /// TODO: Maybe should remove this flag?
     _allow_no_auth: bool,
 }
 
-impl SimpleAuthenticationProcessor {
-    pub fn new(allow_no_auth: bool) -> Self {
+impl ShallowAuthenticationProcessor {
+    pub fn new(position: u16, allow_no_auth: bool) -> Self {
         Self {
+            priority: adjust_priority(PRIORITY_NORMAL, position),
             _allow_no_auth: allow_no_auth,
         }
     }
-
-    pub fn new_boxed(allow_no_auth: bool) -> Box<Self> {
-        Box::new(Self::new(allow_no_auth))
-    }
 }
 
-impl PreProcessorHandler for SimpleAuthenticationProcessor {
+impl PreProcessorHandler for ShallowAuthenticationProcessor {
+    fn priority(&self) -> u16 {
+        self.priority
+    }
+
     fn handle(
         &self,
         req: &actix_web::HttpRequest,
@@ -122,22 +127,22 @@ impl PreProcessorHandler for SimpleAuthenticationProcessor {
 /// Provides authorization for already authenticated requests.
 ///
 pub struct AuthorizeProcessor {
+    priority: u16,
     rules: Option<AuthRules>,
 }
 
 impl AuthorizeProcessor {
-    pub fn new(rules_expr: &str) -> Result<Self, XepakError> {
+    pub fn new(position: u16, rules_expr: &str) -> Result<Self, XepakError> {
         let rules = if rules_expr.trim().is_empty() {
             None
         } else {
             Some(RulesParser::new(rules_expr).parse()?.normalize())
         };
 
-        Ok(Self { rules })
-    }
-
-    pub fn new_boxed(rules_expr: &str) -> Result<Box<Self>, XepakError> {
-        Ok(Box::new(Self::new(rules_expr)?))
+        Ok(Self {
+            priority: adjust_priority(PRIORITY_NORMAL, position),
+            rules,
+        })
     }
 }
 
@@ -168,5 +173,9 @@ impl PreProcessorHandler for AuthorizeProcessor {
         }
 
         Ok(())
+    }
+
+    fn priority(&self) -> u16 {
+        self.priority
     }
 }

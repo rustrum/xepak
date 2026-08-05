@@ -1,10 +1,15 @@
-use std::{collections::HashSet, fs, path::PathBuf, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+    path::PathBuf,
+    sync::Arc,
+};
 
 use bon::Builder;
 use serde::Deserialize;
 
 use crate::{
-    XepakError, auth::SimpleAuthSpecs, schema::Schema, server::processor::PreProcessor,
+    XepakError, auth::ShallowAuthSpecs, schema::Schema, server::processor::PreProcessor,
     storage::StorageSettings,
 };
 
@@ -24,10 +29,7 @@ pub struct XepakConf {
     pub storage: Vec<StorageSettings>,
 
     #[serde(default)]
-    pub simple_auth_require: bool,
-
-    #[serde(default)]
-    pub simple_auth: Vec<SimpleAuthSpecs>,
+    pub shallow_auth: Vec<ShallowAuthSpecs>,
 }
 
 impl XepakConf {
@@ -45,25 +47,33 @@ impl XepakConf {
 #[derive(Builder, Clone, Debug, Default, Deserialize)]
 pub struct XepakSpecs {
     #[serde(default)]
-    pub auth: Option<XepakAuthSpecs>,
-    #[serde(default)]
     pub script: Vec<RhaiScript>,
+
     #[serde(default)]
     pub endpoint: Vec<EndpointSpecs>,
+
+    /// Shared registry for all pre-processors
+    #[serde(default)]
+    pub shared_pre_processors: HashMap<String, PreProcessor>,
+
+    #[serde(default)]
+    pub default_pre_processors: Vec<PreProcessor>,
 }
 
 impl XepakSpecs {
     /// Extend current specs with values from other.
     pub fn extend(&mut self, other: XepakSpecs) {
-        if let Some(auth) = other.auth {
-            self.auth = Some(auth);
-        }
+        self.default_pre_processors
+            .extend(other.default_pre_processors);
+        self.shared_pre_processors
+            .extend(other.shared_pre_processors);
 
         self.script.extend(other.script);
         self.endpoint.extend(other.endpoint);
     }
 
-    pub fn validate(&self) -> bool {
+    /// Returns false if specs has minor errors and Err on bit structural issues.
+    pub fn validate(&self) -> Result<bool, XepakError> {
         let mut result = true;
 
         let mut ids = HashSet::new();
@@ -82,12 +92,32 @@ impl XepakSpecs {
             }
         }
 
-        result
+        for (ppid, pp) in &self.shared_pre_processors {
+            if let PreProcessor::Ref { .. } = pp {
+                return Err(XepakError::Cfg(format!(
+                    "Shared pre-processor \"{ppid}\" can't have a \"Ref\" type."
+                )));
+            }
+        }
+
+        for pp in &self.default_pre_processors {
+            if let PreProcessor::Ref { id } = pp {
+                if !self.shared_pre_processors.contains_key(id) {
+                    return Err(XepakError::Cfg(format!(
+                        "Can't find pre-processor by reference: \"{id}\""
+                    )));
+                }
+            }
+        }
+
+        Ok(result)
     }
 }
 
 #[derive(Builder, Clone, Debug, Deserialize)]
-pub struct XepakAuthSpecs {}
+pub struct XepakAuthSpecs {
+    // TODO: configure different types of auth specs
+}
 
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct RhaiScript {
@@ -190,7 +220,7 @@ pub fn load_specs_from_dir(dir_path: PathBuf) -> Result<XepakSpecs, XepakError> 
         result.extend(specs);
     }
 
-    let _ = result.validate();
+    let _ = result.validate()?;
 
     Ok(result)
 }

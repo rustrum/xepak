@@ -14,10 +14,11 @@ use actix_web::web::ServiceConfig;
 use actix_web::{HttpServer, web::Data};
 
 use crate::XepakError;
-use crate::auth::{SimpleAuthRegistry, auth_specs_to_registry};
+use crate::auth::{ShallowAuthRegistry, auth_specs_to_registry};
 use crate::cfg::{XepakConf, XepakSpecs};
 use crate::schema::{Schema, convert_with_schema};
 use crate::server::handler::EndpointHandler;
+use crate::server::processor::PreProcessor;
 use crate::storage::{SqlxRequestArgs, Storage, StorageRequestArgs, init_storage_connectors};
 use crate::types::XepakValue;
 
@@ -28,10 +29,12 @@ pub const CONTENT_TYPE_JSON: &str = "application/json";
 
 #[derive(Clone)]
 pub struct XepakAppData {
-    /// Enforce simple auth for all endpoints
-    simple_auth_required: bool,
-    simple_auth_registry: SimpleAuthRegistry,
     storage_links: HashMap<String, Storage>,
+
+    shared_pre_processors: HashMap<String, PreProcessor>,
+    default_pre_processors: Vec<PreProcessor>,
+
+    simple_auth_registry: ShallowAuthRegistry,
 }
 
 impl XepakAppData {
@@ -59,14 +62,16 @@ pub async fn init_server(
 
     let storage_links = init_storage_connectors(&conf_dir, &config.storage).await?;
 
-    let simple_auth_registry = auth_specs_to_registry(&config.simple_auth)?;
+    let simple_auth_registry = auth_specs_to_registry(&config.shallow_auth)?;
 
     tracing::debug!("Simple auth registry {simple_auth_registry:?}");
 
     let app_data = XepakAppData {
         storage_links,
         simple_auth_registry,
-        simple_auth_required: config.simple_auth_require,
+
+        shared_pre_processors: specs.shared_pre_processors,
+        default_pre_processors: specs.default_pre_processors,
     };
     // let data: Data<ApateState> = Data::new(config.into_state());
 
@@ -80,6 +85,7 @@ pub async fn init_server(
     // }
     // app.default_service(web::to(handlers::apate_server_handler));
 
+    // Defining Endpoints here required all nested data to be send+sync
     let mut endpoints = Vec::new();
     for espec in specs.endpoint {
         endpoints.push(EndpointHandler::new(espec, &app_data)?);
