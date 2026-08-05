@@ -117,7 +117,7 @@ impl PreProcessorHandler for ShallowAuthenticationProcessor {
             return not_auth_err;
         };
 
-        tracing::debug!("Authenticate user: {auth_id}");
+        tracing::debug!("User authenticated: {auth_id}");
         input.set_auth(auth_id.to_string(), auth_roles.clone());
 
         Ok(())
