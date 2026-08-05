@@ -116,12 +116,12 @@ impl<'a> RulesParser<'a> {
         }
 
         if self.scopes.len() != 1 {
-            return Err(parse_err("missing closing brace", self.pos));
+            return Err(parse_err("missing closing brace", self.pos, self.input));
         }
 
         let root = self.scopes.pop().unwrap();
         if root.items.is_empty() {
-            return Err(parse_err("empty auth string", self.pos));
+            return Err(parse_err("empty auth string", self.pos, ""));
         }
 
         Ok(root.combine())
@@ -150,20 +150,20 @@ impl<'a> RulesParser<'a> {
                     self.token_buf.push(c);
                     Ok(())
                 }
-                _ => Err(parse_err("unexpected character", self.pos)),
+                _ => Err(parse_err("unexpected character", self.pos, self.input)),
             },
 
             ParseState::ReadingRole => match ch {
                 ' ' | '\t' | '\n' | '\r' | '(' | ')' => {
                     let word = self.flush_to_idle();
-                    self.consume_word(&word, self.pos, true)?;
+                    self.consume_word(&word, self.pos)?;
                     self.handle_brace(ch)
                 }
                 c if c.is_alphanumeric() || c == '_' => {
                     self.token_buf.push(c);
                     Ok(())
                 }
-                _ => Err(parse_err("unexpected character", self.pos)),
+                _ => Err(parse_err("unexpected character", self.pos, self.input)),
             },
 
             ParseState::ReadingId => match ch {
@@ -176,20 +176,20 @@ impl<'a> RulesParser<'a> {
                     self.token_buf.push(c);
                     Ok(())
                 }
-                _ => Err(parse_err("unexpected character", self.pos)),
+                _ => Err(parse_err("unexpected character", self.pos, self.input)),
             },
 
             ParseState::ReadingKeyword => match ch {
                 ' ' | '\t' | '\n' | '\r' | '(' | ')' => {
                     let word = self.flush_to_idle();
-                    self.consume_word(&word, self.pos, false)?;
+                    self.consume_word(&word, self.pos)?;
                     self.handle_brace(ch)
                 }
                 c if c.is_alphanumeric() || c == '_' => {
                     self.token_buf.push(c);
                     Ok(())
                 }
-                _ => Err(parse_err("unexpected character", self.pos)),
+                _ => Err(parse_err("unexpected character", self.pos, self.input)),
             },
         }
     }
@@ -198,9 +198,9 @@ impl<'a> RulesParser<'a> {
         let word = std::mem::take(&mut self.token_buf);
 
         match self.state {
-            ParseState::ReadingRole => self.consume_word(&word, self.pos, true),
+            ParseState::ReadingRole => self.consume_word(&word, self.pos),
             ParseState::ReadingId => self.consume_id(&word, self.pos),
-            ParseState::ReadingKeyword => self.consume_word(&word, self.pos, false),
+            ParseState::ReadingKeyword => self.consume_word(&word, self.pos),
             _ => Ok(()),
         }
     }
@@ -218,14 +218,18 @@ impl<'a> RulesParser<'a> {
         }
     }
 
-    fn consume_word(&mut self, word: &str, idx: usize, allow_role: bool) -> Result<(), XepakError> {
-        if let Some(new_op) = classify_keyword(word, idx)? {
+    fn consume_word(&mut self, word: &str, idx: usize) -> Result<(), XepakError> {
+        if let Some(new_op) = classify_keyword(word, idx, self.input)? {
             let scope = self.scopes.last_mut().unwrap();
-            scope.op = scope.op.on_operator(new_op, idx)?;
-        } else if allow_role {
+            scope.op = scope.op.on_operator(new_op, idx, self.input)?;
+        } else {
             let scope = self.scopes.last_mut().unwrap();
             if matches!(scope.op, OpKind::Empty) && !scope.items.is_empty() {
-                return Err(parse_err("expected operator between operands", idx));
+                return Err(parse_err(
+                    "expected operator between operands",
+                    idx,
+                    self.input,
+                ));
             }
             scope.items.push(AuthRules::Role {
                 v: word.to_string(),
@@ -237,11 +241,15 @@ impl<'a> RulesParser<'a> {
 
     fn consume_id(&mut self, word: &str, idx: usize) -> Result<(), XepakError> {
         if word.is_empty() {
-            return Err(parse_err("empty id after '#'", idx));
+            return Err(parse_err("empty id after '#'", idx, self.input));
         }
         let scope = self.scopes.last_mut().unwrap();
         if matches!(scope.op, OpKind::Empty) && !scope.items.is_empty() {
-            return Err(parse_err("expected operator between operands", idx));
+            return Err(parse_err(
+                "expected operator between operands",
+                idx,
+                self.input,
+            ));
         }
         scope.items.push(AuthRules::Id {
             v: word.to_string(),
@@ -253,7 +261,7 @@ impl<'a> RulesParser<'a> {
     fn push_scope(&mut self, idx: usize) -> Result<(), XepakError> {
         let scope = self.scopes.last().unwrap();
         if !scope.op.expecting_operand() && !scope.items.is_empty() {
-            return Err(parse_err("expected operator before '('", idx));
+            return Err(parse_err("expected operator before '('", idx, self.input));
         }
         self.scopes.push(Scope::new());
         Ok(())
@@ -261,11 +269,11 @@ impl<'a> RulesParser<'a> {
 
     fn pop_scope(&mut self, idx: usize) -> Result<(), XepakError> {
         if self.scopes.len() <= 1 {
-            return Err(parse_err("unexpected ')'", idx));
+            return Err(parse_err("unexpected ')'", idx, self.input));
         }
         let inner = self.scopes.pop().unwrap();
         if inner.items.is_empty() {
-            return Err(parse_err("empty group", idx));
+            return Err(parse_err("empty group", idx, self.input));
         }
         let combined = inner.combine();
         let scope = self.scopes.last_mut().unwrap();
@@ -288,13 +296,17 @@ impl OpKind {
         matches!(self, OpKind::AndExpecting | OpKind::OrExpecting)
     }
 
-    fn on_operator(&self, new: OpKind, position: usize) -> Result<OpKind, XepakError> {
+    fn on_operator(&self, new: OpKind, position: usize, expr: &str) -> Result<OpKind, XepakError> {
         match (self, new) {
             (OpKind::Empty, OpKind::And) => Ok(OpKind::AndExpecting),
             (OpKind::Empty, OpKind::Or) => Ok(OpKind::OrExpecting),
             (OpKind::And | OpKind::AndExpecting, OpKind::And) => Ok(OpKind::AndExpecting),
             (OpKind::Or | OpKind::OrExpecting, OpKind::Or) => Ok(OpKind::OrExpecting),
-            _ => Err(parse_err("mixed AND/OR operators inside braces", position)),
+            _ => Err(parse_err(
+                "mixed AND/OR operators inside braces",
+                position,
+                expr,
+            )),
         }
     }
 
@@ -333,10 +345,13 @@ impl Scope {
     }
 }
 
-fn parse_err(message: &str, pos: usize) -> XepakError {
-    XepakError::Cfg(format!(
-        "Auth string parse error at position {pos}: {message}"
-    ))
+fn parse_err(message: &str, pos: usize, expr: &str) -> XepakError {
+    let message = if !expr.is_empty() {
+        format!("Auth string parse error at position {pos}: {message} -> {expr}")
+    } else {
+        format!("Auth string parse error at position {pos}: {message}")
+    };
+    XepakError::Cfg(message)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -347,12 +362,16 @@ enum ParseState {
     ReadingKeyword,
 }
 
-fn classify_keyword(word: &str, pos: usize) -> Result<Option<OpKind>, XepakError> {
+fn classify_keyword(word: &str, pos: usize, expr: &str) -> Result<Option<OpKind>, XepakError> {
     match word {
         "AND" => Ok(Some(OpKind::And)),
         "OR" => Ok(Some(OpKind::Or)),
-        w if w.to_uppercase() == "AND" => Err(parse_err("'AND' keyword must be uppercase", pos)),
-        w if w.to_uppercase() == "OR" => Err(parse_err("'OR' keyword must be uppercase", pos)),
+        w if w.to_uppercase() == "AND" => {
+            Err(parse_err("'AND' keyword must be uppercase", pos, expr))
+        }
+        w if w.to_uppercase() == "OR" => {
+            Err(parse_err("'OR' keyword must be uppercase", pos, expr))
+        }
         _ => Ok(None),
     }
 }
@@ -507,6 +526,29 @@ mod tests {
                     AuthRules::Id {
                         v: "boss".to_string()
                     }
+                ]
+            }
+        );
+
+        let mut parser = RulesParser::new("#boss OR (ADMIN AND MANAGER)");
+        let conf = parser.parse().expect("should parse");
+        assert_eq!(
+            conf,
+            AuthRules::Or {
+                nested: vec![
+                    AuthRules::Id {
+                        v: "boss".to_string()
+                    },
+                    AuthRules::And {
+                        nested: vec![
+                            AuthRules::Role {
+                                v: "ADMIN".to_string()
+                            },
+                            AuthRules::Role {
+                                v: "MANAGER".to_string()
+                            }
+                        ]
+                    },
                 ]
             }
         );

@@ -16,17 +16,13 @@ use serde::Serialize;
 
 use crate::{
     XepakError,
-    auth::{AuthorizeProcessor, SimpleAuthenticationProcessor},
     cfg::{EndpointSpecs, ResourceSpecs},
     script_lua::{build_lua_function, execute_lua_script, lua_load_engine},
     script_rhai::{build_rhai_ast, build_rhai_engine, execute_script_blocking},
     server::{
         CONTENT_TYPE_CBOR, CONTENT_TYPE_JSON, LIMIT_HEADER, OFFSET_HEADER, RequestInput,
         XepakAppData,
-        processor::{
-            BodyToArgsProcessor, InputArgsValidator, PreProcessor, PreProcessorHandler,
-            QueryArgsProcessor,
-        },
+        processor::{PreProcessorHandler, build_pre_processor, init_required_pre_processors},
         to_error_object,
     },
     storage::ResourceRequest,
@@ -41,7 +37,8 @@ pub struct EndpointHandler {
     rhai_engine: Arc<Option<Engine>>,
     handler_rhai: Arc<Option<AST>>,
     handler_lua: Arc<Option<(Lua, Function)>>,
-    processors: Arc<Vec<Box<dyn PreProcessorHandler + Send + Sync>>>,
+    processors: Arc<Vec<Box<dyn PreProcessorHandler>>>,
+    // processors: Arc<Vec<Box<dyn PreProcessorHandler + Send + Sync>>>,
 }
 
 impl EndpointHandler {
@@ -74,36 +71,48 @@ impl EndpointHandler {
             _ => None,
         };
 
-        let mut processors: Vec<Box<dyn PreProcessorHandler + Send + Sync>> = vec![
-            Box::new(QueryArgsProcessor {}),
-            Box::new(InputArgsValidator {}),
-        ];
-
-        if app.simple_auth_required {
-            processors.push(SimpleAuthenticationProcessor::new_boxed(false));
-        }
-
-        for p in &ep.processor {
-            match p {
-                PreProcessor::ParseBodyArgs => processors.push(BodyToArgsProcessor::new_boxed()),
-                PreProcessor::SimpleAuth { allow_no_auth } => {
-                    processors.push(SimpleAuthenticationProcessor::new_boxed(*allow_no_auth))
-                }
-                PreProcessor::Authorize { rules } => {
-                    processors.push(AuthorizeProcessor::new_boxed(rules.as_ref())?)
-                }
-            }
-        }
-
-        processors.sort_by_key(|b| std::cmp::Reverse(b.priority()));
-
+        // let mut processors: Vec<Box<dyn PreProcessorHandler + Send + Sync>> = vec![
+        let pre_processors = Self::build_pre_processors(&ep, app)?;
         Ok(Self {
             ep: Arc::new(ep),
             rhai_engine: Arc::new(rhai_engine),
             handler_rhai: Arc::new(handler_rhai),
             handler_lua: Arc::new(handler_lua),
-            processors: Arc::new(processors),
+            processors: Arc::new(pre_processors),
         })
+    }
+
+    fn build_pre_processors(
+        ep: &EndpointSpecs,
+        app: &XepakAppData,
+    ) -> Result<Vec<Box<dyn PreProcessorHandler>>, XepakError> {
+        let mut processors: Vec<Box<dyn PreProcessorHandler>> = init_required_pre_processors();
+
+        let mut order = 0u16;
+        // Default pre processors
+        for specs in &app.default_pre_processors {
+            order += 1;
+            processors.push(build_pre_processor(
+                order,
+                specs,
+                &app.shared_pre_processors,
+            )?);
+        }
+
+        // Pre processors for current handler
+        for specs in &ep.processor {
+            order += 1;
+            processors.push(build_pre_processor(
+                order,
+                specs,
+                &app.shared_pre_processors,
+            )?);
+        }
+
+        // Here PP order could change (depends on the basic priority each handlers had)
+        processors.sort_by_key(|b| std::cmp::Reverse(b.priority()));
+
+        Ok(processors)
     }
 
     async fn handle(

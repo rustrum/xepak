@@ -9,6 +9,7 @@ use serde::Deserialize;
 
 use crate::{
     XepakError,
+    auth::{AuthorizeProcessor, ShallowAuthenticationProcessor},
     schema::validate_with_schema,
     server::{CONTENT_TYPE_CBOR, RequestInput, XepakAppData},
     types::XepakValue,
@@ -24,21 +25,65 @@ pub const PRIORITY_LAST: u16 = 1000;
 #[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum PreProcessor {
+    /// Referenece to shared pre-processor
+    Ref {
+        id: String,
+    },
+
+    /// Extracts body argurments to request object.
     ParseBodyArgs,
-    SimpleAuth {
+
+    ShallowAuthentication {
         #[serde(default)]
         allow_no_auth: bool,
     },
+
     Authorize {
         rules: String,
     },
 }
 
-pub trait PreProcessorHandler {
-    /// Handler with higher priority will be processed first
-    fn priority(&self) -> u16 {
-        PRIORITY_NORMAL
+pub fn init_required_pre_processors() -> Vec<Box<dyn PreProcessorHandler>> {
+    vec![
+        Box::new(QueryArgsProcessor {}),
+        Box::new(InputArgsValidator {}),
+    ]
+}
+
+pub fn build_pre_processor(
+    position: u16,
+    specs: &PreProcessor,
+    shared: &HashMap<String, PreProcessor>,
+) -> Result<Box<dyn PreProcessorHandler>, XepakError> {
+    match specs {
+        PreProcessor::Ref { id } => {
+            if let Some(sspecs) = shared.get(id) {
+                if let PreProcessor::Ref { .. } = sspecs {
+                    Err(XepakError::Cfg(format!(
+                        "Ref types are not allowed in shared pre-processors"
+                    )))
+                } else {
+                    build_pre_processor(position, sspecs, shared)
+                }
+            } else {
+                Err(XepakError::Cfg(format!(
+                    "Can't find pre-processor by reference: \"{id}\""
+                )))
+            }
+        }
+        PreProcessor::ParseBodyArgs => Ok(Box::new(BodyToArgsProcessor::default())),
+        PreProcessor::ShallowAuthentication { allow_no_auth } => Ok(Box::new(
+            ShallowAuthenticationProcessor::new(position, *allow_no_auth),
+        )),
+        PreProcessor::Authorize { rules } => {
+            Ok(Box::new(AuthorizeProcessor::new(position, rules.as_ref())?))
+        }
     }
+}
+
+pub trait PreProcessorHandler: Send + Sync {
+    /// Handler with higher priority will be processed first
+    fn priority(&self) -> u16;
 
     fn handle(
         &self,
@@ -47,6 +92,14 @@ pub trait PreProcessorHandler {
         body: &Bytes,
         input: &mut RequestInput,
     ) -> Result<(), XepakError>;
+}
+
+#[inline]
+pub fn adjust_priority(current: u16, order: u16) -> u16 {
+    if current > order {
+        return 0;
+    }
+    current - order
 }
 
 /// Execute validation logic for all input arguments according to schema.
@@ -75,7 +128,7 @@ pub struct QueryArgsProcessor {}
 
 impl PreProcessorHandler for QueryArgsProcessor {
     fn priority(&self) -> u16 {
-        PRIORITY_FIRST + 1
+        PRIORITY_FIRST + 1000
     }
 
     fn handle(
@@ -104,13 +157,9 @@ impl PreProcessorHandler for QueryArgsProcessor {
         Ok(())
     }
 }
-pub struct BodyToArgsProcessor {}
 
-impl BodyToArgsProcessor {
-    pub fn new_boxed() -> Box<Self> {
-        Box::new(Self {})
-    }
-}
+#[derive(Default)]
+pub struct BodyToArgsProcessor {}
 
 impl BodyToArgsProcessor {
     pub fn handle_cbor_body(
@@ -175,5 +224,9 @@ impl PreProcessorHandler for BodyToArgsProcessor {
         } else {
             self.handle_json_body(body, input)
         }
+    }
+
+    fn priority(&self) -> u16 {
+        PRIORITY_NORMAL
     }
 }
