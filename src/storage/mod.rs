@@ -139,7 +139,7 @@ impl Storage {
     pub async fn query<RA: SqlxRequestArgs>(
         &self,
         request: ResourceRequest<'_, RA>,
-    ) -> Result<Vec<Record>, XepakError> {
+    ) -> Result<Vec<XepakValue>, XepakError> {
         let mut connection = self.pool.acquire().await.unwrap();
 
         let pquery = ParametrizedQuery::new(request.query);
@@ -151,7 +151,7 @@ impl Storage {
         let mut out = Vec::new();
         for row in result {
             let out_row = self.map_row(row);
-            out.push(out_row);
+            out.push(out_row.into());
         }
 
         Ok(out)
@@ -161,7 +161,7 @@ impl Storage {
     pub async fn query_one<RA: SqlxRequestArgs>(
         &self,
         request: ResourceRequest<'_, RA>,
-    ) -> Result<Option<Record>, XepakError> {
+    ) -> Result<Option<XepakValue>, XepakError> {
         let mut connection = self.pool.acquire().await.unwrap();
 
         let pquery = ParametrizedQuery::new(request.query);
@@ -173,7 +173,7 @@ impl Storage {
             .await
             .expect("TODO");
 
-        Ok(result.map(|r| self.map_row(r)))
+        Ok(result.map(|r| self.map_row(r).into()))
     }
 
     /// Execute query that must have one row with only one column.
@@ -187,6 +187,7 @@ impl Storage {
                 "Expect to have non empty response from DB".to_string(),
             ));
         };
+        let row = row.as_map()?;
 
         tracing::debug!("ONE: {row:?}");
 
