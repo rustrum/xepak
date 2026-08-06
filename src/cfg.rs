@@ -171,13 +171,21 @@ pub enum ResourceSpecs {
         query: String,
     },
 
-    QueryScriptRhai {
+    // Will be renamed to QueryScript
+    QueryScriptLua {
         #[serde(default)]
         data_source: String,
         script: String,
     },
 
-    QueryScriptLua {
+    DataScript {
+        #[serde(default)]
+        data_source: String,
+        script: String,
+    },
+
+    // Almost deprecated
+    QueryScriptRhai {
         #[serde(default)]
         data_source: String,
         script: String,

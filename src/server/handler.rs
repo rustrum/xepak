@@ -17,7 +17,10 @@ use serde::Serialize;
 use crate::{
     XepakError,
     cfg::{EndpointSpecs, ResourceSpecs},
-    script_lua::{build_lua_function, execute_lua_script, lua_load_engine},
+    script_lua::{
+        build_lua_function, execute_lua_script, lua_load_engine, quick_table_is_array,
+        quick_table_is_map,
+    },
     script_rhai::{build_rhai_ast, build_rhai_engine, execute_script_blocking},
     server::{
         CONTENT_TYPE_CBOR, CONTENT_TYPE_JSON, LIMIT_HEADER, OFFSET_HEADER, RequestInput,
@@ -63,7 +66,8 @@ impl EndpointHandler {
         };
 
         let handler_lua = match &ep.resource {
-            ResourceSpecs::QueryScriptLua { script, .. } => {
+            ResourceSpecs::QueryScriptLua { script, .. }
+            | ResourceSpecs::DataScript { script, .. } => {
                 let lua = lua_load_engine(app)?;
                 let luafn = build_lua_function(&lua, script)?;
                 Some((lua, luafn))
@@ -216,7 +220,7 @@ impl EndpointHandler {
                     )));
                 };
 
-                let query = execute_lua_script(
+                let query = execute_lua_script::<String>(
                     state.clone(),
                     self.ep.uri.clone(),
                     self.handler_lua.clone(),
@@ -226,6 +230,45 @@ impl EndpointHandler {
 
                 let rr = ResourceRequest::new(&query, input);
                 ds.query(rr).await
+            }
+            ResourceSpecs::DataScript { data_source, .. } => {
+                let Some(ds) = state.get_data_source(data_source) else {
+                    return Err(XepakError::Cfg(format!(
+                        "Data source does not exists \"{data_source}\""
+                    )));
+                };
+                let result: mlua::Value = execute_lua_script(
+                    state.clone(),
+                    self.ep.uri.clone(),
+                    self.handler_lua.clone(),
+                    input.clone(),
+                )
+                .await?;
+
+                let mut response = Vec::new();
+
+                match result {
+                    mlua::Value::Table(table) => {
+                        // if quick_table_is_array(&table) {
+                        //     table.sequence_values()
+                        // } else if quick_table_is_map(&table) {
+                        // } else {
+                        // }
+                    }
+                    mlua::Value::Nil => todo!(),
+                    mlua::Value::Boolean(_) => todo!(),
+                    mlua::Value::LightUserData(light_user_data) => todo!(),
+                    mlua::Value::Integer(_) => todo!(),
+                    mlua::Value::Number(_) => todo!(),
+                    mlua::Value::String(_) => todo!(),
+                    mlua::Value::Function(function) => todo!(),
+                    mlua::Value::Thread(thread) => todo!(),
+                    mlua::Value::UserData(any_user_data) => todo!(),
+                    mlua::Value::Error(error) => todo!(),
+                    mlua::Value::Other(value_ref) => todo!(),
+                }
+
+                Ok(response)
             }
         }
     }

@@ -44,19 +44,27 @@ impl SimpleAuthSpecs {
             }
         } else {
             self.key.clone()
-        };
+        }
+        .trim()
+        .to_string();
 
         let roles = self.roles.iter().map(|v| v.to_uppercase()).collect();
 
-        registry.insert(api_key, (self.id.clone(), roles));
+        // With current check we could have only one empty id record with empty key
+        if api_key.is_empty() && !self.id.trim().is_empty() {
+            return Err(XepakError::Cfg(format!(
+                "Empty API key allowed only for anonymous auth! ID must be empty not \"{}\"",
+                self.id
+            )));
+        }
+
+        registry.insert(api_key, (self.id.trim().to_string(), roles));
 
         Ok(())
     }
 }
 
-pub fn auth_specs_to_registry(
-    specs: &[SimpleAuthSpecs],
-) -> Result<SimpleAuthRegistry, XepakError> {
+pub fn auth_specs_to_registry(specs: &[SimpleAuthSpecs]) -> Result<SimpleAuthRegistry, XepakError> {
     let mut registry: SimpleAuthRegistry = Default::default();
 
     for s in specs {
@@ -69,16 +77,41 @@ pub fn auth_specs_to_registry(
 /// Authenticates requests using [`SimpleAuthSpecs`].
 pub struct SimpleAuthenticationProcessor {
     priority: u16,
-    /// TODO: Maybe should remove this flag?
-    _allow_no_auth: bool,
+    /// Allow anonymous authentication
+    anonymous_auth: bool,
 }
 
 impl SimpleAuthenticationProcessor {
-    pub fn new(position: u16, allow_no_auth: bool) -> Self {
+    const ANON_AUTH_ERROR: &str = "Authentication failed! API key is not provided.";
+
+    const AUTH_ERROR: &str = "Authentication failed!";
+
+    pub fn new(position: u16, anonymous_auth: bool) -> Self {
         Self {
             priority: adjust_priority(PRIORITY_NORMAL, position),
-            _allow_no_auth: allow_no_auth,
+            anonymous_auth,
         }
+    }
+
+    fn try_anonymous_auth(
+        &self,
+        state: &crate::server::XepakAppData,
+        input: &mut crate::server::RequestInput,
+    ) -> Result<(), XepakError> {
+        if !self.anonymous_auth {
+            return Err(XepakError::Forbidden(Self::ANON_AUTH_ERROR.to_string()));
+        }
+        let auth_roles = match state.get_auth_data("") {
+            Some((_, roles)) => roles.clone(),
+            None => HashSet::new(),
+        };
+
+        tracing::debug!(
+            "Anonymous user authenticated with roles: {}",
+            auth_roles.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(", ")
+            );
+        input.set_auth("".to_string(), auth_roles);
+        Ok(())
     }
 }
 
@@ -99,22 +132,20 @@ impl PreProcessorHandler for SimpleAuthenticationProcessor {
             return Ok(());
         }
 
-        let not_auth_err = Err(XepakError::Forbidden("Not authenticated".to_string()));
-
         // get API key value from headers
         let Some(api_key_value) = req.headers().get(API_KEY_HEADER) else {
-            return not_auth_err;
+            return self.try_anonymous_auth(state, input);
         };
 
         let api_key = api_key_value
             .to_str()
-            .map_err(|e| XepakError::Input(format!("Wrong {API_KEY_HEADER} value: {e}")))?;
+            .map_err(|e| XepakError::Input(format!("Wrong {API_KEY_HEADER} value format: {e}")))?;
 
         tracing::debug!("API key found: {api_key}");
 
         // check in registry if key exists or error
         let Some((auth_id, auth_roles)) = state.get_auth_data(api_key) else {
-            return not_auth_err;
+            return Err(XepakError::Forbidden(Self::AUTH_ERROR.to_string()));
         };
 
         tracing::debug!("User authenticated: {auth_id}");

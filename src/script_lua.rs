@@ -2,8 +2,8 @@ use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 use actix_web::web::Data;
 use mlua::{
-    Error as LuaError, ExternalError, FromLua, Function, IntoLua, Lua, Table, UserData,
-    UserDataMethods, Value,
+    Error as LuaError, ExternalError, FromLua, FromLuaMulti, Function, IntoLua, Lua, Table,
+    UserData, UserDataMethods, Value,
 };
 
 use crate::{
@@ -156,6 +156,20 @@ impl IntoLua for XepakValue {
             XepakValue::Float(v) => Ok(Value::Number(v)),
             XepakValue::Text(v) => Ok(Value::String(lua.create_string(&v)?)),
             XepakValue::Blob(v) => Ok(Value::String(lua.create_string(&v)?)),
+            XepakValue::Map(v) => {
+                let t = lua.create_table()?;
+                for (k, xv) in v {
+                    t.set(k, xv.into_lua(lua)?)?;
+                }
+                Ok(Value::Table(t))
+            }
+            XepakValue::Tuple(v) => {
+                let t = lua.create_table()?;
+                for xv in v {
+                    t.push(xv.into_lua(lua)?)?;
+                }
+                Ok(Value::Table(t))
+            }
         }
     }
 }
@@ -327,12 +341,15 @@ fn row_to_lua_table(lua: &Lua, row: HashMap<String, XepakValue>) -> mlua::Result
 /// Each request gets its own Lua VM so concurrent requests on the same actix worker
 /// thread cannot share or corrupt the `ctx` global. Analogous to execute_script_blocking
 /// for rhai but fully async — no blocking threads or handle.block_on calls.
-pub async fn execute_lua_script(
+pub async fn execute_lua_script<R>(
     _state: Data<XepakAppData>,
     uri: String,
     lua_env: Arc<Option<(Lua, Function)>>,
     input: RequestInput,
-) -> Result<String, XepakError> {
+) -> Result<R, XepakError>
+where
+    R: FromLuaMulti + 'static,
+{
     tokio::task::spawn_local(async move {
         let Some((lua, lua_fn)) = lua_env.as_ref() else {
             return Err(XepakError::Unexpected(format!(
@@ -352,7 +369,7 @@ pub async fn execute_lua_script(
         isolated_fn.set_environment(request_env)?;
 
         // TODO: redo error handling later (may add line numbers logs if possible)
-        match isolated_fn.call_async::<String>(()).await {
+        match isolated_fn.call_async::<R>(()).await {
             Ok(result) => Ok(result),
             Err(e) => {
                 Err(if let Some(xerror) = extract_xepak_from_lua_error(&e) {
@@ -411,3 +428,55 @@ impl From<LuaError> for XepakError {
         extract_xepak_from_lua_error(&e).unwrap_or_else(|| XepakError::LuaScript(e.to_string()))
     }
 }
+
+pub fn quick_table_is_map(table: &Table) -> bool {
+    let tlen = table.len().unwrap_or(0);
+    tlen == 0 && table.pairs::<Value, Value>().next().is_some()
+}
+
+pub fn quick_table_is_array(table: &Table) -> bool {
+    let tlen = table.len().unwrap_or(0);
+    tlen > 0 || (tlen == 0 && table.pairs::<Value, Value>().next().is_none())
+}
+
+// fn is_pure_sequence(table: &Table) -> Result<bool> {
+//     let mut count = 0usize;
+//     let mut max_index = 0usize;
+//
+//     table.len()
+//     for entry in table.pairs::<Value, Value>() {
+//         let (key, _) = entry?;
+//
+//         let Some(index) = positive_array_index(&key) else {
+//             return Ok(false);
+//         };
+//
+//         count += 1;
+//         max_index = max_index.max(index);
+//     }
+//
+//     // For a pure sequence like { "a", "b", "c" },
+//     // count == max_index == 3.
+//     //
+//     // For { [1] = "a", [3] = "c" },
+//     // count == 2, max_index == 3, so it is not a pure sequence.
+//     Ok(count == max_index)
+// }
+//
+// fn positive_array_index(value: &Value) -> Option<usize> {
+//     match value {
+//         Value::Integer(i) if *i >= 1 => (*i).try_into().ok(),
+//
+//         Value::Number(n) => {
+//             let n = *n;
+//
+//             if n >= 1.0 && n.fract() == 0.0 && n <= usize::MAX as f64 {
+//                 Some(n as usize)
+//             } else {
+//                 None
+//             }
+//         }
+//
+//         _ => None,
+//     }
+// }

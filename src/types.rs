@@ -7,7 +7,10 @@
 use std::collections::HashMap;
 
 use base64::Engine;
-use serde::Deserialize;
+use serde::{
+    Deserialize,
+    ser::{SerializeMap, SerializeSeq},
+};
 use sqlx::{TypeInfo, ValueRef as _};
 use strum::Display;
 
@@ -38,6 +41,8 @@ pub enum XepakType {
     Int,
     Float,
     Blob,
+    Tuple,
+    Map,
 }
 
 /// Unified value wrapper for input/output (IDK a better solution than using enum yet).
@@ -60,6 +65,10 @@ pub enum XepakValue {
     Text(String),
     /// Some kind of a binary blob
     Blob(Vec<u8>),
+
+    Tuple(Vec<XepakValue>),
+
+    Map(HashMap<String, XepakValue>),
 }
 
 impl XepakValue {
@@ -72,6 +81,8 @@ impl XepakValue {
             Self::Float(_) => XepakType::Float,
             Self::Text(_) => XepakType::Text,
             Self::Blob(_) => XepakType::Blob,
+            Self::Tuple(_) => XepakType::Tuple,
+            Self::Map(_) => XepakType::Map,
         }
     }
 
@@ -96,6 +107,8 @@ impl XepakValue {
             }
             XepakType::Text => Self::Text(v.to_string()),
             XepakType::Blob => unimplemented!(),
+            XepakType::Tuple => unimplemented!(),
+            XepakType::Map => unimplemented!(),
         };
         Ok(xv)
     }
@@ -103,11 +116,13 @@ impl XepakValue {
     pub fn as_int(&self) -> Result<i128, XepakError> {
         const TO_TYPE: XepakType = XepakType::Int;
         match self {
-            XepakValue::Null | XepakValue::Blob(_) => Err(XepakError::ConvertValue(
-                self.get_type(),
-                TO_TYPE,
-                "Not possible".to_string(),
-            )),
+            XepakValue::Null | XepakValue::Blob(_) | XepakValue::Tuple(_) | XepakValue::Map(_) => {
+                Err(XepakError::ConvertValue(
+                    self.get_type(),
+                    TO_TYPE,
+                    "Not possible".to_string(),
+                ))
+            }
             XepakValue::Boolean(v) => Ok(if *v { 1 } else { 0 }),
             XepakValue::Integer(v) => Ok(*v),
             XepakValue::Float(v) => {
@@ -145,13 +160,15 @@ impl XepakValue {
             XepakValue::Float(v) => v.to_string(),
             XepakValue::Text(v) => v.clone(),
             XepakValue::Blob(v) => base64::engine::general_purpose::STANDARD.encode(v),
+            XepakValue::Tuple(v) => serde_json::to_string(v).unwrap_or_else(|_| "[]".to_string()),
+            XepakValue::Map(v) => serde_json::to_string(v).unwrap_or_else(|_| "{}".to_string()),
         }
     }
 
     pub fn as_bool(&self) -> Result<bool, XepakError> {
         const TO_TYPE: XepakType = XepakType::Boolean;
         Ok(match self {
-            XepakValue::Null | XepakValue::Blob(_) => {
+            XepakValue::Null | XepakValue::Blob(_) | XepakValue::Tuple(_) | XepakValue::Map(_) => {
                 return Err(XepakError::ConvertValue(
                     self.get_type(),
                     TO_TYPE,
@@ -192,7 +209,7 @@ impl XepakValue {
     pub fn as_float(&self) -> Result<f64, XepakError> {
         const TO_TYPE: XepakType = XepakType::Float;
         Ok(match self {
-            XepakValue::Null | XepakValue::Blob(_) => {
+            XepakValue::Null | XepakValue::Blob(_) | XepakValue::Tuple(_) | XepakValue::Map(_) => {
                 return Err(XepakError::ConvertValue(
                     self.get_type(),
                     TO_TYPE,
@@ -243,17 +260,48 @@ impl XepakValue {
         })
     }
 
+    pub fn as_tuple(&self) -> Result<Vec<XepakValue>, XepakError> {
+        const TO_TYPE: XepakType = XepakType::Blob;
+        Ok(match self {
+            XepakValue::Null => Vec::new(),
+            XepakValue::Tuple(v) => v.clone(),
+            _ => {
+                return Err(XepakError::ConvertValue(
+                    self.get_type(),
+                    TO_TYPE,
+                    "Not possible".to_string(),
+                ));
+            }
+        })
+    }
+
+    pub fn as_map(&self) -> Result<HashMap<String, XepakValue>, XepakError> {
+        const TO_TYPE: XepakType = XepakType::Blob;
+        Ok(match self {
+            XepakValue::Null => HashMap::new(),
+            XepakValue::Map(v) => v.clone(),
+            _ => {
+                return Err(XepakError::ConvertValue(
+                    self.get_type(),
+                    TO_TYPE,
+                    "Not possible".to_string(),
+                ));
+            }
+        })
+    }
+
     pub fn bind_sqlx<'a>(
         self,
         query: sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments<'a>>,
     ) -> sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments<'a>> {
-        match self {
+        match &self {
             XepakValue::Null => query.bind(None::<String>),
-            XepakValue::Boolean(v) => query.bind(v),
-            XepakValue::Integer(v) => query.bind(v as i64),
-            XepakValue::Float(v) => query.bind(v),
-            XepakValue::Text(v) => query.bind(v),
-            XepakValue::Blob(v) => query.bind(v),
+            XepakValue::Boolean(v) => query.bind(*v),
+            XepakValue::Integer(v) => query.bind(*v as i64),
+            XepakValue::Float(v) => query.bind(*v),
+            XepakValue::Text(v) => query.bind(v.clone()),
+            XepakValue::Blob(v) => query.bind(v.clone()),
+            XepakValue::Tuple(_) | XepakValue::Map(_) => query.bind(self.as_string()),
         }
     }
 }
@@ -279,6 +327,18 @@ impl From<f64> for XepakValue {
 impl From<i128> for XepakValue {
     fn from(value: i128) -> Self {
         Self::Integer(value)
+    }
+}
+
+impl From<HashMap<String, XepakValue>> for XepakValue {
+    fn from(value: HashMap<String, XepakValue>) -> Self {
+        Self::Map(value)
+    }
+}
+
+impl From<Vec<XepakValue>> for XepakValue {
+    fn from(value: Vec<XepakValue>) -> Self {
+        Self::Tuple(value)
     }
 }
 
@@ -364,7 +424,8 @@ impl<'de> serde::Deserialize<'de> for XepakValue {
         D: serde::Deserializer<'de>,
     {
         let value = String::deserialize(deserializer)?;
-
+        // It is weird to deserialize everyting as a string.
+        // Would not work with other CBOR deserializers
         Ok(XepakValue::Text(value))
     }
 }
@@ -385,6 +446,20 @@ impl serde::Serialize for XepakValue {
                 let str_value = base64::engine::general_purpose::STANDARD.encode(v);
                 ser.serialize_str(str_value.as_str())
             }
+            XepakValue::Map(v) => {
+                let mut map = ser.serialize_map(Some(v.len()))?;
+                for (k, v) in v {
+                    map.serialize_entry(k, v)?;
+                }
+                map.end()
+            }
+            XepakValue::Tuple(v) => {
+                let mut seq = ser.serialize_seq(Some(v.len()))?;
+                for element in v {
+                    seq.serialize_element(element)?;
+                }
+                seq.end()
+            }
         }
     }
 }
@@ -402,6 +477,8 @@ impl minicbor::Encode<()> for XepakValue {
             XepakValue::Float(v) => e.encode(v)?,
             XepakValue::Text(v) => e.encode(v)?,
             XepakValue::Blob(v) => e.encode(v)?,
+            XepakValue::Tuple(v) => e.encode(v)?,
+            XepakValue::Map(v) => e.encode(v)?,
         };
         Ok(())
     }
