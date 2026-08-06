@@ -9,7 +9,7 @@ use bon::Builder;
 use serde::Deserialize;
 
 use crate::{
-    XepakError, auth::ShallowAuthSpecs, schema::Schema, server::processor::PreProcessor,
+    XepakError, auth::SimpleAuthSpecs, schema::Schema, server::processor::PreProcessor,
     storage::StorageSettings,
 };
 
@@ -29,7 +29,7 @@ pub struct XepakConf {
     pub storage: Vec<StorageSettings>,
 
     #[serde(default)]
-    pub shallow_auth: Vec<ShallowAuthSpecs>,
+    pub simple_auth: Vec<SimpleAuthSpecs>,
 }
 
 impl XepakConf {

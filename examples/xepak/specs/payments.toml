@@ -11,7 +11,7 @@ uri = "/payment/{payment_id:\\d+}/revalidate"
 single_record_response = true
 
 [[endpoint.processor]]
-type = "shallow_authentication"
+type = "simple_authentication"
 
 [[endpoint.processor]]
 type = "authorize"

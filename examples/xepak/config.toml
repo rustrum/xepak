@@ -1,6 +1,6 @@
 # Want to have some property like 
 # auth = { type="auth_type", some data }
-shallow_auth = [
+simple_auth = [
     { id = "boss", key = "BossKEY", from_env = false, roles = [
         "ADMIN",
         "MANAGER",

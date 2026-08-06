@@ -9,7 +9,7 @@ use serde::Deserialize;
 
 use crate::{
     XepakError,
-    auth::{AuthorizeProcessor, ShallowAuthenticationProcessor},
+    auth::{AuthorizeProcessor, SimpleAuthenticationProcessor},
     schema::validate_with_schema,
     server::{CONTENT_TYPE_CBOR, RequestInput, XepakAppData},
     types::XepakValue,
@@ -33,7 +33,7 @@ pub enum PreProcessor {
     /// Extracts body argurments to request object.
     ParseBodyArgs,
 
-    ShallowAuthentication {
+    SimpleAuthentication {
         #[serde(default)]
         allow_no_auth: bool,
     },
@@ -72,8 +72,8 @@ pub fn build_pre_processor(
             }
         }
         PreProcessor::ParseBodyArgs => Ok(Box::new(BodyToArgsProcessor::default())),
-        PreProcessor::ShallowAuthentication { allow_no_auth } => Ok(Box::new(
-            ShallowAuthenticationProcessor::new(position, *allow_no_auth),
+        PreProcessor::SimpleAuthentication { allow_no_auth } => Ok(Box::new(
+            SimpleAuthenticationProcessor::new(position, *allow_no_auth),
         )),
         PreProcessor::Authorize { rules } => {
             Ok(Box::new(AuthorizeProcessor::new(position, rules.as_ref())?))

@@ -12,13 +12,13 @@ use crate::{
     server::processor::{PRIORITY_NORMAL, PreProcessorHandler, adjust_priority},
 };
 
-pub type ShallowAuthRegistry = HashMap<String, (String, HashSet<String>)>;
+pub type SimpleAuthRegistry = HashMap<String, (String, HashSet<String>)>;
 
 pub const API_KEY_HEADER: &str = "x-api-key";
 
 /// The most simple toml based auth configuration.
 #[derive(Clone, Debug, Deserialize)]
-pub struct ShallowAuthSpecs {
+pub struct SimpleAuthSpecs {
     id: String,
 
     key: String,
@@ -30,8 +30,8 @@ pub struct ShallowAuthSpecs {
     roles: Vec<String>,
 }
 
-impl ShallowAuthSpecs {
-    fn put_to_registry(&self, registry: &mut ShallowAuthRegistry) -> Result<(), XepakError> {
+impl SimpleAuthSpecs {
+    fn put_to_registry(&self, registry: &mut SimpleAuthRegistry) -> Result<(), XepakError> {
         let api_key = if self.from_env {
             match std::env::var(&self.key) {
                 Ok(v) => v,
@@ -55,9 +55,9 @@ impl ShallowAuthSpecs {
 }
 
 pub fn auth_specs_to_registry(
-    specs: &[ShallowAuthSpecs],
-) -> Result<ShallowAuthRegistry, XepakError> {
-    let mut registry: ShallowAuthRegistry = Default::default();
+    specs: &[SimpleAuthSpecs],
+) -> Result<SimpleAuthRegistry, XepakError> {
+    let mut registry: SimpleAuthRegistry = Default::default();
 
     for s in specs {
         s.put_to_registry(&mut registry)?;
@@ -67,13 +67,13 @@ pub fn auth_specs_to_registry(
 }
 
 /// Authenticates requests using [`SimpleAuthSpecs`].
-pub struct ShallowAuthenticationProcessor {
+pub struct SimpleAuthenticationProcessor {
     priority: u16,
     /// TODO: Maybe should remove this flag?
     _allow_no_auth: bool,
 }
 
-impl ShallowAuthenticationProcessor {
+impl SimpleAuthenticationProcessor {
     pub fn new(position: u16, allow_no_auth: bool) -> Self {
         Self {
             priority: adjust_priority(PRIORITY_NORMAL, position),
@@ -82,7 +82,7 @@ impl ShallowAuthenticationProcessor {
     }
 }
 
-impl PreProcessorHandler for ShallowAuthenticationProcessor {
+impl PreProcessorHandler for SimpleAuthenticationProcessor {
     fn priority(&self) -> u16 {
         self.priority
     }
