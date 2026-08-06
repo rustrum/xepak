@@ -14,7 +14,7 @@ use actix_web::web::ServiceConfig;
 use actix_web::{HttpServer, web::Data};
 
 use crate::XepakError;
-use crate::auth::{ShallowAuthRegistry, auth_specs_to_registry};
+use crate::auth::{SimpleAuthRegistry, auth_specs_to_registry};
 use crate::cfg::{XepakConf, XepakSpecs};
 use crate::schema::{Schema, convert_with_schema};
 use crate::server::handler::EndpointHandler;
@@ -34,7 +34,7 @@ pub struct XepakAppData {
     shared_pre_processors: HashMap<String, PreProcessor>,
     default_pre_processors: Vec<PreProcessor>,
 
-    simple_auth_registry: ShallowAuthRegistry,
+    simple_auth_registry: SimpleAuthRegistry,
 }
 
 impl XepakAppData {
@@ -62,7 +62,7 @@ pub async fn init_server(
 
     let storage_links = init_storage_connectors(&conf_dir, &config.storage).await?;
 
-    let simple_auth_registry = auth_specs_to_registry(&config.shallow_auth)?;
+    let simple_auth_registry = auth_specs_to_registry(&config.simple_auth)?;
 
     tracing::debug!("Simple auth registry {simple_auth_registry:?}");
 

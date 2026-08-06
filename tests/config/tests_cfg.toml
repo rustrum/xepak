@@ -1,6 +1,6 @@
 port = 4321
 
-shallow_auth = [
+simple_auth = [
     { id = "boss", key = "BossKEY", from_env = false, roles = [ "ADMIN", "MANAGER", ] },
     { id = "manager", key = "ManagerKEY", from_env = false, roles = [ "MANAGER", ] },
     { id = "user", key = "UserKEY", from_env = false },
