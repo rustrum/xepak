@@ -1,3 +1,12 @@
+# XepakValue structures
+
+Should add more types of XepakValues
+- Map
+- Vec
+
+It would allow to have very generic and serializable response
+
+
 # Optimization 
 
 ## RequestInput optimizations or not

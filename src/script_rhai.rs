@@ -409,6 +409,18 @@ pub fn xepak_to_dynamic(value: &XepakValue) -> Dynamic {
         XepakValue::Float(v) => Dynamic::from_float(*v),
         XepakValue::Text(v) => Dynamic::from(v.clone()),
         XepakValue::Blob(v) => Dynamic::from(v.clone()),
+        XepakValue::Tuple(v) => Dynamic::from(
+            v.iter()
+                .map(xepak_to_dynamic)
+                .collect::<rhai::Array>(),
+        ),
+        XepakValue::Map(v) => {
+            let mut map = rhai::Map::new();
+            for (k, val) in v {
+                map.insert(k.clone().into(), xepak_to_dynamic(val));
+            }
+            Dynamic::from(map)
+        }
     }
 }
 

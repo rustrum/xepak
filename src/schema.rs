@@ -101,6 +101,8 @@ pub fn convert_with_schema(
         XepakType::Int => XepakValue::Integer(value.as_int()?),
         XepakType::Float => XepakValue::Float(value.as_float()?),
         XepakType::Blob => XepakValue::Blob(value.as_blob()?),
+        XepakType::Tuple => XepakValue::Tuple(value.as_tuple()?),
+        XepakType::Map => XepakValue::Map(value.as_map()?),
     })
 }
 

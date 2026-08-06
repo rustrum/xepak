@@ -34,8 +34,10 @@ pub enum PreProcessor {
     ParseBodyArgs,
 
     SimpleAuthentication {
+        
+        /// Allows anonymous authentication
         #[serde(default)]
-        allow_no_auth: bool,
+        anonymous_auth: bool,
     },
 
     Authorize {
@@ -72,8 +74,8 @@ pub fn build_pre_processor(
             }
         }
         PreProcessor::ParseBodyArgs => Ok(Box::new(BodyToArgsProcessor::default())),
-        PreProcessor::SimpleAuthentication { allow_no_auth } => Ok(Box::new(
-            SimpleAuthenticationProcessor::new(position, *allow_no_auth),
+        PreProcessor::SimpleAuthentication { anonymous_auth } => Ok(Box::new(
+            SimpleAuthenticationProcessor::new(position, *anonymous_auth),
         )),
         PreProcessor::Authorize { rules } => {
             Ok(Box::new(AuthorizeProcessor::new(position, rules.as_ref())?))
