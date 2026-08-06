@@ -300,7 +300,7 @@ async fn storage_query_one(lua: Lua, (query, args): (String, Value)) -> mlua::Re
         .map_err(ExternalError::into_lua_err)?
     {
         None => Ok(Value::Nil),
-        Some(r) => Ok(Value::Table(row_to_lua_table(&lua, r)?)),
+        Some(r) => r.into_lua(&lua),
     }
 }
 
@@ -321,20 +321,12 @@ async fn storage_query_value(lua: Lua, (query, args): (String, Value)) -> mlua::
         .into_lua(&lua)
 }
 
-fn rows_to_lua_table(lua: &Lua, rows: Vec<HashMap<String, XepakValue>>) -> mlua::Result<Table> {
+fn rows_to_lua_table(lua: &Lua, rows: Vec<XepakValue>) -> mlua::Result<Table> {
     let result = lua.create_table()?;
     for (i, row) in rows.into_iter().enumerate() {
-        result.set(i + 1, row_to_lua_table(lua, row)?)?;
+        result.set(i + 1, row.into_lua(lua)?)?;
     }
     Ok(result)
-}
-
-fn row_to_lua_table(lua: &Lua, row: HashMap<String, XepakValue>) -> mlua::Result<Table> {
-    let t = lua.create_table()?;
-    for (k, v) in row {
-        t.set(k, v)?;
-    }
-    Ok(t)
 }
 
 /// Execute LUA script in async way.

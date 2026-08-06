@@ -276,6 +276,9 @@ fn storage_query_rs(
     let result = handle
         .block_on(async { ds.query(rr).await })?
         .into_iter()
+        .map(|row| row.as_map())
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
         .map(|row| {
             row.into_iter()
                 .map(|(k, v)| (k, xepak_to_dynamic(&v)))
@@ -312,13 +315,19 @@ pub fn storage_query_one_rs(
 
     let rr = ResourceRequest::new(query, input);
 
-    let result = handle.block_on(async { ds.query_one(rr).await })?.map(|v| {
-        v.into_iter()
-            .map(|(k, v)| (k.into(), xepak_to_dynamic(&v)))
-            .collect::<rhai::Map>()
-    });
+    let result = match handle.block_on(async { ds.query_one(rr).await })? {
+        Some(v) => {
+            let row = v.as_map()?;
+            let map = row
+                .into_iter()
+                .map(|(k, v)| (k.into(), xepak_to_dynamic(&v)))
+                .collect::<rhai::Map>();
+            Dynamic::from_map(map)
+        }
+        None => Dynamic::UNIT,
+    };
 
-    Ok(result.map(Dynamic::from_map).unwrap_or(Dynamic::UNIT))
+    Ok(result)
 }
 
 pub fn storage_query_value(

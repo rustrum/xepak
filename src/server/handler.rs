@@ -28,8 +28,8 @@ use crate::{
         processor::{PreProcessorHandler, build_pre_processor, init_required_pre_processors},
         to_error_object,
     },
-    storage::ResourceRequest,
-    types::XepakValue,
+    storage::{ResourceRequest, SqlxRequestArgs, Storage},
+    types::{XepakType, XepakValue},
 };
 
 type EndpointHandlerArgs = (HttpRequest, Data<XepakAppData>, Bytes);
@@ -173,7 +173,7 @@ impl EndpointHandler {
         &self,
         input: &RequestInput,
         state: &Data<XepakAppData>,
-    ) -> Result<Vec<HashMap<String, XepakValue>>, XepakError> {
+    ) -> Result<XepakValue, XepakError> {
         match &self.ep.resource {
             ResourceSpecs::Query { data_source, query } => {
                 let Some(ds) = state.get_data_source(data_source) else {
@@ -183,7 +183,7 @@ impl EndpointHandler {
                 };
 
                 let rr = ResourceRequest::new(query, input);
-                ds.query(rr).await
+                self.run_query(ds, rr).await
             }
             ResourceSpecs::QueryScriptRhai { data_source, .. } => {
                 let Some(ds) = state.get_data_source(data_source) else {
@@ -211,7 +211,7 @@ impl EndpointHandler {
                 };
 
                 let rr = ResourceRequest::new(&query, input);
-                ds.query(rr).await
+                self.run_query(ds, rr).await
             }
             ResourceSpecs::QueryScriptLua { data_source, .. } => {
                 let Some(ds) = state.get_data_source(data_source) else {
@@ -229,47 +229,39 @@ impl EndpointHandler {
                 .await?;
 
                 let rr = ResourceRequest::new(&query, input);
-                ds.query(rr).await
+                self.run_query(ds, rr).await
             }
             ResourceSpecs::DataScript { data_source, .. } => {
-                let Some(ds) = state.get_data_source(data_source) else {
-                    return Err(XepakError::Cfg(format!(
-                        "Data source does not exists \"{data_source}\""
-                    )));
-                };
-                let result: mlua::Value = execute_lua_script(
-                    state.clone(),
-                    self.ep.uri.clone(),
-                    self.handler_lua.clone(),
-                    input.clone(),
-                )
-                .await?;
+                // let Some(ds) = state.get_data_source(data_source) else {
+                //     return Err(XepakError::Cfg(format!(
+                //         "Data source does not exists \"{data_source}\""
+                //     )));
+                // };
+                // let result: mlua::Value = execute_lua_script(
+                //     state.clone(),
+                //     self.ep.uri.clone(),
+                //     self.handler_lua.clone(),
+                //     input.clone(),
+                // )
+                // .await?;
 
-                let mut response = Vec::new();
-
-                match result {
-                    mlua::Value::Table(table) => {
-                        // if quick_table_is_array(&table) {
-                        //     table.sequence_values()
-                        // } else if quick_table_is_map(&table) {
-                        // } else {
-                        // }
-                    }
-                    mlua::Value::Nil => todo!(),
-                    mlua::Value::Boolean(_) => todo!(),
-                    mlua::Value::LightUserData(light_user_data) => todo!(),
-                    mlua::Value::Integer(_) => todo!(),
-                    mlua::Value::Number(_) => todo!(),
-                    mlua::Value::String(_) => todo!(),
-                    mlua::Value::Function(function) => todo!(),
-                    mlua::Value::Thread(thread) => todo!(),
-                    mlua::Value::UserData(any_user_data) => todo!(),
-                    mlua::Value::Error(error) => todo!(),
-                    mlua::Value::Other(value_ref) => todo!(),
-                }
-
-                Ok(response)
+                // let mut response = Vec::new();
+                unimplemented!()
             }
+        }
+    }
+
+    async fn run_query<RA: SqlxRequestArgs>(
+        &self,
+        ds: &Storage,
+        request: ResourceRequest<'_, RA>,
+    ) -> Result<XepakValue, XepakError> {
+        if self.ep.single_record_response {
+            ds.query_one(request)
+                .await
+                .map(|v| v.unwrap_or(XepakValue::Null))
+        } else {
+            ds.query(request).await.map(Into::into)
         }
     }
 
@@ -307,25 +299,27 @@ impl EndpointHandler {
         &self,
         req: &HttpRequest,
         input: &RequestInput,
-        data: Vec<HashMap<String, XepakValue>>,
+        data: XepakValue,
     ) -> HttpResponse {
-        if self.ep.single_record_response {
-            if data.len() > 1 {
-                tracing::warn!("More than one record returned for URI:{}", req.uri());
-            }
-
-            let Some(one_row_data) = data.first() else {
+        match data.get_type() {
+            XepakType::Null => {
                 let (status_code, err_data) = to_error_object(XepakError::NotFound(format!(
                     "Record not found at URI: {}",
                     req.uri()
                 )));
 
-                return self.data_to_response(req, Some(input), status_code, &err_data);
-            };
-
-            self.data_to_response(req, Some(input), StatusCode::OK, &one_row_data)
-        } else {
-            self.data_to_response(req, Some(input), StatusCode::OK, &data)
+                self.data_to_response(req, Some(input), status_code, &err_data)
+            }
+            XepakType::Map | XepakType::Tuple => {
+                self.data_to_response(req, Some(input), StatusCode::OK, &data)
+            }
+            _ => {
+                let (status_code, err_data) = to_error_object(XepakError::NotConsistent(format!(
+                    "Return data types could be only Array|Map|Null not {}",
+                    data.get_type()
+                )));
+                self.data_to_response(req, Some(input), status_code, &err_data)
+            }
         }
     }
 }
