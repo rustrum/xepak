@@ -2,5 +2,5 @@
 
 ### DSL configuration
 
-All structs where names are ending with `Specs` are parts of a *.toml DSL specification.
+All structs which names has suffix `Specs` are parts of a *.toml DSL specification.
 

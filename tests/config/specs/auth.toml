@@ -1,0 +1,59 @@
+[[endpoint]]
+uri = "/auth/posts/public"
+
+processor = [
+    { type = "simple_authentication" },
+]
+
+resource = {
+    type = "query",
+    query = "SELECT * FROM posts",
+}
+
+[[endpoint]]
+uri = "/auth/posts/boss"
+
+processor = [
+    { type = "simple_authentication" },
+    {
+        type = "authorize",
+        rules = "ADMIN",
+    }
+]
+
+resource = {
+    type = "query",
+    query = "SELECT * FROM posts",
+}
+
+[[endpoint]]
+uri = "/auth/posts/manager"
+
+processor = [
+    { type = "simple_authentication" },
+    {
+        type = "authorize",
+        rules = "MANAGER",
+    }
+]
+
+resource = {
+    type = "query",
+    query = "SELECT * FROM posts",
+}
+
+[[endpoint]]
+uri = "/auth/posts/admin"
+
+processor = [
+    { type = "simple_authentication" },
+    {
+        type = "authorize",
+        rules = "#admin",
+    }
+]
+
+resource = {
+    type = "query",
+    query = "SELECT * FROM posts",
+}

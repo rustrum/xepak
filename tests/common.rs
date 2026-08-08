@@ -67,10 +67,15 @@ pub fn clean_directory_files(dir_path: &PathBuf) -> std::io::Result<()> {
     Ok(())
 }
 
-pub async fn init_default_test_server(delay_ms: usize) -> XepakTestServer {
+pub fn init_test_config() -> (XepakConf, XepakSpecs) {
     let config = load_conf_file(CONFIG_FILE).expect("Should have valid config");
     let specs_dir = PathBuf::from_str(SPECS_DIR).expect("Specs dir must exists");
     let specs = load_specs_from_dir(specs_dir).expect("Should have valid specs");
+    (config, specs)
+}
+
+pub async fn init_default_test_server(delay_ms: usize) -> XepakTestServer {
+    let (config, specs) = init_test_config();
 
     XepakTestServer::start(config, specs, delay_ms).await
 }
