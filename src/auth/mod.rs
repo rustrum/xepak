@@ -108,8 +108,12 @@ impl SimpleAuthenticationProcessor {
 
         tracing::debug!(
             "Anonymous user authenticated with roles: {}",
-            auth_roles.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(", ")
-            );
+            auth_roles
+                .iter()
+                .map(|v| v.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
         input.set_auth("".to_string(), auth_roles);
         Ok(())
     }

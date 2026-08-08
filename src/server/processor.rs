@@ -34,7 +34,6 @@ pub enum PreProcessor {
     ParseBodyArgs,
 
     SimpleAuthentication {
-        
         /// Allows anonymous authentication
         #[serde(default)]
         anonymous_auth: bool,
