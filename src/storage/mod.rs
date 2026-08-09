@@ -6,7 +6,8 @@ use std::sync::Arc;
 
 use crate::XepakError;
 use crate::sql_key_args::ParametrizedQuery;
-use crate::types::{Record, SqlxValue, XepakValue};
+use crate::xepak_data::XepakValue;
+use crate::xepak_data::sql::SqlxValue;
 use serde::Deserialize;
 use sqlx::any::{AnyArguments, AnyConnectOptions, AnyRow};
 use sqlx::query::Query;
@@ -236,7 +237,7 @@ impl Storage {
         Ok(sql_query)
     }
 
-    fn map_row(&self, row: AnyRow) -> Record {
+    fn map_row(&self, row: AnyRow) -> HashMap<String, XepakValue> {
         let cols = row.columns();
         let mut out_row = HashMap::new();
         for (idx, c) in cols.iter().enumerate() {

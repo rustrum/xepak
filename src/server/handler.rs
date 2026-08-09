@@ -1,4 +1,4 @@
-use std::{collections::HashMap, pin::Pin, sync::Arc};
+use std::{pin::Pin, sync::Arc};
 
 use actix_web::{
     Handler, HttpRequest, HttpResponse, HttpResponseBuilder,
@@ -12,7 +12,6 @@ use actix_web::{
 };
 use mlua::{Function, Lua};
 use rhai::{AST, Engine};
-use serde::Serialize;
 
 use crate::{
     XepakError,
@@ -29,7 +28,7 @@ use crate::{
         to_error_object,
     },
     storage::{ResourceRequest, SqlxRequestArgs, Storage},
-    types::{XepakType, XepakValue},
+    xepak_data::{XepakType, XepakValue},
 };
 
 type EndpointHandlerArgs = (HttpRequest, Data<XepakAppData>, Bytes);
@@ -231,7 +230,7 @@ impl EndpointHandler {
                 let rr = ResourceRequest::new(&query, input);
                 self.run_query(ds, rr).await
             }
-            ResourceSpecs::DataScript { data_source, .. } => {
+            ResourceSpecs::DataScript { data_source:_, .. } => {
                 // let Some(ds) = state.get_data_source(data_source) else {
                 //     return Err(XepakError::Cfg(format!(
                 //         "Data source does not exists \"{data_source}\""
@@ -265,16 +264,13 @@ impl EndpointHandler {
         }
     }
 
-    fn data_to_response<R>(
+    fn data_to_response(
         &self,
         req: &HttpRequest,
         input: Option<&RequestInput>,
         status_code: StatusCode,
-        data: &R,
-    ) -> HttpResponse
-    where
-        R: Serialize + minicbor::Encode<()>,
-    {
+        data: &XepakValue,
+    ) -> HttpResponse {
         let cbor_response = if let Some(accept) = req.headers().get(ACCEPT)
             && accept.eq(CONTENT_TYPE_CBOR)
         {
@@ -360,13 +356,13 @@ impl HttpServiceFactory for EndpointHandler {
     }
 }
 
-fn to_json_response<T: Serialize>(
+fn to_json_response(
     code: StatusCode,
-    data: &T,
+    data: &XepakValue,
     limit: usize,
     offset: usize,
 ) -> HttpResponse<BoxBody> {
-    match serde_json::to_string(data) {
+    match data.to_json() {
         Ok(body) => {
             let mut resp = HttpResponseBuilder::new(code);
             resp.append_header((CONTENT_TYPE, CONTENT_TYPE_JSON));
@@ -386,13 +382,13 @@ fn to_json_response<T: Serialize>(
     }
 }
 
-fn to_cbor_response<T: minicbor::Encode<()>>(
+fn to_cbor_response(
     code: StatusCode,
-    data: &T,
+    data: &XepakValue,
     limit: usize,
     offset: usize,
 ) -> HttpResponse<BoxBody> {
-    match minicbor::to_vec(data) {
+    match data.to_cbor_vec() {
         Ok(body) => {
             let mut resp = HttpResponseBuilder::new(code);
             resp.append_header((CONTENT_TYPE, CONTENT_TYPE_CBOR));

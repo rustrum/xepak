@@ -20,7 +20,7 @@ use crate::schema::{Schema, convert_with_schema};
 use crate::server::handler::EndpointHandler;
 use crate::server::processor::PreProcessor;
 use crate::storage::{SqlxRequestArgs, Storage, StorageRequestArgs, init_storage_connectors};
-use crate::types::XepakValue;
+use crate::xepak_data::XepakValue;
 
 const OFFSET_HEADER: &str = "X-Offset";
 const LIMIT_HEADER: &str = "X-Limit";
@@ -293,7 +293,7 @@ impl SqlxRequestArgs for RequestInput {
     }
 }
 
-pub fn to_error_object(err: XepakError) -> (StatusCode, HashMap<String, XepakValue>) {
+pub fn to_error_object(err: XepakError) -> (StatusCode, XepakValue) {
     let mut result = HashMap::<String, XepakValue>::with_capacity(2);
     let mut code = StatusCode::from_u16(520).expect("Must not fail (^_^)");
     match err {
@@ -321,5 +321,5 @@ pub fn to_error_object(err: XepakError) -> (StatusCode, HashMap<String, XepakVal
             result.insert("code".to_string(), "unknown_error".into());
         }
     }
-    (code, result)
+    (code, result.into())
 }

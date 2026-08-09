@@ -6,7 +6,7 @@ pub mod script_rhai;
 pub mod server;
 mod sql_key_args;
 pub mod storage;
-pub mod types;
+pub mod xepak_data;
 
 use std::sync::Arc;
 
@@ -14,11 +14,10 @@ use rhai::{EvalAltResult, ParseError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::types::XepakType;
+use crate::xepak_data::XepakDataError;
 
 /*
-
-Think about representing errors in a form of an object like
+TODO: Think about representing errors in a form of an object like
 {
     "code": "trip_not_possible",
     "message": "Trip is not possible, please check start/stop coordinates and try again."
@@ -46,10 +45,7 @@ pub enum XepakError {
     #[error("{0}")]
     WeScrewed(String),
 
-    #[error("Can't covert type from {0} to {1}: {2}")]
-    ConvertValue(XepakType, XepakType, String),
-
-    #[error("Can't covert: {0}")]
+    #[error("Convert error: {0}")]
     Convert(String),
 
     #[error("Decode error: {0}")]
@@ -92,6 +88,17 @@ impl XepakError {
             | XepakError::WeScrewed(_)
             | XepakError::Forbidden(_) => false,
             _ => false,
+        }
+    }
+}
+
+impl From<XepakDataError> for XepakError {
+    fn from(value: XepakDataError) -> Self {
+        match value {
+            XepakDataError::Convert(_) | XepakDataError::ConvertValue(_, _, _) => {
+                XepakError::Convert(value.to_string())
+            }
+            XepakDataError::Decode(msg) => XepakError::Decode(msg),
         }
     }
 }

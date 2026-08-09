@@ -10,7 +10,7 @@ use crate::{
     XepakError,
     server::{RequestInput, XepakAppData},
     storage::ResourceRequest,
-    types::XepakValue,
+    xepak_data::XepakValue,
 };
 
 #[derive(Debug, Clone)]
@@ -388,7 +388,7 @@ pub async fn execute_script_blocking(
         match rhai.eval_ast_with_scope::<Dynamic>(&mut scope, ast) {
             Ok(result) => Ok(result),
             Err(e) => {
-                return Err(if let EvalAltResult::ErrorRuntime(ref value, pos) = *e {
+                Err(if let EvalAltResult::ErrorRuntime(ref value, pos) = *e {
                     if let Some(xerror) = value.clone().try_cast::<XepakError>() {
                         // no need to log here, this could be an expected behavior
                         if !xerror.is_expectable() {
@@ -402,7 +402,7 @@ pub async fn execute_script_blocking(
                 } else {
                     tracing::error!("Script execution: {e}");
                     Arc::new(*e).into()
-                });
+                })
             }
         }
     })

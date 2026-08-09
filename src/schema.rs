@@ -4,7 +4,7 @@ use serde::Deserialize;
 
 use crate::{
     XepakError,
-    types::{XepakType, XepakValue},
+    xepak_data::{XepakType, XepakValue},
 };
 
 /// Schema for input/output arguments
