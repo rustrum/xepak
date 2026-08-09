@@ -10,7 +10,7 @@ use crate::{
     XepakError,
     server::{RequestInput, XepakAppData},
     storage::ResourceRequest,
-    types::XepakValue,
+    xepak_data::XepakValue,
 };
 
 thread_local! {

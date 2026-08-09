@@ -46,9 +46,9 @@ toml.workspace = true
 
 base64 = "0.22.1"
 bon = "3.9.1"
+cbor2 = "1.1.4"
 # async-trait = "0.1.89"
 mlua = { version = "0.11", features = ["lua55", "vendored", "async", "send"] }
-minicbor = { version = "2.2.2", features = ["std", "alloc"] }
 rhai = { version = "1.23", features = ["sync", "no_custom_syntax"] }
 # rhai = { version = "1.23", features = ["sync", "no_custom_syntax", "serde"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }

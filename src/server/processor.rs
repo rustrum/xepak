@@ -12,7 +12,7 @@ use crate::{
     auth::{AuthorizeProcessor, SimpleAuthenticationProcessor},
     schema::validate_with_schema,
     server::{CONTENT_TYPE_CBOR, RequestInput, XepakAppData},
-    types::XepakValue,
+    xepak_data::XepakValue,
 };
 
 pub const PRIORITY_FIRST: u16 = 60_000;
