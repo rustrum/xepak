@@ -9,6 +9,7 @@ use reqwest::StatusCode;
 use serde_json::Value as JsonValue;
 
 use serial_test::serial;
+use xepak_rest::xepak_data::XepakValue;
 
 // #[tokio::main(flavor = "current_thread")]
 // #[test]
@@ -147,4 +148,22 @@ async fn response_json_cbor_with_nulls() {
     assert_eq!(Some(55), json_data.type_int);
     assert_eq!(None, json_data.type_real);
     assert_eq!(Some(vec![0x2d]), json_data.type_blob);
+}
+
+#[tokio::test]
+#[serial]
+async fn script_response_types() {
+    let _server = init_default_test_server(INIT_DELAY_DEFAULT).await;
+
+    let response = client::get("/alltypes/script/table").await;
+    let value: XepakValue = client::extract_from_json(response, Some(StatusCode::OK)).await;
+
+    assert!(value.is_map());
+    let value = value.as_map().unwrap();
+
+    // Nill values are considered abscent in mlua
+    assert!(!value.contains_key("null_val"));
+    assert!(matches!(value["int_val"], XepakValue::Integer(1)));
+    assert!(matches!(value["float_val"], XepakValue::Float(2.2)));
+    assert!(matches!(&value["string_val"], XepakValue::Text(txt) if txt == "String from LUA"));
 }
