@@ -329,10 +329,6 @@ fn rows_to_lua_table(lua: &Lua, rows: Vec<XepakValue>) -> mlua::Result<Table> {
     Ok(result)
 }
 
-/// Execute LUA script in async way.
-/// Each request gets its own Lua VM so concurrent requests on the same actix worker
-/// thread cannot share or corrupt the `ctx` global. Analogous to execute_script_blocking
-/// for rhai but fully async — no blocking threads or handle.block_on calls.
 pub async fn execute_lua_script<R>(
     _state: Data<XepakAppData>,
     uri: String,
@@ -342,43 +338,53 @@ pub async fn execute_lua_script<R>(
 where
     R: FromLuaMulti + 'static,
 {
-    tokio::task::spawn_local(async move {
-        let Some((lua, lua_fn)) = lua_env.as_ref() else {
-            return Err(XepakError::Unexpected(format!(
-                "Query script AST must already exists for handler {uri}"
-            )));
-        };
+    let Some((lua, lua_fn)) = lua_env.as_ref() else {
+        return Err(XepakError::Unexpected(format!(
+            "Query script AST must already exists for handler {uri}"
+        )));
+    };
 
-        let request_env = lua.create_table()?;
-        request_env.set("ctx", LuaRequestContext::from(input))?;
+    execute_lua_script_inner(lua, lua_fn.clone(), input).await
+}
 
-        let globals = lua.globals();
-        let meta = lua.create_table()?;
-        meta.set("__index", globals)?;
-        request_env.set_metatable(Some(meta))?;
+/// Execute LUA script in async way.
+/// Each request gets its own Lua VM so concurrent requests on the same actix worker
+/// thread cannot share or corrupt the `ctx` global. Analogous to execute_script_blocking
+/// for rhai but fully async — no blocking threads or handle.block_on calls.
+async fn execute_lua_script_inner<R>(
+    lua: &Lua,
+    isolated_fn: Function,
+    input: RequestInput,
+) -> Result<R, XepakError>
+where
+    R: FromLuaMulti + 'static,
+{
+    let request_env = lua.create_table()?;
+    request_env.set("ctx", LuaRequestContext::from(input))?;
 
-        let isolated_fn = lua_fn.clone();
-        isolated_fn.set_environment(request_env)?;
+    let globals = lua.globals();
+    let meta = lua.create_table()?;
+    meta.set("__index", globals)?;
+    request_env.set_metatable(Some(meta))?;
 
-        // TODO: redo error handling later (may add line numbers logs if possible)
-        match isolated_fn.call_async::<R>(()).await {
-            Ok(result) => Ok(result),
-            Err(e) => {
-                Err(if let Some(xerror) = extract_xepak_from_lua_error(&e) {
-                    // no need to log here, this could be an expected behavior
-                    if !xerror.is_expectable() {
-                        tracing::error!("Lua script error: {xerror}");
-                    }
-                    xerror
-                } else {
-                    tracing::error!("Lua scrip error: {e}");
-                    XepakError::LuaScript(e.to_string())
-                })
-            }
+    isolated_fn.set_environment(request_env)?;
+
+    // TODO: redo error handling later (may add line numbers logs if possible)
+    match isolated_fn.call_async::<R>(()).await {
+        Ok(result) => Ok(result),
+        Err(e) => {
+            Err(if let Some(xerror) = extract_xepak_from_lua_error(&e) {
+                // no need to log here, this could be an expected behavior
+                if !xerror.is_expectable() {
+                    tracing::error!("Lua script error: {xerror}");
+                }
+                xerror
+            } else {
+                tracing::error!("Lua scrip error: {e}");
+                XepakError::LuaScript(e.to_string())
+            })
         }
-    })
-    .await
-    .map_err(XepakError::other)?
+    }
 }
 
 fn log_info(_: &Lua, msg: String) -> mlua::Result<()> {

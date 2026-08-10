@@ -101,12 +101,12 @@ impl XepakSpecs {
         }
 
         for pp in &self.default_pre_processors {
-            if let PreProcessor::Ref { id } = pp {
-                if !self.shared_pre_processors.contains_key(id) {
-                    return Err(XepakError::Cfg(format!(
-                        "Can't find pre-processor by reference: \"{id}\""
-                    )));
-                }
+            if let PreProcessor::Ref { id } = pp
+                && !self.shared_pre_processors.contains_key(id)
+            {
+                return Err(XepakError::Cfg(format!(
+                    "Can't find pre-processor by reference: \"{id}\""
+                )));
             }
         }
 
@@ -216,7 +216,12 @@ pub fn load_specs_from_dir(dir_path: PathBuf) -> Result<XepakSpecs, XepakError> 
     for entry in dir_content {
         let entry = entry.map_err(Arc::new)?;
         let path = entry.path();
-        if !path.is_file() || path.extension().unwrap_or_default().to_ascii_lowercase() != "toml" {
+        if !path.is_file()
+            || !path
+                .extension()
+                .unwrap_or_default()
+                .eq_ignore_ascii_case("toml")
+        {
             continue;
         }
         let buf = fs::read(&path)

@@ -11,6 +11,7 @@ const ENV_PORT: &str = "XEPAK_PORT";
 const ENV_PATH: &str = "XEPAK_CONFIG";
 
 #[actix_web::main]
+#[allow(clippy::expect_fun_call)]
 async fn main() -> Result<(), XepakError> {
     let args = parse_cli_args().map_err(Arc::new)?;
 
@@ -92,12 +93,12 @@ fn parse_cli_args() -> io::Result<AppArgs> {
 }
 
 fn update_from_env(mut args: AppArgs) -> AppArgs {
-    if args.port.is_none() {
-        if let Some(pn) = std::env::var(ENV_PORT).ok().map(|p| p.parse::<u16>()) {
-            match pn {
-                Ok(p) => args.port = Some(p),
-                Err(e) => tracing::error!("Can't parse port number: {}", e),
-            }
+    if args.port.is_none()
+        && let Some(pn) = std::env::var(ENV_PORT).ok().map(|p| p.parse::<u16>())
+    {
+        match pn {
+            Ok(p) => args.port = Some(p),
+            Err(e) => tracing::error!("Can't parse port number: {}", e),
         }
     }
 

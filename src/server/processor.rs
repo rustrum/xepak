@@ -60,9 +60,9 @@ pub fn build_pre_processor(
         PreProcessor::Ref { id } => {
             if let Some(sspecs) = shared.get(id) {
                 if let PreProcessor::Ref { .. } = sspecs {
-                    Err(XepakError::Cfg(format!(
-                        "Ref types are not allowed in shared pre-processors"
-                    )))
+                    Err(XepakError::Cfg(
+                        "Ref types are not allowed in shared pre-processors".to_string(),
+                    ))
                 } else {
                     build_pre_processor(position, sspecs, shared)
                 }

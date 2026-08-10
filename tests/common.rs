@@ -171,28 +171,19 @@ pub mod domain {
     where
         D: Deserializer<'de>,
     {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum StringOrBytes {
-            String(String),
-            Bytes(Vec<u8>),
-        }
-
-        let opt: Option<StringOrBytes> = Option::deserialize(deserializer)?;
-
-        let data = match opt {
-            Some(val) => val,
-            None => return Ok(None),
-        };
-
-        match data {
-            StringOrBytes::String(s) => {
-                let bytes = engine::general_purpose::STANDARD
-                    .decode(s)
-                    .map_err(serde::de::Error::custom)?;
-                Ok(Some(bytes))
+        // Human readable -> JSON -> bytes shold be as string
+        if deserializer.is_human_readable() {
+            match Option::<String>::deserialize(deserializer)? {
+                None => Ok(None),
+                Some(s) => {
+                    let bytes = engine::general_purpose::STANDARD
+                        .decode(s)
+                        .map_err(serde::de::Error::custom)?;
+                    Ok(Some(bytes))
+                }
             }
-            StringOrBytes::Bytes(b) => Ok(Some(b)),
+        } else {
+            Option::<Vec<u8>>::deserialize(deserializer)
         }
     }
 }
@@ -262,9 +253,7 @@ pub mod client {
 
         let builder = client.get(uri).headers(hm);
 
-        let response = builder.send().await.expect("Request must not fail");
-
-        response
+        builder.send().await.expect("Request must not fail")
     }
 
     pub fn cbor_headers() -> HashMap<String, String> {
@@ -321,6 +310,12 @@ pub mod client {
         }
 
         let bytes = response.bytes().await.expect("Should read response bytes");
-        cbor2::from_slice(&bytes).expect("Should be able to parse into CBOR")
+
+        cbor2::from_slice(&bytes).unwrap_or_else(|e| {
+            panic!(
+                "Should be able to parse into CBOR.\n{e}\n{}",
+                cbor2::diagnostic_pretty(&bytes[..]).unwrap()
+            )
+        })
     }
 }

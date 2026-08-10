@@ -47,11 +47,11 @@ impl RhaiRequestContext {
         value: &Dynamic,
     ) -> Result<(), Box<EvalAltResult>> {
         let xvalue =
-            dynamic_to_xepak(&value).map_err(|err| to_eval_alt_result_ctx(err, Some(ctx)))?;
+            dynamic_to_xepak(value).map_err(|err| to_eval_alt_result_ctx(err, Some(ctx)))?;
 
         self.input
             .set_arg_with_schema(arg_name, xvalue, true)
-            .map_err(|err| to_eval_alt_result_ctx(err, Some(ctx)).into())
+            .map_err(|err| to_eval_alt_result_ctx(err, Some(ctx)))
     }
 }
 

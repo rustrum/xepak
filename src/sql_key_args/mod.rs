@@ -157,7 +157,7 @@ impl<'a> SqlLexer<'a> {
                     | LexerState::StringDoubleClosing => {
                         state = LexerState::CurlOpen(1, self.offset);
                     }
-                    LexerState::CurlOpen(c, offset) if c == 1 => {
+                    LexerState::CurlOpen(1, offset) => {
                         state = LexerState::CurlOpen(2, offset);
                     }
                     LexerState::CurlOpen(c, _) if c > 2 => state = LexerState::Sql,
@@ -170,10 +170,10 @@ impl<'a> SqlLexer<'a> {
                     LexerState::CurlOpen(c, _) if c != 2 => {
                         state = LexerState::Sql;
                     }
-                    LexerState::CurlOpen(c, offset) if c == 2 => {
+                    LexerState::CurlOpen(2, offset) => {
                         state = LexerState::CurlClose(1, offset);
                     }
-                    LexerState::CurlClose(c, offset) if c == 1 => {
+                    LexerState::CurlClose(1, offset) => {
                         let from = offset;
                         let to = self.offset;
                         let key = &self.sql[(from + 2)..=(to - 2)];
