@@ -175,7 +175,7 @@ impl IntoLua for XepakValue {
 }
 
 impl FromLua for XepakValue {
-    fn from_lua(value: Value, _: &Lua) -> mlua::Result<Self> {
+    fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
         match value {
             Value::Nil => Ok(XepakValue::Null),
             Value::Boolean(v) => Ok(XepakValue::Boolean(v)),
@@ -186,6 +186,37 @@ impl FromLua for XepakValue {
                     .map_err(|e| LuaError::runtime(e.to_string()))?
                     .to_owned(),
             )),
+            // Tuple is a table without keys
+            Value::Table(t) if quick_table_is_tuple(&t) => {
+                let mut tuple = Vec::new();
+                for item in t.sequence_values::<Value>() {
+                    tuple.push(XepakValue::from_lua(item?, lua)?);
+                }
+                Ok(XepakValue::Tuple(tuple))
+            }
+            // Map must have at least one key or we will handle it as a tuple
+            Value::Table(t) if quick_table_is_map(&t) => {
+                let mut map = HashMap::new();
+                for pairs in t.pairs::<Value, Value>() {
+                    let (k, v) = pairs?;
+                    let key = match k {
+                        Value::String(s) => s
+                            .to_str()
+                            .map_err(|e| LuaError::runtime(e.to_string()))?
+                            .to_owned(),
+                        Value::Integer(i) => i.to_string(),
+                        Value::Number(n) if n.fract() == 0.0 => n.to_string(),
+                        other => {
+                            return Err(LuaError::runtime(format!(
+                                "key type {} is not compatible with XepakValue Map",
+                                other.type_name()
+                            )));
+                        }
+                    };
+                    map.insert(key, XepakValue::from_lua(v, lua)?);
+                }
+                Ok(XepakValue::Map(map))
+            }
             // TODO lua handles bytes as string so it is not possible to explicitly convert back to Blob
             other => Err(LuaError::runtime(format!(
                 "{} not compatible with XepakValue",
@@ -427,16 +458,23 @@ impl From<LuaError> for XepakError {
     }
 }
 
+/// Quick check for a map content inside Lua table.
+/// Empty table will never be considered as an empty map.
 pub fn quick_table_is_map(table: &Table) -> bool {
     let tlen = table.len().unwrap_or(0);
     tlen == 0 && table.pairs::<Value, Value>().next().is_some()
 }
 
-pub fn quick_table_is_array(table: &Table) -> bool {
+/// Quick check for a tuple/array content inside Lua table.
+/// Empty table is array too, which is not 100% accurate but acceptable :|
+pub fn quick_table_is_tuple(table: &Table) -> bool {
     let tlen = table.len().unwrap_or(0);
     tlen > 0 || (tlen == 0 && table.pairs::<Value, Value>().next().is_none())
 }
 
+// These are more valid checks but I do not like them.
+// Too much code and data traverse.
+//
 // fn is_pure_sequence(table: &Table) -> Result<bool> {
 //     let mut count = 0usize;
 //     let mut max_index = 0usize;

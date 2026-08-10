@@ -15,3 +15,18 @@ single_record_response = true
 type = "query"
 query = "SELECT * FROM alltypes WHERE id={{type_id}}"
 
+
+[[endpoint]]
+uri = "/alltypes/script/table"
+
+[endpoint.resource]
+type = "data_script"
+script = """
+return {
+    null_val = nil,
+    int_val = 1,
+    float_val = 2.2,
+    string_val = "String from LUA",
+}
+"""
+

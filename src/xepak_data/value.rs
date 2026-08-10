@@ -50,6 +50,14 @@ impl XepakValue {
         matches!(self, Self::Null)
     }
 
+    pub fn is_map(&self) -> bool {
+        matches!(self, Self::Map(_))
+    }
+
+    pub fn is_tuple(&self) -> bool {
+        matches!(self, Self::Tuple(_))
+    }
+
     pub fn from_str_as(v: &str, parse_as: XepakType) -> Result<Self, XepakDataError> {
         let xv = match parse_as {
             XepakType::Null => Self::Null,
