@@ -16,10 +16,7 @@ use rhai::{AST, Engine};
 use crate::{
     XepakError,
     cfg::{EndpointSpecs, ResourceSpecs},
-    script_lua::{
-        build_lua_function, execute_lua_script, lua_load_engine, quick_table_is_array,
-        quick_table_is_map,
-    },
+    script_lua::{build_lua_function, execute_lua_script, lua_load_engine},
     script_rhai::{build_rhai_ast, build_rhai_engine, execute_script_blocking},
     server::{
         CONTENT_TYPE_CBOR, CONTENT_TYPE_JSON, LIMIT_HEADER, OFFSET_HEADER, RequestInput,
@@ -230,22 +227,14 @@ impl EndpointHandler {
                 let rr = ResourceRequest::new(&query, input);
                 self.run_query(ds, rr).await
             }
-            ResourceSpecs::DataScript { data_source:_, .. } => {
-                // let Some(ds) = state.get_data_source(data_source) else {
-                //     return Err(XepakError::Cfg(format!(
-                //         "Data source does not exists \"{data_source}\""
-                //     )));
-                // };
-                // let result: mlua::Value = execute_lua_script(
-                //     state.clone(),
-                //     self.ep.uri.clone(),
-                //     self.handler_lua.clone(),
-                //     input.clone(),
-                // )
-                // .await?;
-
-                // let mut response = Vec::new();
-                unimplemented!()
+            ResourceSpecs::DataScript { data_source: _, .. } => {
+                execute_lua_script(
+                    state.clone(),
+                    self.ep.uri.clone(),
+                    self.handler_lua.clone(),
+                    input.clone(),
+                )
+                .await
             }
         }
     }

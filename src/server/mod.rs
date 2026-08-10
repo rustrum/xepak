@@ -93,7 +93,7 @@ pub async fn init_server(
 
     let server = HttpServer::new(move || {
         let ep_config = endpoints.clone();
-        let app = App::new()
+        App::new()
             .app_data(Data::new(app_data.clone()))
             // .service(web::scope("/") ...
             .configure(|cfg: &mut ServiceConfig| {
@@ -101,11 +101,7 @@ pub async fn init_server(
                     cfg.service(eh);
                 }
             })
-            .wrap(Logger::default());
-        // let endpoint = web::scope("some/endpoint").configure(cfg_fn)
-        // web::sc
-        // app.service()
-        app
+            .wrap(Logger::default())
     })
     .bind((Ipv4Addr::UNSPECIFIED, port))
     .map_err(Arc::new)?

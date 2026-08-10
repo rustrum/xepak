@@ -30,6 +30,7 @@ pub enum XepakValue {
 
     Map(HashMap<String, XepakValue>),
 }
+
 impl XepakValue {
     /// Returns type associated with a current wrapped value.
     pub fn get_type(&self) -> XepakType {
@@ -46,7 +47,7 @@ impl XepakValue {
     }
 
     pub fn is_null(&self) -> bool {
-        if let Self::Null = self { true } else { false }
+        matches!(self, Self::Null)
     }
 
     pub fn from_str_as(v: &str, parse_as: XepakType) -> Result<Self, XepakDataError> {
@@ -213,12 +214,9 @@ impl XepakValue {
         Ok(match self {
             XepakValue::Null => vec![],
             XepakValue::Blob(v) => v.clone(),
-            XepakValue::Text(v) => {
-                let value = base64::engine::general_purpose::STANDARD
-                    .decode(v)
-                    .map_err(|e| XepakDataError::Decode(format!("{e}")))?;
-                value
-            }
+            XepakValue::Text(v) => base64::engine::general_purpose::STANDARD
+                .decode(v)
+                .map_err(|e| XepakDataError::Decode(format!("{e}")))?,
             _ => {
                 return Err(XepakDataError::ConvertValue(
                     self.get_type(),
@@ -257,6 +255,35 @@ impl XepakValue {
                 ));
             }
         })
+    }
+
+    pub fn to_type(&self, to_type: XepakType) -> Result<XepakValue, XepakDataError> {
+        let value = match to_type {
+            XepakType::Null => Self::Null,
+            XepakType::Boolean => Self::Boolean(self.as_bool()?),
+            XepakType::Int => Self::Integer(self.as_int()?),
+            XepakType::Float => Self::Float(self.as_float()?),
+            XepakType::Text => Self::Text(self.as_string()),
+            XepakType::Blob => Self::Blob(self.as_blob()?),
+            XepakType::Tuple => Self::Tuple(self.as_tuple()?),
+            XepakType::Map => Self::Map(self.as_map()?),
+        };
+        Ok(value)
+    }
+}
+
+impl PartialEq for XepakValue {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Boolean(l0), Self::Boolean(r0)) => l0 == r0,
+            (Self::Integer(l0), Self::Integer(r0)) => l0 == r0,
+            (Self::Float(l0), Self::Float(r0)) => l0 == r0,
+            (Self::Text(l0), Self::Text(r0)) => l0 == r0,
+            (Self::Blob(l0), Self::Blob(r0)) => l0 == r0,
+            (Self::Tuple(l0), Self::Tuple(r0)) => l0 == r0,
+            (Self::Map(l0), Self::Map(r0)) => l0 == r0,
+            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+        }
     }
 }
 
