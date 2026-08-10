@@ -213,10 +213,11 @@ impl Storage {
         request: &'q ResourceRequest<'q, RA>,
         pquery: &'q ParametrizedQuery<'q>,
         query: &'q Cow<'q, str>,
-    ) -> Result<Query<'q, Any, AnyArguments<'q>>, XepakError> {
+    ) -> Result<Query<'q, Any, AnyArguments>, XepakError> {
         tracing::debug!("Executing query: {}", pquery.get_query());
         tracing::debug!("Executing build: {}", query);
-        let mut sql_query = sqlx::query(query.as_ref());
+
+        let mut sql_query = sqlx::query(sqlx::AssertSqlSafe(query.as_ref()));
 
         tracing::debug!("Query arguments: {:?}", pquery.get_args());
         for argument_name in pquery.get_args() {
@@ -274,6 +275,6 @@ pub trait SqlxRequestArgs: StorageRequestArgs {
     fn bind_arg<'a>(
         &'a self,
         arg_name: &str,
-        query: sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments<'a>>,
-    ) -> Result<sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments<'a>>, XepakError>;
+        query: sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments>,
+    ) -> Result<sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments>, XepakError>;
 }
