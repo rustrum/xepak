@@ -227,7 +227,7 @@ impl EndpointHandler {
                 let rr = ResourceRequest::new(&query, input);
                 self.run_query(ds, rr).await
             }
-            ResourceSpecs::DataScript { data_source: _, .. } => {
+            ResourceSpecs::DataScript { .. } => {
                 execute_lua_script(
                     state.clone(),
                     self.ep.uri.clone(),

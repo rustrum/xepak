@@ -1,0 +1,8 @@
+[advisories]
+ignore = [
+    #Actix
+    "RUSTSEC-2025-0009",
+    "RUSTSEC-2025-0010",
+    # Reqwest mostly
+    "RUSTSEC-2024-0336",
+]

@@ -5,8 +5,8 @@ use super::XepakValue;
 impl XepakValue {
     pub fn bind_sqlx<'a>(
         self,
-        query: sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments<'a>>,
-    ) -> sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments<'a>> {
+        query: sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments>,
+    ) -> sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments> {
         match &self {
             XepakValue::Null => query.bind(None::<String>),
             XepakValue::Boolean(v) => query.bind(*v),

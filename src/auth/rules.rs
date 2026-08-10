@@ -51,10 +51,10 @@ impl AuthRules {
             },
             AuthRules::Id { .. } => self.clone(),
             AuthRules::And { nested } => Self::And {
-                nested: nested.iter().cloned().map(|v| v.normalize()).collect(),
+                nested: nested.iter().map(|v| v.normalize()).collect(),
             },
             AuthRules::Or { nested } => Self::And {
-                nested: nested.iter().cloned().map(|v| v.normalize()).collect(),
+                nested: nested.iter().map(|v| v.normalize()).collect(),
             },
         }
     }
