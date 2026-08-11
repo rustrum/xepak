@@ -2,16 +2,197 @@ mod common;
 
 use common::*;
 use reqwest::StatusCode;
-use std::collections::HashMap;
+use serde::Deserialize;
+use std::{collections::HashMap, path::PathBuf, str::FromStr as _};
+use xepak_rest::cfg::{load_conf_file, load_specs_from_dir};
 
 use serial_test::serial;
 
+// TODO: Need to add and test capability to ignore default pre-processors for particular endpoint
+
+#[derive(Deserialize, Debug)]
+struct AuthScriptRecord {
+    pub id: String,
+    pub roles: Vec<String>,
+    pub is_admin: bool,
+    pub is_manager: bool,
+}
+
+async fn check_script_auth(uri: &str, key: Option<&str>, expected: AuthScriptRecord) {
+    let headers = if let Some(k) = key {
+        HashMap::from([("x-api-key".to_string(), k.to_string())])
+    } else {
+        HashMap::new()
+    };
+
+    let response = client::get_resource(uri, HashMap::<String, String>::new(), headers).await;
+
+    assert!(
+        response.status().is_success(),
+        "Request must be accepted, got {}",
+        response.status()
+    );
+
+    let actual: AuthScriptRecord = client::extract_from_json(response, None).await;
+
+    assert_eq!(actual.id, expected.id, "id mismatch");
+    assert_eq!(actual.roles, expected.roles, "roles mismatch");
+    assert_eq!(actual.is_admin, expected.is_admin, "is_admin mismatch");
+    assert_eq!(
+        actual.is_manager, expected.is_manager,
+        "is_manager mismatch"
+    );
+}
+
 #[tokio::test]
 #[serial]
-async fn auth_public_endpoint() {
+async fn auth_script_arguments() {
     let _server = init_default_test_server(INIT_DELAY_DEFAULT).await;
 
-    const URI: &str = "/auth/posts/public";
+    const URI: &str = "/auth/script/info";
+
+    check_script_auth(
+        URI,
+        Some("BossKEY"),
+        AuthScriptRecord {
+            id: "boss".to_string(),
+            roles: vec!["ADMIN".to_string(), "MANAGER".to_string()],
+            is_admin: true,
+            is_manager: true,
+        },
+    )
+    .await;
+
+    check_script_auth(
+        URI,
+        Some("ManagerKEY"),
+        AuthScriptRecord {
+            id: "manager".to_string(),
+            roles: vec!["MANAGER".to_string()],
+            is_admin: false,
+            is_manager: true,
+        },
+    )
+    .await;
+
+    check_script_auth(
+        URI,
+        Some("AdminKEY"),
+        AuthScriptRecord {
+            id: "admin".to_string(),
+            roles: Vec::new(),
+            is_admin: false,
+            is_manager: false,
+        },
+    )
+    .await;
+
+    check_script_auth(
+        URI,
+        Some("UserKEY"),
+        AuthScriptRecord {
+            id: "user".to_string(),
+            roles: Vec::new(),
+            is_admin: false,
+            is_manager: false,
+        },
+    )
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+async fn auth_script_anon_arguments() {
+    let _server = init_default_test_server(INIT_DELAY_DEFAULT).await;
+
+    const URI: &str = "/auth/script/anon";
+
+    check_script_auth(
+        URI,
+        Some("BossKEY"),
+        AuthScriptRecord {
+            id: "boss".to_string(),
+            roles: vec!["ADMIN".to_string(), "MANAGER".to_string()],
+            is_admin: true,
+            is_manager: true,
+        },
+    )
+    .await;
+
+    check_script_auth(
+        URI,
+        None,
+        AuthScriptRecord {
+            id: "".to_string(),
+            roles: Vec::new(),
+            is_admin: false,
+            is_manager: false,
+        },
+    )
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+async fn auth_default_pre_processor() {
+    let _server = init_default_test_server(INIT_DELAY_DEFAULT).await;
+
+    const URI: &str = "/auth/script/public";
+
+    // Without default pre-processors, public endpoint should be accessible without key
+    let response = client::get(URI).await;
+    assert!(
+        response.status().is_success(),
+        "Public endpoint must be accessible without API key when no default pre-processor is set, got {}",
+        response.status()
+    );
+
+    drop(_server);
+
+    let config = load_conf_file(CONFIG_FILE).expect("Should have valid config");
+    let specs_dir = PathBuf::from_str(SPECS_DIR).expect("Specs dir must exists");
+    let mut specs = load_specs_from_dir(specs_dir).expect("Should have valid specs");
+
+    use xepak_rest::server::processor::PreProcessor;
+    specs
+        .default_pre_processors
+        .push(PreProcessor::SimpleAuthentication {
+            anonymous_auth: false,
+        });
+
+    let _server = XepakTestServer::start(config, specs, INIT_DELAY_DEFAULT).await;
+
+    // With default pre-processor, public endpoint should require API key
+    let response = client::get(URI).await;
+    assert_eq!(
+        StatusCode::FORBIDDEN,
+        response.status(),
+        "Public endpoint must be rejected without API key when default pre-processor is set"
+    );
+
+    // Valid API keys should still work
+    let valid_keys = ["BossKEY", "ManagerKEY", "AdminKEY", "UserKEY"];
+    for key in valid_keys {
+        let response = client::get_resource(
+            URI,
+            HashMap::<String, String>::new(),
+            HashMap::from([("x-api-key".to_string(), key.to_string())]),
+        )
+        .await;
+        assert!(
+            response.status().is_success(),
+            "Valid key \"{key}\" must be accepted with default pre-processor, got {}",
+            response.status()
+        );
+    }
+}
+
+#[tokio::test]
+#[serial]
+async fn auth_require_key() {
+    let _server = init_default_test_server(INIT_DELAY_DEFAULT).await;
+
+    const URI: &str = "/auth/posts/info";
 
     // No API key provided
     let response = client::get(URI).await;

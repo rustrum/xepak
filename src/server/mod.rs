@@ -129,7 +129,7 @@ pub struct RequestInput {
 
     /// Authentication data for current request.
     /// Shold be provided by an appropriate pre-processor.
-    auth: Arc<Option<(XepakValue, HashSet<String>)>>,
+    pub(crate) auth: Arc<Option<(XepakValue, HashSet<String>)>>,
 
     limit: usize,
 

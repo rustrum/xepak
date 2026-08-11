@@ -78,6 +78,44 @@ impl LuaRequestContext {
             .set_arg_with_schema(arg_name, xvalue, true)
             .map_err(ExternalError::into_lua_err)
     }
+
+    fn get_auth_id(lua: &Lua, this: &Self, _: ()) -> mlua::Result<Value> {
+        Ok(this
+            .input
+            .auth
+            .as_ref()
+            .as_ref()
+            .map(|(k, _)| k.clone().into_lua(lua))
+            .transpose()?
+            .unwrap_or(Value::Nil))
+    }
+
+    fn get_auth_roles(lua: &Lua, this: &Self, _: ()) -> mlua::Result<Value> {
+        let result = this
+            .input
+            .auth
+            .as_ref()
+            .as_ref()
+            .map(|(_, roles)| roles.iter().cloned().collect::<Vec<String>>().into_lua(lua))
+            .transpose()?;
+        if let Some(v) = result {
+            Ok(v)
+        } else {
+            Ok(Value::Table(lua.create_table()?))
+        }
+    }
+
+    fn has_auth_role(_: &Lua, this: &Self, role_name: String) -> mlua::Result<Value> {
+        let role_name = role_name.trim().to_uppercase();
+        let result = this
+            .input
+            .auth
+            .as_ref()
+            .as_ref()
+            .map(|(_, roles)| roles.contains(&role_name))
+            .unwrap_or(false);
+        Ok(Value::Boolean(result))
+    }
 }
 
 impl UserData for LuaRequestContext {
@@ -86,6 +124,10 @@ impl UserData for LuaRequestContext {
         methods.add_method("has_arg", Self::has_arg);
         methods.add_method("get_arg", Self::get_arg);
         methods.add_method_mut("set_arg", Self::set_arg);
+
+        methods.add_method("get_auth_id", Self::get_auth_id);
+        methods.add_method("get_auth_roles", Self::get_auth_roles);
+        methods.add_method("has_auth_role", Self::has_auth_role);
     }
 }
 

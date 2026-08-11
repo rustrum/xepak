@@ -5,4 +5,6 @@ ignore = [
     "RUSTSEC-2025-0010",
     # Reqwest mostly
     "RUSTSEC-2024-0336",
+    #Rhai
+    "RUSTSEC-2026-0249",
 ]
