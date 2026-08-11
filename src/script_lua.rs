@@ -175,7 +175,7 @@ impl IntoLua for XepakValue {
 }
 
 impl FromLua for XepakValue {
-    fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
+    fn from_lua(value: Value, _lua: &Lua) -> mlua::Result<Self> {
         match value {
             Value::Nil => Ok(XepakValue::Null),
             Value::Boolean(v) => Ok(XepakValue::Boolean(v)),
@@ -188,9 +188,13 @@ impl FromLua for XepakValue {
             )),
             // Tuple is a table without keys
             Value::Table(t) if quick_table_is_tuple(&t) => {
+                let len = t.len()?;
                 let mut tuple = Vec::new();
-                for item in t.sequence_values::<Value>() {
-                    tuple.push(XepakValue::from_lua(item?, lua)?);
+                for i in 1..=len {
+                    // This is how to workaround nill values in sequences
+                    // iterating over sequence could stop on nill
+                    let item: XepakValue = t.raw_get(i)?;
+                    tuple.push(item);
                 }
                 Ok(XepakValue::Tuple(tuple))
             }
@@ -213,7 +217,7 @@ impl FromLua for XepakValue {
                             )));
                         }
                     };
-                    map.insert(key, XepakValue::from_lua(v, lua)?);
+                    map.insert(key, XepakValue::from_lua(v, _lua)?);
                 }
                 Ok(XepakValue::Map(map))
             }

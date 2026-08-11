@@ -24,9 +24,30 @@ type = "data_script"
 script = """
 return {
     null_val = nil,
+    bool_val = false,
     int_val = 1,
     float_val = 2.2,
     string_val = "String from LUA",
+}
+"""
+
+
+[[endpoint]]
+uri = "/alltypes/script/tuple"
+
+[endpoint.resource]
+type = "data_script"
+script = """
+if ctx:has_arg("empty") then
+    return {}
+end
+
+return {
+    nil,
+    true,
+    1,
+    2.2,
+    "String from LUA"
 }
 """
 
