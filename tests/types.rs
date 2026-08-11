@@ -155,6 +155,7 @@ async fn response_json_cbor_with_nulls() {
 async fn script_response_types() {
     let _server = init_default_test_server(INIT_DELAY_DEFAULT).await;
 
+    // Map response
     let response = client::get("/alltypes/script/table").await;
     let value: XepakValue = client::extract_from_json(response, Some(StatusCode::OK)).await;
 
@@ -163,7 +164,35 @@ async fn script_response_types() {
 
     // Nill values are considered abscent in mlua
     assert!(!value.contains_key("null_val"));
+    assert!(matches!(value["bool_val"], XepakValue::Boolean(false)));
     assert!(matches!(value["int_val"], XepakValue::Integer(1)));
     assert!(matches!(value["float_val"], XepakValue::Float(2.2)));
     assert!(matches!(&value["string_val"], XepakValue::Text(txt) if txt == "String from LUA"));
+
+    // Tuple response
+    let response = client::get("/alltypes/script/tuple").await;
+    let value: XepakValue = client::extract_from_json(response, Some(StatusCode::OK)).await;
+
+    assert!(value.is_tuple());
+    let value = value.as_tuple().unwrap();
+
+    // Nill values in sequences are bad but xepak could handle this
+    assert_eq!(
+        value,
+        vec![
+            XepakValue::Null,
+            XepakValue::Boolean(true),
+            XepakValue::Integer(1),
+            XepakValue::Float(2.2),
+            XepakValue::Text("String from LUA".to_string())
+        ]
+    );
+
+    // Empty tuple
+    let response = client::get("/alltypes/script/tuple?empty=1").await;
+    let value: XepakValue = client::extract_from_json(response, Some(StatusCode::OK)).await;
+
+    assert!(value.is_tuple());
+    let value = value.as_tuple().unwrap();
+    assert!(value.is_empty());
 }
