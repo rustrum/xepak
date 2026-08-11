@@ -1,14 +1,58 @@
 [[endpoint]]
-uri = "/auth/posts/public"
+uri = "/auth/script/public"
+
+[endpoint.resource]
+type = "data_script"
+script = """
+return {
+    id = ctx:get_auth_id(),
+    roles = ctx:get_auth_roles(),
+    is_admin = ctx:has_auth_role("admin"),
+    is_manager = ctx:has_auth_role("manager"),
+}
+"""
+
+
+[[endpoint]]
+uri = "/auth/script/info"
 
 processor = [
     { type = "simple_authentication" },
 ]
 
-resource = {
-    type = "query",
-    query = "SELECT * FROM posts",
+[endpoint.resource]
+type = "data_script"
+script = """
+return {
+    id = ctx:get_auth_id(),
+    roles = ctx:get_auth_roles(),
+    is_admin = ctx:has_auth_role("admin"),
+    is_manager = ctx:has_auth_role("manager"),
 }
+"""
+
+
+[[endpoint]]
+uri = "/auth/script/anon"
+
+processor = [
+    {
+        type = "simple_authentication",
+        anonymous_auth = true,
+    },
+]
+
+[endpoint.resource]
+type = "data_script"
+script = """
+return {
+    id = ctx:get_auth_id(),
+    roles = ctx:get_auth_roles(),
+    is_admin = ctx:has_auth_role("admin"),
+    is_manager = ctx:has_auth_role("manager"),
+}
+"""
+
 
 [[endpoint]]
 uri = "/auth/posts/boss"
@@ -26,6 +70,7 @@ resource = {
     query = "SELECT * FROM posts",
 }
 
+
 [[endpoint]]
 uri = "/auth/posts/manager"
 
@@ -42,6 +87,7 @@ resource = {
     query = "SELECT * FROM posts",
 }
 
+
 [[endpoint]]
 uri = "/auth/posts/admin"
 
@@ -57,3 +103,4 @@ resource = {
     type = "query",
     query = "SELECT * FROM posts",
 }
+
