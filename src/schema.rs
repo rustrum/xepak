@@ -1,3 +1,4 @@
+//! TODO: Schema stuff should be moved to xepak_data module
 use std::collections::HashMap;
 
 use serde::Deserialize;

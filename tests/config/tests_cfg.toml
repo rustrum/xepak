@@ -12,3 +12,11 @@ auth = [
     { id = "admin", key = "AdminKEY", from_env = false },
     { id = "user", key = "UserKEY", from_env = false },
 ]
+
+int_val = 1
+float_val = 2.2
+string_val = "registry_val"
+map_val = {
+    host = "localhost",
+    "weird.key" = "some_value",
+}

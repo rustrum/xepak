@@ -34,14 +34,36 @@ pub fn lua_load_engine(app_state: &XepakAppData) -> Result<Lua, XepakError> {
 }
 
 /// App data is stored inside each Lua VM.
+#[derive(Clone)]
 struct LuaAppData {
-    state: XepakAppData,
+    data: Arc<XepakAppData>,
 }
 
 impl LuaAppData {
     fn load(lua: &Lua) -> mlua::Result<mlua::AppDataRef<'_, LuaAppData>> {
         lua.app_data_ref::<LuaAppData>()
             .ok_or_else(|| LuaError::runtime("LuaAppData not initialized (o_O)."))
+    }
+
+    fn get_secret(lua: &Lua, this: &Self, key: String) -> mlua::Result<Value> {
+        match this.data.get_secret(&key) {
+            Some(v) => v.clone().into_lua(lua),
+            None => Ok(Value::Nil),
+        }
+    }
+
+    fn get_registry_value(lua: &Lua, this: &Self, key: String) -> mlua::Result<Value> {
+        match this.data.get_registry_value(&key) {
+            Some(v) => v.clone().into_lua(lua),
+            None => Ok(Value::Nil),
+        }
+    }
+}
+
+impl UserData for LuaAppData {
+    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("get_secret", Self::get_secret);
+        methods.add_method("get_registry_value", Self::get_registry_value);
     }
 }
 
@@ -279,12 +301,15 @@ pub fn build_lua_function(lua: &Lua, script: &str) -> Result<Function, XepakErro
 
 /// Creates a Lua VM and registers all globals.
 pub fn build_lua_engine(app_state: &XepakAppData) -> Result<Lua, XepakError> {
+    let app_data = LuaAppData {
+        data: Arc::new(app_state.clone()),
+    };
     let lua = Lua::new();
 
     // This state can be accesses from any rust function
-    lua.set_app_data(LuaAppData {
-        state: app_state.clone(),
-    });
+    lua.set_app_data(app_data.clone());
+
+    lua.globals().set("app", app_data)?;
 
     lua.globals()
         .set("query_builder", lua.create_function(LuaQueryBuilder::new)?)?;
@@ -350,7 +375,7 @@ async fn storage_query(lua: Lua, (query, args): (String, Value)) -> mlua::Result
     let input = prepare_args(&lua, args)?;
     let state = {
         let app = LuaAppData::load(&lua)?;
-        app.state.clone()
+        app.data.clone()
     };
     let Some(ds) = state.get_data_source("") else {
         return Err(XepakError::Cfg("Data source does not exist".to_string()).into_lua_err());
@@ -365,7 +390,7 @@ async fn storage_query_one(lua: Lua, (query, args): (String, Value)) -> mlua::Re
     let input = prepare_args(&lua, args)?;
     let state = {
         let app = LuaAppData::load(&lua)?;
-        app.state.clone()
+        app.data.clone()
     };
     let Some(ds) = state.get_data_source("") else {
         return Err(XepakError::Cfg("Data source does not exist".to_string()).into_lua_err());
@@ -386,7 +411,7 @@ async fn storage_query_value(lua: Lua, (query, args): (String, Value)) -> mlua::
     let input = prepare_args(&lua, args)?;
     let state = {
         let app = LuaAppData::load(&lua)?;
-        app.state.clone()
+        app.data.clone()
     };
     let Some(ds) = state.get_data_source("") else {
         return Err(XepakError::Cfg("Data source does not exist".to_string()).into_lua_err());

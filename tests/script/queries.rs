@@ -1,7 +1,6 @@
-mod common;
+use super::common::domain::{ErrorResponse, PostsRecord};
+use super::common::*;
 
-use common::domain::{ErrorResponse, PostsRecord};
-use common::*;
 use reqwest::StatusCode;
 use serde_json::Value as JsonValue;
 

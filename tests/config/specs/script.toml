@@ -1,0 +1,27 @@
+[[endpoint]]
+uri = "/script/lua/secrets"
+
+[endpoint.resource]
+type = "data_script"
+script = """
+return {
+    secret_1 = app:get_secret("secret1"),
+    secret_2 = app:get_secret("secret2"),
+    secret_3 = app:get_secret("secret3"),
+    secret_4 = app:get_secret("secret4"),
+}
+"""
+
+[[endpoint]]
+uri = "/script/lua/registry"
+
+[endpoint.resource]
+type = "data_script"
+script = """
+return {
+    int_val = app:get_registry_value("int_val"),
+    float_val = app:get_registry_value("float_val"),
+    string_val = app:get_registry_value("string_val"),
+    map_val = app:get_registry_value("map_val"),
+}
+"""
