@@ -6,14 +6,6 @@ Cache should have background task to clean it from time to time.
 
 # Configuration
 
-### Registry
-
-Should have some kind of a registry of maps which will be sharead across scripts.
-
-Use cases:
-- auth regirsty
-- secrets (including loading from env)
-- some k-v data for lua scripts
 
 
 # Optimization 

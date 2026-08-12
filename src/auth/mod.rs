@@ -1,9 +1,7 @@
 pub mod rules;
 pub mod token;
 
-use std::collections::{HashMap, HashSet};
-
-use serde::Deserialize;
+use std::collections::HashSet;
 
 use crate::{
     XepakError,
@@ -11,81 +9,7 @@ use crate::{
     server::processor::{PRIORITY_NORMAL, PreProcessorHandler, adjust_priority},
 };
 
-pub type SimpleAuthRegistry = HashMap<String, (String, HashSet<String>)>;
-
 pub const API_KEY_HEADER: &str = "x-api-key";
-
-/// The most simple toml based auth configuration.
-#[derive(Clone, Debug, Deserialize)]
-pub struct AuthSpecs {
-    id: String,
-
-    key: String,
-
-    #[serde(default)]
-    from_env: bool,
-
-    #[serde(default)]
-    roles: Vec<String>,
-}
-
-impl AuthSpecs {
-    fn put_to_registry(&self, registry: &mut SimpleAuthRegistry) -> Result<(), XepakError> {
-        let api_key = if self.from_env {
-            match std::env::var(&self.key) {
-                Ok(v) => v,
-                Err(err) => {
-                    return Err(XepakError::Cfg(format!(
-                        "Can't load API key from ENV variable \"{}\" {}",
-                        self.key, err
-                    )));
-                }
-            }
-        } else {
-            self.key.clone()
-        }
-        .trim()
-        .to_string();
-
-        let roles = self.roles.iter().map(|v| v.to_uppercase()).collect();
-
-        // With current check we could have only one empty id record with empty key
-        if api_key.is_empty() && !self.id.trim().is_empty() {
-            return Err(XepakError::Cfg(format!(
-                "Empty API key allowed only for anonymous auth! ID must be empty not \"{}\"",
-                self.id
-            )));
-        }
-
-        registry.insert(api_key, (self.id.trim().to_string(), roles));
-
-        Ok(())
-    }
-}
-
-pub fn prepare_registry_data(
-    mut reg: HashMap<String, toml::Value>,
-) -> Result<SimpleAuthRegistry, XepakError> {
-    let auth_registry = match reg.remove("auth") {
-        Some(v) => auth_reg_from_toml(v)?,
-        None => Default::default(),
-    };
-
-    Ok(auth_registry)
-}
-
-pub fn auth_reg_from_toml(auth_toml: toml::Value) -> Result<SimpleAuthRegistry, XepakError> {
-    let specs = Vec::<AuthSpecs>::deserialize(auth_toml)
-        .map_err(|e| XepakError::Cfg(format!("Wrong registry.auth format {}", e)))?;
-
-    let mut registry: SimpleAuthRegistry = Default::default();
-
-    for s in specs {
-        s.put_to_registry(&mut registry)?;
-    }
-
-    Ok(registry)
-}
 
 /// Authenticates requests using [`SimpleAuthSpecs`].
 pub struct SimpleAuthenticationProcessor {

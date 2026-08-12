@@ -1,6 +1,5 @@
-mod common;
+use super::common::*;
 
-use common::*;
 use reqwest::StatusCode;
 use serde_json::Value as JsonValue;
 
