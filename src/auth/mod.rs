@@ -1,10 +1,9 @@
 pub mod rules;
 pub mod token;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use serde::Deserialize;
-use sqlx_core::HashMap;
 
 use crate::{
     XepakError,
@@ -18,7 +17,7 @@ pub const API_KEY_HEADER: &str = "x-api-key";
 
 /// The most simple toml based auth configuration.
 #[derive(Clone, Debug, Deserialize)]
-pub struct SimpleAuthSpecs {
+pub struct AuthSpecs {
     id: String,
 
     key: String,
@@ -30,7 +29,7 @@ pub struct SimpleAuthSpecs {
     roles: Vec<String>,
 }
 
-impl SimpleAuthSpecs {
+impl AuthSpecs {
     fn put_to_registry(&self, registry: &mut SimpleAuthRegistry) -> Result<(), XepakError> {
         let api_key = if self.from_env {
             match std::env::var(&self.key) {
@@ -64,7 +63,21 @@ impl SimpleAuthSpecs {
     }
 }
 
-pub fn auth_specs_to_registry(specs: &[SimpleAuthSpecs]) -> Result<SimpleAuthRegistry, XepakError> {
+pub fn prepare_registry_data(
+    mut reg: HashMap<String, toml::Value>,
+) -> Result<SimpleAuthRegistry, XepakError> {
+    let auth_registry = match reg.remove("auth") {
+        Some(v) => auth_reg_from_toml(v)?,
+        None => Default::default(),
+    };
+
+    Ok(auth_registry)
+}
+
+pub fn auth_reg_from_toml(auth_toml: toml::Value) -> Result<SimpleAuthRegistry, XepakError> {
+    let specs = Vec::<AuthSpecs>::deserialize(auth_toml)
+        .map_err(|e| XepakError::Cfg(format!("Wrong registry.auth format {}", e)))?;
+
     let mut registry: SimpleAuthRegistry = Default::default();
 
     for s in specs {

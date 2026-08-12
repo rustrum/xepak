@@ -1,3 +1,9 @@
+# App state
+
+## In memory cache
+Should have some kind of LRU cache accessible for all scripts.
+Cache should have background task to clean it from time to time.
+
 # Configuration
 
 ### Registry

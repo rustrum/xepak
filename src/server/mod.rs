@@ -14,7 +14,7 @@ use actix_web::web::ServiceConfig;
 use actix_web::{HttpServer, web::Data};
 
 use crate::XepakError;
-use crate::auth::{SimpleAuthRegistry, auth_specs_to_registry};
+use crate::auth::{SimpleAuthRegistry, prepare_registry_data};
 use crate::cfg::{XepakConf, XepakSpecs};
 use crate::schema::{Schema, convert_with_schema};
 use crate::server::handler::EndpointHandler;
@@ -62,7 +62,7 @@ pub async fn init_server(
 
     let storage_links = init_storage_connectors(&conf_dir, &config.storage).await?;
 
-    let simple_auth_registry = auth_specs_to_registry(&config.simple_auth)?;
+    let simple_auth_registry = prepare_registry_data(config.registry)?;
 
     tracing::debug!("Simple auth registry {simple_auth_registry:?}");
 

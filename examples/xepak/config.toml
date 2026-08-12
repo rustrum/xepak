@@ -1,6 +1,16 @@
-# Want to have some property like 
-# auth = { type="auth_type", some data }
-simple_auth = [
+[[storage]]
+# id = "default"
+type = "sqlite"
+# file = "./db.sqlite3"
+# file = "../db.sqlite3"
+file = ""
+create_db = true
+wal = true
+migrations_dir = "sqlite/migrations"
+
+
+[registry]
+auth = [
     { id = "boss", key = "BossKEY", from_env = false, roles = [
         "ADMIN",
         "MANAGER",
@@ -11,12 +21,3 @@ simple_auth = [
     { id = "user", key = "UserKEY", from_env = false },
 ]
 
-[[storage]]
-# id = "default"
-type = "sqlite"
-# file = "./db.sqlite3"
-# file = "../db.sqlite3"
-file = ""
-create_db = true
-wal = true
-migrations_dir = "sqlite/migrations"
