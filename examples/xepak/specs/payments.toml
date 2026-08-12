@@ -10,10 +10,10 @@ query = "SELECT * FROM payments LIMIT {{-limit-}} OFFSET {{-offset-}}"
 uri = "/payment/{payment_id:\\d+}/revalidate"
 single_record_response = true
 
-[[endpoint.processor]]
+[[endpoint.pre_processors]]
 type = "simple_authentication"
 
-[[endpoint.processor]]
+[[endpoint.pre_processors]]
 type = "authorize"
 rules = "#boss OR (ADMIN AND MANAGER)"
 

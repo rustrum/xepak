@@ -14,9 +14,22 @@ return {
 
 
 [[endpoint]]
+uri = "/auth/script/nodef"
+pre_processors_ignore_default = true
+
+[endpoint.resource]
+type = "data_script"
+script = """
+return {
+    always = "public"
+}
+"""
+
+
+[[endpoint]]
 uri = "/auth/script/info"
 
-processor = [
+pre_processors = [
     { type = "simple_authentication" },
 ]
 
@@ -35,7 +48,7 @@ return {
 [[endpoint]]
 uri = "/auth/script/anon"
 
-processor = [
+pre_processors = [
     {
         type = "simple_authentication",
         anonymous_auth = true,
@@ -57,7 +70,7 @@ return {
 [[endpoint]]
 uri = "/auth/posts/boss"
 
-processor = [
+pre_processors = [
     { type = "simple_authentication" },
     {
         type = "authorize",
@@ -74,7 +87,7 @@ resource = {
 [[endpoint]]
 uri = "/auth/posts/manager"
 
-processor = [
+pre_processors = [
     { type = "simple_authentication" },
     {
         type = "authorize",
@@ -91,7 +104,7 @@ resource = {
 [[endpoint]]
 uri = "/auth/posts/admin"
 
-processor = [
+pre_processors = [
     { type = "simple_authentication" },
     {
         type = "authorize",
