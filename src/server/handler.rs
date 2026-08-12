@@ -90,17 +90,18 @@ impl EndpointHandler {
 
         let mut order = 0u16;
         // Default pre processors
-        for specs in &app.default_pre_processors {
-            order += 1;
-            processors.push(build_pre_processor(
-                order,
-                specs,
-                &app.shared_pre_processors,
-            )?);
+        if !ep.pre_processors_ignore_default {
+            for specs in &app.default_pre_processors {
+                order += 1;
+                processors.push(build_pre_processor(
+                    order,
+                    specs,
+                    &app.shared_pre_processors,
+                )?);
+            }
         }
-
         // Pre processors for current handler
-        for specs in &ep.processor {
+        for specs in &ep.pre_processors {
             order += 1;
             processors.push(build_pre_processor(
                 order,

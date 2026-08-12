@@ -1,19 +1,22 @@
 mod common;
 
 use common::*;
+use maplit::hashset;
 use reqwest::StatusCode;
 use serde::Deserialize;
-use std::{collections::HashMap, path::PathBuf, str::FromStr as _};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+    str::FromStr as _,
+};
 use xepak_rest::cfg::{load_conf_file, load_specs_from_dir};
 
 use serial_test::serial;
 
-// TODO: Need to add and test capability to ignore default pre-processors for particular endpoint
-
 #[derive(Deserialize, Debug)]
 struct AuthScriptRecord {
     pub id: String,
-    pub roles: Vec<String>,
+    pub roles: HashSet<String>,
     pub is_admin: bool,
     pub is_manager: bool,
 }
@@ -56,7 +59,7 @@ async fn auth_script_arguments() {
         Some("BossKEY"),
         AuthScriptRecord {
             id: "boss".to_string(),
-            roles: vec!["ADMIN".to_string(), "MANAGER".to_string()],
+            roles: hashset! {"ADMIN".to_string(), "MANAGER".to_string()},
             is_admin: true,
             is_manager: true,
         },
@@ -68,7 +71,7 @@ async fn auth_script_arguments() {
         Some("ManagerKEY"),
         AuthScriptRecord {
             id: "manager".to_string(),
-            roles: vec!["MANAGER".to_string()],
+            roles: hashset! {"MANAGER".to_string()},
             is_admin: false,
             is_manager: true,
         },
@@ -80,7 +83,7 @@ async fn auth_script_arguments() {
         Some("AdminKEY"),
         AuthScriptRecord {
             id: "admin".to_string(),
-            roles: Vec::new(),
+            roles: Default::default(),
             is_admin: false,
             is_manager: false,
         },
@@ -92,7 +95,7 @@ async fn auth_script_arguments() {
         Some("UserKEY"),
         AuthScriptRecord {
             id: "user".to_string(),
-            roles: Vec::new(),
+            roles: Default::default(),
             is_admin: false,
             is_manager: false,
         },
@@ -112,7 +115,7 @@ async fn auth_script_anon_arguments() {
         Some("BossKEY"),
         AuthScriptRecord {
             id: "boss".to_string(),
-            roles: vec!["ADMIN".to_string(), "MANAGER".to_string()],
+            roles: hashset! {"ADMIN".to_string(), "MANAGER".to_string()},
             is_admin: true,
             is_manager: true,
         },
@@ -124,12 +127,21 @@ async fn auth_script_anon_arguments() {
         None,
         AuthScriptRecord {
             id: "".to_string(),
-            roles: Vec::new(),
+            roles: Default::default(),
             is_admin: false,
             is_manager: false,
         },
     )
     .await;
+}
+
+async fn assert_nodef_access() {
+    let response = client::get("/auth/script/nodef").await;
+    assert!(
+        response.status().is_success(),
+        "Nodef must be always accessible. Got response {}",
+        response.status()
+    );
 }
 
 #[tokio::test]
@@ -147,8 +159,11 @@ async fn auth_default_pre_processor() {
         response.status()
     );
 
+    assert_nodef_access().await;
+
     drop(_server);
 
+    // Now adding default auth pre-processor to configuration
     let config = load_conf_file(CONFIG_FILE).expect("Should have valid config");
     let specs_dir = PathBuf::from_str(SPECS_DIR).expect("Specs dir must exists");
     let mut specs = load_specs_from_dir(specs_dir).expect("Should have valid specs");
@@ -185,6 +200,9 @@ async fn auth_default_pre_processor() {
             response.status()
         );
     }
+
+    // This one skips default pre-processors so it should be public
+    assert_nodef_access().await;
 }
 
 #[tokio::test]
@@ -192,7 +210,7 @@ async fn auth_default_pre_processor() {
 async fn auth_require_key() {
     let _server = init_default_test_server(INIT_DELAY_DEFAULT).await;
 
-    const URI: &str = "/auth/posts/info";
+    const URI: &str = "/auth/script/info";
 
     // No API key provided
     let response = client::get(URI).await;

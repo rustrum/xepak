@@ -29,7 +29,7 @@ title = { type = "text", scope = "input", required = true, validate = [
 content = { type = "text", apply_to = "all" }
 
 # Access check and cache could also be a processor I guess ?
-[[endpoint.processor]]
+[[endpoint.pre_processors]]
 type = "parse_body_args"
 
 [endpoint.resource]

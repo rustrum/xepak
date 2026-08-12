@@ -151,9 +151,14 @@ pub struct EndpointSpecs {
     #[serde(default)]
     pub single_record_response: bool,
 
+    /// Do not use default pre processors
+    /// for the current endpoint.
+    #[serde(default)]
+    pub pre_processors_ignore_default: bool,
+
     /// This logic handle requests to extract/validate data
     #[serde(default)]
-    pub processor: Vec<PreProcessor>,
+    pub pre_processors: Vec<PreProcessor>,
 
     #[serde(default)]
     pub strict_schema: bool,
