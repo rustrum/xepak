@@ -9,8 +9,7 @@ use bon::Builder;
 use serde::Deserialize;
 
 use crate::{
-    XepakError, auth::SimpleAuthSpecs, schema::Schema, server::processor::PreProcessor,
-    storage::StorageSettings,
+    XepakError, schema::Schema, server::processor::PreProcessor, storage::StorageSettings,
 };
 
 /// Main configuration file that properties could be overwritten via ENV or not ? (TODO).
@@ -29,7 +28,7 @@ pub struct XepakConf {
     pub storage: Vec<StorageSettings>,
 
     #[serde(default)]
-    pub simple_auth: Vec<SimpleAuthSpecs>,
+    pub registry: HashMap<String, toml::Value>,
 }
 
 impl XepakConf {
