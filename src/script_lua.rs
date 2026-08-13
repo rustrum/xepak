@@ -58,12 +58,35 @@ impl LuaAppData {
             None => Ok(Value::Nil),
         }
     }
+
+    async fn cache_get(
+        lua: Lua,
+        this: mlua::UserDataRef<Self>,
+        key: String,
+    ) -> mlua::Result<Value> {
+        match this.data.cache_get(&key).await {
+            Some(v) => v.into_lua(&lua),
+            None => Ok(Value::Nil),
+        }
+    }
+
+    async fn cache_set(
+        _lua: Lua,
+        this: mlua::UserDataRef<Self>,
+        (key, value): (String, XepakValue),
+    ) -> mlua::Result<()> {
+        this.data.cache_insert(key, value).await;
+        Ok(())
+    }
 }
 
 impl UserData for LuaAppData {
     fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("get_secret", Self::get_secret);
         methods.add_method("get_registry_value", Self::get_registry_value);
+
+        methods.add_async_method("cache_get", Self::cache_get);
+        methods.add_async_method("cache_set", Self::cache_set);
     }
 }
 

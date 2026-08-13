@@ -25,3 +25,26 @@ return {
     map_val = app:get_registry_value("map_val"),
 }
 """
+
+[[endpoint]]
+uri = "/script/lua/cache/get/{key:\\w+}"
+
+[endpoint.resource]
+type = "data_script"
+script = """
+
+return {
+    app:cache_get(ctx:get_arg("key"))
+}
+"""
+
+[[endpoint]]
+uri = "/script/lua/cache/set/{key:\\w+}/{value:\\w+}"
+
+[endpoint.resource]
+type = "data_script"
+script = """
+app:cache_set(ctx:get_arg("key"), ctx:get_arg("value"))
+return {}
+"""
+
