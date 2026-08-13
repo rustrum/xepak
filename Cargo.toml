@@ -13,8 +13,8 @@ keywords = ["api", "rest", "db", "proxy", "sql"]
 
 [workspace.dependencies]
 async-lock = { version = "3.4", features = ["std"] }
+base64 = "0.22.1"
 env_logger = "0.11"
-rhai = { version = "1.25.1", features = ["sync", "no_custom_syntax", "serde"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 serde_urlencoded = "0.7"
@@ -39,16 +39,21 @@ default = ["server"]
 server = ["getopt3"]
 
 [dependencies]
+base64.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_urlencoded.workspace = true
 toml.workspace = true
 
-base64 = "0.22.1"
+actix-router = "0.5"
+actix-web = { version = "4.14.1", features = ["rustls"] }
 bon = "3.9.1"
 cbor2 = "1.1.4"
+futures-util = "0.3.34"
+getopt3 = { version = "2.5.0", optional = true }
 # async-trait = "0.1.89"
 mlua = { version = "0.11", features = ["lua55", "vendored", "async", "send"] }
+moka = { version = "0.12.16", features = ["future"] }
 rhai = { version = "1.25", features = ["sync", "no_custom_syntax"] }
 # rhai = { version = "1.23", features = ["sync", "no_custom_syntax", "serde"] }
 sqlx = { version = "0.9", features = ["runtime-tokio", "sqlite"] }
@@ -59,10 +64,9 @@ tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 
-actix-router = "0.5"
-actix-web = { version = "4.14.1", features = ["rustls"] }
 
-getopt3 = { version = "2.5.0", optional = true }
+
+
 
 [dev-dependencies]
 cbor2 = "1.1.4"

@@ -1,3 +1,4 @@
+pub mod cache;
 pub mod handler;
 pub mod input;
 pub mod processor;
@@ -7,6 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::net::Ipv4Addr;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 use actix_web::App;
 use actix_web::dev::Server;
@@ -17,6 +19,7 @@ use actix_web::{HttpServer, web::Data};
 
 use crate::XepakError;
 use crate::cfg::{XepakConf, XepakSpecs};
+use crate::server::cache::AppCache;
 use crate::server::handler::EndpointHandler;
 use crate::server::processor::PreProcessor;
 use crate::server::registry::AppRegistry;
@@ -39,6 +42,8 @@ pub struct XepakAppData {
     default_pre_processors: Vec<PreProcessor>,
 
     registry: AppRegistry,
+
+    cache: AppCache,
 }
 
 impl XepakAppData {
@@ -55,6 +60,14 @@ impl XepakAppData {
     }
     pub fn get_registry_value(&self, key: &str) -> Option<&XepakValue> {
         self.registry.data.get(key)
+    }
+
+    pub async fn cache_get(&self, key: &str) -> Option<XepakValue> {
+        self.cache.get(key).await
+    }
+
+    pub async fn cache_insert(&self, key: String, value: XepakValue) {
+        self.cache.insert(key, value).await
     }
 }
 
@@ -78,7 +91,10 @@ pub async fn init_server(
         registry: AppRegistry::try_from(config.registry)?,
         shared_pre_processors: specs.shared_pre_processors,
         default_pre_processors: specs.default_pre_processors,
+        cache: AppCache::new(10_000, Duration::from_mins(5)),
     };
+
+    cache_cleanup(app_data.cache.clone());
     // let data: Data<ApateState> = Data::new(config.into_state());
 
     // let mut app = App::new()
@@ -115,6 +131,19 @@ pub async fn init_server(
     .run();
 
     Ok(server)
+}
+
+fn cache_cleanup(cache: AppCache) {
+    tokio::spawn(async move {
+        // Use an interval instead of sleep to prevent timing drift
+        let mut interval = tokio::time::interval(Duration::from_secs(60));
+
+        loop {
+            // The first tick completes immediately, so we skip it or just let it run
+            interval.tick().await;
+            cache.cleanup().await;
+        }
+    });
 }
 
 pub fn to_error_object(err: XepakError) -> (StatusCode, XepakValue) {

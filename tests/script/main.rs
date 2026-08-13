@@ -85,3 +85,22 @@ async fn script_access_secrets_registry() {
     assert_eq!(result["secret_4"], "raw_text_value_4");
     assert!(!result.contains_key("secret_3"));
 }
+
+#[tokio::test]
+#[serial]
+async fn script_cache_api() {
+    let _server = init_default_test_server(INIT_DELAY_DEFAULT).await;
+
+    let response = client::get("/script/lua/cache/get/kkay").await;
+    let result: Vec<XepakValue> = client::extract_from_json(response, None).await;
+    assert!(result.is_empty());
+
+    let response = client::get("/script/lua/cache/set/kkay/kvalue").await;
+    let result: Vec<XepakValue> = client::extract_from_json(response, None).await;
+    assert!(result.is_empty());
+
+    let response = client::get("/script/lua/cache/get/kkay").await;
+    let result: Vec<String> = client::extract_from_json(response, None).await;
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0], "kvalue".to_string());
+}
