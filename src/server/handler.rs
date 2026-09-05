@@ -160,7 +160,7 @@ impl EndpointHandler {
         );
 
         for p in self.processors.as_ref() {
-            p.handle(req, state, body, &mut input)?;
+            p.handle(req, state, body, &mut input).await?;
         }
 
         Ok(input)

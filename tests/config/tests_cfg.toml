@@ -9,7 +9,7 @@ migrations_dir = "migrations"
 auth = [
     { id = "boss", key = "BossKEY", from_env = false, roles = [ "ADMIN", "MANAGER" ] },
     { id = "manager", key = "ManagerKEY", from_env = false, roles = [ "MANAGER", ] },
-    { id = "admin", key = "AdminKEY", from_env = false },
+    { id = "hacker", key = "HackerKEY", from_env = false },
     { id = "user", key = "UserKEY", from_env = false },
 ]
 

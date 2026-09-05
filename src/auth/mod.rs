@@ -3,6 +3,8 @@ pub mod token;
 
 use std::collections::HashSet;
 
+use async_trait::async_trait;
+
 use crate::{
     XepakError,
     auth::rules::{AuthRules, RulesParser},
@@ -56,12 +58,13 @@ impl SimpleAuthenticationProcessor {
     }
 }
 
+#[async_trait(?Send)]
 impl PreProcessorHandler for SimpleAuthenticationProcessor {
     fn priority(&self) -> u16 {
         self.priority
     }
 
-    fn handle(
+    async fn handle(
         &self,
         req: &actix_web::HttpRequest,
         state: &actix_web::web::Data<crate::server::XepakAppData>,
@@ -118,8 +121,9 @@ impl AuthorizeProcessor {
     }
 }
 
+#[async_trait(?Send)]
 impl PreProcessorHandler for AuthorizeProcessor {
-    fn handle(
+    async fn handle(
         &self,
         _req: &actix_web::HttpRequest,
         _state: &actix_web::web::Data<crate::server::XepakAppData>,

@@ -69,6 +69,10 @@ impl XepakAppData {
     pub async fn cache_insert(&self, key: String, value: XepakValue) {
         self.cache.insert(key, value).await
     }
+
+    pub async fn cache_insert_ttl(&self, key: String, value: XepakValue, ttl_sec: u16) {
+        self.cache.insert_ttl(key, value, ttl_sec).await
+    }
 }
 
 pub async fn init_server(
@@ -95,17 +99,6 @@ pub async fn init_server(
     };
 
     cache_cleanup(app_data.cache.clone());
-    // let data: Data<ApateState> = Data::new(config.into_state());
-
-    // let mut app = App::new()
-    // // .app_data(data.clone())
-    // .wrap(Logger::default());
-    // #[cfg(feature = "server")]
-    // {
-    //     app = app
-    //         .service(web::scope(handlers::ADMIN_API).configure(handlers::admin_service_config));
-    // }
-    // app.default_service(web::to(handlers::apate_server_handler));
 
     // Defining Endpoints here required all nested data to be send+sync
     let mut endpoints = Vec::new();
@@ -113,13 +106,41 @@ pub async fn init_server(
         endpoints.push(EndpointHandler::new(espec, &app_data)?);
     }
 
+    // let especs = specs.endpoint.clone();
+    // let factory = move || {
+    //     let mut endpoints = Vec::new();
+    //     for espec in especs {
+    //         // endpoints.push(EndpointHandler::new(espec, &app_data)?);
+    //         endpoints.push(EndpointHandler::new(espec, &app_data).unwrap());
+    //     }
+    //     // let ep_config = endpoints.clone();
+    //     App::new()
+    //         .app_data(Data::new(app_data.clone()))
+    //         // .service(web::scope("/") ...
+    //         .configure(|cfg: &mut ServiceConfig| {
+    //             // for eh in ep_config {
+    //             for eh in endpoints {
+    //                 cfg.service(eh);
+    //             }
+    //         })
+    //         .wrap(Logger::default())
+    // };
+
+    // let factory = app_factory(&app_data, specs.endpoint)?;
     let server = HttpServer::new(move || {
-        let ep_config = endpoints.clone();
+        let endpoints = endpoints.clone();
+        // let mut endpoints = Vec::new();
+        // for espec in especs.clone() {
+        //     // endpoints.push(EndpointHandler::new(espec, &app_data)?);
+        //     endpoints.push(EndpointHandler::new(espec, &app_data).unwrap());
+        // }
+        // let ep_config = endpoints.clone();
         App::new()
             .app_data(Data::new(app_data.clone()))
             // .service(web::scope("/") ...
             .configure(|cfg: &mut ServiceConfig| {
-                for eh in ep_config {
+                // for eh in ep_config {
+                for eh in endpoints {
                     cfg.service(eh);
                 }
             })
@@ -132,6 +153,38 @@ pub async fn init_server(
 
     Ok(server)
 }
+
+// fn app_factory<F, I, S, B>(app_data: &XepakAppData, especs: Vec<EndpointSpecs>) -> Result<F, XepakError>
+// where
+//     F: Fn() -> I + Send + Clone + 'static,
+//     I: IntoServiceFactory<S, Request>,
+//
+//     S: ServiceFactory<Request, Config = AppConfig> + 'static,
+//     S::Error: Into<Error> + 'static,
+//     S::InitError: fmt::Debug,
+//     S::Response: Into<Response<B>> + 'static,
+//     <S::Service as Service<Request>>::Future: 'static,
+//     S::Service: 'static,
+//
+//     B: MessageBody + 'static,
+// {
+// Ok(    || {
+//     let mut endpoints = Vec::new();
+//     for espec in especs{
+//         endpoints.push(EndpointHandler::new(espec, &app_data)?);
+//     }
+//     // let ep_config = endpoints.clone();
+//     let app = App::new()
+//         .app_data(Data::new(app_data.clone()))
+//         // .service(web::scope("/") ...
+//         .configure(|cfg: &mut ServiceConfig| {
+//             // for eh in ep_config {
+//             for eh in endpoints {
+//                 cfg.service(eh);
+//             }
+//         })
+//         .wrap(Logger::default())})
+// }
 
 fn cache_cleanup(cache: AppCache) {
     tokio::spawn(async move {

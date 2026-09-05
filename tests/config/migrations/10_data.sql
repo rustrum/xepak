@@ -11,6 +11,13 @@ VALUES
 ('8 record', 88, 8.8, NULL);
 
 
+INSERT INTO tokens
+(user_id, api_key, roles)
+VALUES 
+('boss', 'BossApiKey', 'ADMIN,MANAGER'),
+('hacker', 'HackerApiKey', '');
+
+
 INSERT INTO users
 (username, password)
 VALUES 

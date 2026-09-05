@@ -47,6 +47,7 @@ toml.workspace = true
 
 actix-router = "0.5"
 actix-web = { version = "4.14.1", features = ["rustls"] }
+async-trait = "0.1.92"
 bon = "3.9.1"
 cbor2 = "1.1.4"
 futures-util = "0.3.34"

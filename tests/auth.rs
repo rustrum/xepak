@@ -80,9 +80,9 @@ async fn auth_script_arguments() {
 
     check_script_auth(
         URI,
-        Some("AdminKEY"),
+        Some("HackerKEY"),
         AuthScriptRecord {
-            id: "admin".to_string(),
+            id: "hacker".to_string(),
             roles: Default::default(),
             is_admin: false,
             is_manager: false,
@@ -186,7 +186,7 @@ async fn auth_default_pre_processor() {
     );
 
     // Valid API keys should still work
-    let valid_keys = ["BossKEY", "ManagerKEY", "AdminKEY", "UserKEY"];
+    let valid_keys = ["BossKEY", "ManagerKEY", "HackerKEY", "UserKEY"];
     for key in valid_keys {
         let response = client::get_resource(
             URI,
@@ -224,7 +224,7 @@ async fn auth_require_key() {
     check_keys_are_rejected(URI, &["My_Invalid_Key"], "Invalid API key must be rejected").await;
 
     // Valid API keys from tests_cfg.toml
-    let valid_keys = ["BossKEY", "ManagerKEY", "AdminKEY", "UserKEY"];
+    let valid_keys = ["BossKEY", "ManagerKEY", "HackerKEY", "UserKEY"];
     for key in valid_keys {
         let response = client::get_resource(
             URI,
@@ -261,7 +261,12 @@ async fn auth_boss_endpoint() {
     );
 
     // Tokens without ADMIN role must be rejected
-    check_keys_are_rejected(URI, &["ManagerKEY", "AdminKEY", "UserKEY"], "No ADMIN role").await;
+    check_keys_are_rejected(
+        URI,
+        &["ManagerKEY", "HackerKEY", "UserKEY"],
+        "No ADMIN role",
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -287,28 +292,28 @@ async fn auth_manager_endpoint() {
     }
 
     // Tokens without MANAGER role must be rejected
-    check_keys_are_rejected(URI, &["AdminKEY", "UserKEY"], "No MANAGER role").await;
+    check_keys_are_rejected(URI, &["HackerKEY", "UserKEY"], "No MANAGER role").await;
 }
 
 #[tokio::test]
 #[serial]
-async fn auth_admin_endpoint() {
+async fn auth_hacker_endpoint() {
     let _server = init_default_test_server(INIT_DELAY_DEFAULT).await;
 
-    const URI: &str = "/auth/posts/admin";
+    // #hacker rule matches by user id
+    const URI: &str = "/auth/script/hacker";
 
-    // #admin rule matches by user id, only token with id "admin" must be allowed
-    let response = client::get_resource(
+    check_script_auth(
         URI,
-        HashMap::<String, String>::new(),
-        HashMap::from([("x-api-key".to_string(), "AdminKEY".to_string())]),
+        Some("HackerKEY"),
+        AuthScriptRecord {
+            id: "hacker".to_string(),
+            roles: hashset! {},
+            is_admin: false,
+            is_manager: false,
+        },
     )
     .await;
-    assert!(
-        response.status().is_success(),
-        "AdminKEY (id=admin) must be accepted, got {}",
-        response.status()
-    );
 
     // Tokens with other ids must be rejected
     check_keys_are_rejected(URI, &["BossKEY", "ManagerKEY", "UserKEY"], "id != admin").await;
@@ -328,4 +333,92 @@ async fn check_keys_are_rejected(uri: &str, keys: &[&str], message: &str) {
             "{message} Key \"{key}\" must be rejected"
         );
     }
+}
+
+#[tokio::test]
+#[serial]
+async fn storage_token_auth() {
+    let _server = init_default_test_server(INIT_DELAY_DEFAULT).await;
+
+    const URI: &str = "/auth/token/info";
+
+    check_script_auth(
+        URI,
+        Some("BossApiKey"),
+        AuthScriptRecord {
+            id: "boss".to_string(),
+            roles: hashset! {"ADMIN".to_string(), "MANAGER".to_string()},
+            is_admin: true,
+            is_manager: true,
+        },
+    )
+    .await;
+
+    check_script_auth(
+        URI,
+        Some("HackerApiKey"),
+        AuthScriptRecord {
+            id: "hacker".to_string(),
+            roles: Default::default(),
+            is_admin: false,
+            is_manager: false,
+        },
+    )
+    .await;
+
+    check_keys_are_rejected(
+        URI,
+        &["BossKEY", "ManagerKEY", "HackerKEY", "UserKEY"],
+        "Keys not in DB must be rejected",
+    )
+    .await;
+
+    // After clearing tokens, cached auth should still work
+    const CLEAR_URI: &str = "/auth/token/clear";
+
+    client::get(CLEAR_URI).await;
+
+    check_script_auth(
+        URI,
+        Some("BossApiKey"),
+        AuthScriptRecord {
+            id: "boss".to_string(),
+            roles: hashset! {"ADMIN".to_string(), "MANAGER".to_string()},
+            is_admin: true,
+            is_manager: true,
+        },
+    )
+    .await;
+
+    check_script_auth(
+        URI,
+        Some("HackerApiKey"),
+        AuthScriptRecord {
+            id: "hacker".to_string(),
+            roles: Default::default(),
+            is_admin: false,
+            is_manager: false,
+        },
+    )
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+async fn storage_token_auth_cleared() {
+    let _server = init_default_test_server(INIT_DELAY_DEFAULT).await;
+
+    const CLEAR_URI: &str = "/auth/token/clear";
+    const INFO_URI: &str = "/auth/token/info";
+
+    // First clear all tokens
+    client::get(CLEAR_URI).await;
+
+    // After clearing, no token authentication should work
+    check_keys_are_rejected(
+        INFO_URI,
+        &["BossApiKey", "HackerApiKey"],
+        "Tokens must be rejected after clear",
+    )
+    .await;
 }
