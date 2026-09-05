@@ -254,7 +254,7 @@ pub fn storage_query(
     query: &str,
     dyn_args: rhai::Map,
 ) -> Result<Dynamic, XepakError> {
-    let input = RequestInput::new_in_script(prepare_args(dyn_args)?, 0, 0);
+    let input = RequestInput::new_simple(prepare_args(dyn_args)?, 0, 0);
     storage_query_rs(state, handle, ds_name, query, &input)
 }
 
@@ -296,7 +296,7 @@ pub fn storage_query_one(
     query: &str,
     dyn_args: rhai::Map,
 ) -> Result<Dynamic, XepakError> {
-    let input = RequestInput::new_in_script(prepare_args(dyn_args)?, 0, 0);
+    let input = RequestInput::new_simple(prepare_args(dyn_args)?, 0, 0);
     storage_query_one_rs(state, handle, ds_name, query, &input)
 }
 
@@ -337,7 +337,7 @@ pub fn storage_query_value(
     query: &str,
     dyn_args: rhai::Map,
 ) -> Result<Dynamic, XepakError> {
-    let input = RequestInput::new_in_script(prepare_args(dyn_args)?, 0, 0);
+    let input = RequestInput::new_simple(prepare_args(dyn_args)?, 0, 0);
 
     storage_query_value_rs(state, handle, ds_name, query, &input)
 }

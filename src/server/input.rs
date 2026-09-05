@@ -36,6 +36,7 @@ pub struct RequestInput {
 }
 
 impl RequestInput {
+    /// Meant to be executed while handling query string in main logic.
     pub fn new(schema: Schema, strict_schema: bool, uri_pattern: &str, req_path: &str) -> Self {
         // Todo return result that will validate path_args against schema
 
@@ -60,8 +61,9 @@ impl RequestInput {
         }
     }
 
-    /// Used when script is building input for nested queries
-    pub fn new_in_script(args: HashMap<String, XepakValue>, limit: usize, offset: usize) -> Self {
+    /// To use in other parts of code not linked with main request processing flow
+    /// like script or processors.
+    pub fn new_simple(args: HashMap<String, XepakValue>, limit: usize, offset: usize) -> Self {
         RequestInput {
             auth: Arc::new(None),
             schema: Schema::default(),

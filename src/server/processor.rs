@@ -5,11 +5,14 @@ use actix_web::{
     http::{Method, header::CONTENT_TYPE},
     web::{Bytes, Data},
 };
+use async_trait::async_trait;
 use serde::Deserialize;
 
 use crate::{
     XepakError,
-    auth::{AuthorizeProcessor, SimpleAuthenticationProcessor},
+    auth::{
+        AuthorizeProcessor, SimpleAuthenticationProcessor, token::TokenAuthenticationProcessor,
+    },
     schema::validate_with_schema,
     server::{CONTENT_TYPE_CBOR, RequestInput, XepakAppData},
     xepak_data::XepakValue,
@@ -37,6 +40,17 @@ pub enum PreProcessor {
         /// Allows anonymous authentication
         #[serde(default)]
         anonymous_auth: bool,
+    },
+
+    TokenAuthentication {
+        #[serde(default)]
+        data_source: String,
+
+        /// Query in a form: `SELECT id,roles FROM ... WHERE ... key = {{api-key}}`
+        query: String,
+
+        #[serde(default)]
+        cache_ttl_sec: u16,
     },
 
     Authorize {
@@ -79,14 +93,26 @@ pub fn build_pre_processor(
         PreProcessor::Authorize { rules } => {
             Ok(Box::new(AuthorizeProcessor::new(position, rules.as_ref())?))
         }
+        PreProcessor::TokenAuthentication {
+            data_source,
+            query,
+            cache_ttl_sec,
+        } => Ok(Box::new(TokenAuthenticationProcessor::new(
+            position,
+            query.clone(),
+            data_source.clone(),
+            *cache_ttl_sec,
+        ))),
     }
 }
 
+// pub trait PreProcessorHandler: Send + Sync {
+#[async_trait(?Send)]
 pub trait PreProcessorHandler: Send + Sync {
     /// Handler with higher priority will be processed first
     fn priority(&self) -> u16;
 
-    fn handle(
+    async fn handle(
         &self,
         req: &HttpRequest,
         state: &Data<XepakAppData>,
@@ -95,22 +121,26 @@ pub trait PreProcessorHandler: Send + Sync {
     ) -> Result<(), XepakError>;
 }
 
+/// Adjust processor priority related to it's position in the ordered list.
+/// The bigger order - the lower priority is.
 #[inline]
-pub fn adjust_priority(current: u16, order: u16) -> u16 {
-    if current > order {
+pub fn adjust_priority(priority: u16, position: u16) -> u16 {
+    if priority < position {
         return 0;
     }
-    current - order
+    priority - position
 }
 
 /// Execute validation logic for all input arguments according to schema.
 pub struct InputArgsValidator {}
+
+#[async_trait(?Send)]
 impl PreProcessorHandler for InputArgsValidator {
     fn priority(&self) -> u16 {
         PRIORITY_LAST
     }
 
-    fn handle(
+    async fn handle(
         &self,
         _req: &HttpRequest,
         _state: &Data<XepakAppData>,
@@ -127,12 +157,13 @@ impl PreProcessorHandler for InputArgsValidator {
 /// Skip query string args POST/PUT requests (basically anything that have request body)
 pub struct QueryArgsProcessor {}
 
+#[async_trait(?Send)]
 impl PreProcessorHandler for QueryArgsProcessor {
     fn priority(&self) -> u16 {
         PRIORITY_FIRST + 1000
     }
 
-    fn handle(
+    async fn handle(
         &self,
         req: &HttpRequest,
         _state: &Data<XepakAppData>,
@@ -200,8 +231,9 @@ impl BodyToArgsProcessor {
     }
 }
 
+#[async_trait(?Send)]
 impl PreProcessorHandler for BodyToArgsProcessor {
-    fn handle(
+    async fn handle(
         &self,
         req: &HttpRequest,
         _state: &Data<XepakAppData>,

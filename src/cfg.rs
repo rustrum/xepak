@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    fmt::Display,
     fs,
     path::PathBuf,
     sync::Arc,
@@ -256,4 +257,44 @@ fn default_limit_key() -> String {
 
 fn default_offset_key() -> String {
     "offset".to_string()
+}
+
+/// Represents kinda unique id/path related to configuration.
+/// Can be used for debug purpose or to generate cache keys.
+#[derive(Clone)]
+pub struct ResourceRef {
+    ids: Vec<String>,
+}
+
+impl ResourceRef {
+    pub fn new(top_level_id: &str) -> Self {
+        Self {
+            ids: vec![top_level_id.to_string()],
+        }
+    }
+
+    /// Produce nested reference.
+    pub fn nested(&self, id: &str) -> Self {
+        let mut next = self.clone();
+        next.ids.push(id.to_string());
+        next
+    }
+
+    fn as_string(&self) -> String {
+        self.ids
+            .iter()
+            .map(|id| id.to_string())
+            .collect::<Vec<String>>()
+            .join("#")
+    }
+
+    pub fn to_resource_id(&self, resource_type: &str) -> String {
+        format!("{resource_type}:{}", self.as_string())
+    }
+}
+
+impl Display for ResourceRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_string())
+    }
 }

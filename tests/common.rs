@@ -276,7 +276,7 @@ pub mod client {
             uri = format!("{uri}?{qs}");
         }
 
-        let _response = client.get(uri).send().await.expect("Request failed");
+        let _response = client.post(uri).send().await.expect("Request failed");
     }
 
     pub async fn extract_from_json<V: serde::de::DeserializeOwned>(
