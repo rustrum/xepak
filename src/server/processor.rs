@@ -15,6 +15,7 @@ use crate::{
     },
     cfg::ResourceRef,
     schema::validate_with_schema,
+    script_lua::LuaPreProcessor,
     server::{CONTENT_TYPE_CBOR, RequestInput, XepakAppData},
     xepak_data::XepakValue,
 };
@@ -57,6 +58,10 @@ pub enum PreProcessor {
     Authorize {
         rules: String,
     },
+
+    LuaScript {
+        script: String,
+    },
 }
 
 pub fn init_required_pre_processors() -> Vec<Box<dyn PreProcessorHandler>> {
@@ -66,8 +71,8 @@ pub fn init_required_pre_processors() -> Vec<Box<dyn PreProcessorHandler>> {
     ]
 }
 
-#[allow(clippy::only_used_in_recursion)] // Remove it when rref will be utilized later
 pub fn build_pre_processor(
+    app: &XepakAppData,
     parent_rref: &ResourceRef,
     position: u16,
     specs: &PreProcessor,
@@ -82,7 +87,7 @@ pub fn build_pre_processor(
                         "Ref types are not allowed in shared pre-processors".to_string(),
                     ))
                 } else {
-                    build_pre_processor(parent_rref, position, sspecs, shared)
+                    build_pre_processor(app, parent_rref, position, sspecs, shared)
                 }
             } else {
                 Err(XepakError::Cfg(format!(
@@ -107,10 +112,15 @@ pub fn build_pre_processor(
             data_source.clone(),
             *cache_ttl_sec,
         ))),
+        PreProcessor::LuaScript { script } => Ok(Box::new(LuaPreProcessor::new(
+            app,
+            parent_rref.nested(position),
+            position,
+            script,
+        )?)),
     }
 }
 
-// pub trait PreProcessorHandler: Send + Sync {
 #[async_trait(?Send)]
 pub trait PreProcessorHandler: Send + Sync {
     /// Handler with higher priority will be processed first

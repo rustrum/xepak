@@ -8,6 +8,8 @@ use std::{collections::HashMap, env, path::PathBuf, str::FromStr};
 
 use common::*;
 use maplit::hashmap;
+use reqwest::StatusCode;
+use serde_json::Value as JsonValue;
 use serial_test::serial;
 use xepak_rest::{
     cfg::{load_conf_file, load_specs_from_dir},
@@ -103,4 +105,27 @@ async fn script_cache_api() {
     let result: Vec<String> = client::extract_from_json(response, None).await;
     assert_eq!(result.len(), 1);
     assert_eq!(result[0], "kvalue".to_string());
+}
+
+#[tokio::test]
+#[serial]
+async fn script_pre_processor() {
+    let _server = init_default_test_server(INIT_DELAY_DEFAULT).await;
+
+    let response = client::get("/script/lua/pp/good").await;
+    assert!(
+        response.status().is_success(),
+        "Status is {}",
+        response.status()
+    );
+
+    let response = client::get("/script/lua/pp/bad").await;
+    assert_eq!(StatusCode::FORBIDDEN, response.status());
+
+    let rjson = response.json::<JsonValue>().await.unwrap();
+    assert_eq!("forbidden", rjson.get("code").unwrap().as_str().unwrap());
+    assert_eq!(
+        "You are BAD",
+        rjson.get("message").unwrap().as_str().unwrap()
+    );
 }

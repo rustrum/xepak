@@ -12,6 +12,7 @@ return {
 }
 """
 
+
 [[endpoint]]
 uri = "/script/lua/registry"
 
@@ -26,6 +27,7 @@ return {
 }
 """
 
+
 [[endpoint]]
 uri = "/script/lua/cache/get/{key:\\w+}"
 
@@ -38,6 +40,7 @@ return {
 }
 """
 
+
 [[endpoint]]
 uri = "/script/lua/cache/set/{key:\\w+}/{value:\\w+}"
 
@@ -48,3 +51,20 @@ app:cache_set(ctx:get_arg("key"), ctx:get_arg("value"))
 return {}
 """
 
+
+[[endpoint]]
+uri = "/script/lua/pp/{token:\\w+}"
+
+[[endpoint.pre_processors]]
+type = "lua_script"
+script = """
+if ctx:has_arg("token") and ctx:get_arg("token") == "bad" then
+    error_forbidden("You are BAD")
+end
+"""
+
+[endpoint.resource]
+type = "data_script"
+script = """
+return {}
+"""
