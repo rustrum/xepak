@@ -13,6 +13,7 @@ use crate::{
     auth::{
         AuthorizeProcessor, SimpleAuthenticationProcessor, token::TokenAuthenticationProcessor,
     },
+    cfg::ResourceRef,
     schema::validate_with_schema,
     server::{CONTENT_TYPE_CBOR, RequestInput, XepakAppData},
     xepak_data::XepakValue,
@@ -65,11 +66,14 @@ pub fn init_required_pre_processors() -> Vec<Box<dyn PreProcessorHandler>> {
     ]
 }
 
+#[allow(clippy::only_used_in_recursion)] // Remove it when rref will be utilized later
 pub fn build_pre_processor(
+    parent_rref: &ResourceRef,
     position: u16,
     specs: &PreProcessor,
     shared: &HashMap<String, PreProcessor>,
 ) -> Result<Box<dyn PreProcessorHandler>, XepakError> {
+    // TODO: rref will be used later for pre-processors LUA cache
     match specs {
         PreProcessor::Ref { id } => {
             if let Some(sspecs) = shared.get(id) {
@@ -78,7 +82,7 @@ pub fn build_pre_processor(
                         "Ref types are not allowed in shared pre-processors".to_string(),
                     ))
                 } else {
-                    build_pre_processor(position, sspecs, shared)
+                    build_pre_processor(parent_rref, position, sspecs, shared)
                 }
             } else {
                 Err(XepakError::Cfg(format!(

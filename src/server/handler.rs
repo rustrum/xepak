@@ -10,12 +10,11 @@ use actix_web::{
     },
     web::{self, Bytes, Data},
 };
-use mlua::{Function, Lua};
 use rhai::{AST, Engine};
 
 use crate::{
     XepakError,
-    cfg::{EndpointSpecs, ResourceSpecs},
+    cfg::{EndpointSpecs, ResourceRef, ResourceSpecs},
     script_lua::{build_lua_function, execute_lua_script, lua_load_engine},
     script_rhai::{build_rhai_ast, build_rhai_engine, execute_script_blocking},
     server::{
@@ -32,16 +31,20 @@ type EndpointHandlerArgs = (HttpRequest, Data<XepakAppData>, Bytes);
 
 #[derive(Clone)]
 pub struct EndpointHandler {
+    _rref: ResourceRef,
     ep: Arc<EndpointSpecs>,
     rhai_engine: Arc<Option<Engine>>,
     handler_rhai: Arc<Option<AST>>,
-    handler_lua: Arc<Option<(Lua, Function)>>,
+    resource_fn_key: String,
     processors: Arc<Vec<Box<dyn PreProcessorHandler>>>,
-    // processors: Arc<Vec<Box<dyn PreProcessorHandler + Send + Sync>>>,
 }
 
 impl EndpointHandler {
-    pub fn new(ep: EndpointSpecs, app: &XepakAppData) -> Result<Self, XepakError> {
+    pub fn new(
+        rref: ResourceRef,
+        ep: EndpointSpecs,
+        app: &XepakAppData,
+    ) -> Result<Self, XepakError> {
         let mut rhai_engine = None;
 
         let handler_rhai = match &ep.resource {
@@ -61,28 +64,30 @@ impl EndpointHandler {
             _ => None,
         };
 
-        let handler_lua = match &ep.resource {
+        // This is just a validation to fail early if LUA syntax incorrect
+        match &ep.resource {
             ResourceSpecs::QueryScriptLua { script, .. }
             | ResourceSpecs::DataScript { script, .. } => {
                 let lua = lua_load_engine(app)?;
-                let luafn = build_lua_function(&lua, script)?;
-                Some((lua, luafn))
+                let _fn = build_lua_function(&lua, script)?;
             }
-            _ => None,
-        };
+            _ => {}
+        }
 
-        // let mut processors: Vec<Box<dyn PreProcessorHandler + Send + Sync>> = vec![
-        let pre_processors = Self::build_pre_processors(&ep, app)?;
+        let pre_processors = Self::build_pre_processors(rref.nested("pp"), &ep, app)?;
         Ok(Self {
+            resource_fn_key: rref.nested("resource-fn").to_string(),
+            _rref: rref,
             ep: Arc::new(ep),
             rhai_engine: Arc::new(rhai_engine),
             handler_rhai: Arc::new(handler_rhai),
-            handler_lua: Arc::new(handler_lua),
+            // handler_lua: Arc::new(handler_lua),
             processors: Arc::new(pre_processors),
         })
     }
 
     fn build_pre_processors(
+        rref: ResourceRef,
         ep: &EndpointSpecs,
         app: &XepakAppData,
     ) -> Result<Vec<Box<dyn PreProcessorHandler>>, XepakError> {
@@ -94,6 +99,7 @@ impl EndpointHandler {
             for specs in &app.default_pre_processors {
                 order += 1;
                 processors.push(build_pre_processor(
+                    &rref,
                     order,
                     specs,
                     &app.shared_pre_processors,
@@ -104,6 +110,7 @@ impl EndpointHandler {
         for specs in &ep.pre_processors {
             order += 1;
             processors.push(build_pre_processor(
+                &rref,
                 order,
                 specs,
                 &app.shared_pre_processors,
@@ -210,7 +217,10 @@ impl EndpointHandler {
                 let rr = ResourceRequest::new(&query, input);
                 self.run_query(ds, rr).await
             }
-            ResourceSpecs::QueryScriptLua { data_source, .. } => {
+            ResourceSpecs::QueryScriptLua {
+                data_source,
+                script,
+            } => {
                 let Some(ds) = state.get_data_source(data_source) else {
                     return Err(XepakError::Cfg(format!(
                         "Data source does not exists \"{data_source}\""
@@ -218,24 +228,18 @@ impl EndpointHandler {
                 };
 
                 let query = execute_lua_script::<String>(
-                    state.clone(),
-                    self.ep.uri.clone(),
-                    self.handler_lua.clone(),
+                    state,
                     input.clone(),
+                    &self.resource_fn_key,
+                    script,
                 )
                 .await?;
 
                 let rr = ResourceRequest::new(&query, input);
                 self.run_query(ds, rr).await
             }
-            ResourceSpecs::DataScript { .. } => {
-                execute_lua_script(
-                    state.clone(),
-                    self.ep.uri.clone(),
-                    self.handler_lua.clone(),
-                    input.clone(),
-                )
-                .await
+            ResourceSpecs::DataScript { script, .. } => {
+                execute_lua_script(state, input.clone(), &self.resource_fn_key, script).await
             }
         }
     }
