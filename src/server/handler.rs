@@ -15,7 +15,7 @@ use rhai::{AST, Engine};
 use crate::{
     XepakError,
     cfg::{EndpointSpecs, ResourceRef, ResourceSpecs},
-    script_lua::{build_lua_function, execute_lua_script, lua_load_engine},
+    script_lua::{execute_lua_script, init_lua_env_fn},
     script_rhai::{build_rhai_ast, build_rhai_engine, execute_script_blocking},
     server::{
         CONTENT_TYPE_CBOR, CONTENT_TYPE_JSON, LIMIT_HEADER, OFFSET_HEADER, RequestInput,
@@ -68,8 +68,7 @@ impl EndpointHandler {
         match &ep.resource {
             ResourceSpecs::QueryScriptLua { script, .. }
             | ResourceSpecs::DataScript { script, .. } => {
-                let lua = lua_load_engine(app)?;
-                let _fn = build_lua_function(&lua, script)?;
+                init_lua_env_fn(app, script)?;
             }
             _ => {}
         }
@@ -99,6 +98,7 @@ impl EndpointHandler {
             for specs in &app.default_pre_processors {
                 order += 1;
                 processors.push(build_pre_processor(
+                    app,
                     &rref,
                     order,
                     specs,
@@ -110,6 +110,7 @@ impl EndpointHandler {
         for specs in &ep.pre_processors {
             order += 1;
             processors.push(build_pre_processor(
+                app,
                 &rref,
                 order,
                 specs,

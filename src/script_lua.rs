@@ -1,6 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 use actix_web::web::Data;
+use async_trait::async_trait;
 use mlua::{
     Error as LuaError, ExternalError, FromLua, FromLuaMulti, Function, IntoLua, Lua, Table,
     UserData, UserDataMethods, Value,
@@ -8,7 +9,11 @@ use mlua::{
 
 use crate::{
     XepakError,
-    server::{RequestInput, XepakAppData},
+    cfg::ResourceRef,
+    server::{
+        RequestInput, XepakAppData,
+        processor::{PRIORITY_NORMAL, PreProcessorHandler, adjust_priority},
+    },
     storage::ResourceRequest,
     xepak_data::XepakValue,
 };
@@ -53,9 +58,12 @@ pub fn lua_load_function(lua: &Lua, cache_key: &str, script: &str) -> Result<Fun
     Ok(lua_fn)
 }
 
-/// Compiles a Lua script into a Function.
-pub fn build_lua_function(lua: &Lua, script: &str) -> Result<Function, XepakError> {
-    Ok(lua.load(script).into_function()?)
+/// Build&cache Lua environment and try to build `script` against it.
+/// This is needed just to validate if all compiles correctly.
+pub fn init_lua_env_fn(app: &XepakAppData, script: &str) -> Result<(), XepakError> {
+    let lua = lua_load_engine(app)?;
+    lua.load(script).into_function()?;
+    Ok(())
 }
 
 /// App data is stored inside each Lua VM.
@@ -583,47 +591,41 @@ pub fn quick_table_is_tuple(table: &Table) -> bool {
     tlen > 0 || (tlen == 0 && table.pairs::<Value, Value>().next().is_none())
 }
 
-// These are more valid checks but I do not like them.
-// Too much code and data traverse.
-//
-// fn is_pure_sequence(table: &Table) -> Result<bool> {
-//     let mut count = 0usize;
-//     let mut max_index = 0usize;
-//
-//     table.len()
-//     for entry in table.pairs::<Value, Value>() {
-//         let (key, _) = entry?;
-//
-//         let Some(index) = positive_array_index(&key) else {
-//             return Ok(false);
-//         };
-//
-//         count += 1;
-//         max_index = max_index.max(index);
-//     }
-//
-//     // For a pure sequence like { "a", "b", "c" },
-//     // count == max_index == 3.
-//     //
-//     // For { [1] = "a", [3] = "c" },
-//     // count == 2, max_index == 3, so it is not a pure sequence.
-//     Ok(count == max_index)
-// }
-//
-// fn positive_array_index(value: &Value) -> Option<usize> {
-//     match value {
-//         Value::Integer(i) if *i >= 1 => (*i).try_into().ok(),
-//
-//         Value::Number(n) => {
-//             let n = *n;
-//
-//             if n >= 1.0 && n.fract() == 0.0 && n <= usize::MAX as f64 {
-//                 Some(n as usize)
-//             } else {
-//                 None
-//             }
-//         }
-//
-//         _ => None,
-//     }
-// }
+pub struct LuaPreProcessor {
+    priority: u16,
+    rref_key: String,
+    lua_script: String,
+}
+
+impl LuaPreProcessor {
+    pub fn new(
+        app: &XepakAppData,
+        rref: ResourceRef,
+        position: u16,
+        script: &str,
+    ) -> Result<Self, XepakError> {
+        init_lua_env_fn(app, script)?;
+        Ok(Self {
+            rref_key: rref.to_string(),
+            priority: adjust_priority(PRIORITY_NORMAL, position),
+            lua_script: script.to_string(),
+        })
+    }
+}
+
+#[async_trait(?Send)]
+impl PreProcessorHandler for LuaPreProcessor {
+    fn priority(&self) -> u16 {
+        self.priority
+    }
+
+    async fn handle(
+        &self,
+        _req: &actix_web::HttpRequest,
+        state: &Data<crate::server::XepakAppData>,
+        _body: &actix_web::web::Bytes,
+        input: &mut crate::server::RequestInput,
+    ) -> Result<(), XepakError> {
+        execute_lua_script(state, input.clone(), &self.rref_key, &self.lua_script).await
+    }
+}
