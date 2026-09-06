@@ -411,7 +411,6 @@ async fn storage_token_auth_cleared() {
     const CLEAR_URI: &str = "/auth/token/clear";
     const INFO_URI: &str = "/auth/token/info";
 
-    // First clear all tokens
     client::get(CLEAR_URI).await;
 
     // After clearing, no token authentication should work
