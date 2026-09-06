@@ -15,6 +15,8 @@ use crate::{
 
 thread_local! {
     static LUA_CACHE: RefCell<Option<Lua>> = const { RefCell::new(None) };
+
+    static LUA_FNS_CACHE: RefCell<HashMap<String, Function>> = RefCell::new(HashMap::new());
 }
 
 /// Creates new Lua instance or returns current one from thread_local cache.
@@ -31,6 +33,29 @@ pub fn lua_load_engine(app_state: &XepakAppData) -> Result<Lua, XepakError> {
 
         Ok(lua)
     })
+}
+
+/// Build Lua function or returns it from it's internal cache
+pub fn lua_load_function(lua: &Lua, cache_key: &str, script: &str) -> Result<Function, XepakError> {
+    let cached = LUA_FNS_CACHE.with(|cell| cell.borrow().get(cache_key).cloned());
+
+    if let Some(from_cache) = cached {
+        return Ok(from_cache);
+    }
+
+    let lua_fn = lua.load(script).into_function()?;
+
+    LUA_FNS_CACHE.with(|cell| {
+        cell.borrow_mut()
+            .insert(cache_key.to_string(), lua_fn.clone())
+    });
+
+    Ok(lua_fn)
+}
+
+/// Compiles a Lua script into a Function.
+pub fn build_lua_function(lua: &Lua, script: &str) -> Result<Function, XepakError> {
+    Ok(lua.load(script).into_function()?)
 }
 
 /// App data is stored inside each Lua VM.
@@ -317,11 +342,6 @@ impl FromLua for XepakValue {
     }
 }
 
-/// Compiles a Lua script into a Function.
-pub fn build_lua_function(lua: &Lua, script: &str) -> Result<Function, XepakError> {
-    Ok(lua.load(script).into_function()?)
-}
-
 /// Creates a Lua VM and registers all globals.
 pub fn build_lua_engine(app_state: &XepakAppData) -> Result<Lua, XepakError> {
     let app_data = LuaAppData {
@@ -455,21 +475,18 @@ fn rows_to_lua_table(lua: &Lua, rows: Vec<XepakValue>) -> mlua::Result<Table> {
 }
 
 pub async fn execute_lua_script<R>(
-    _state: Data<XepakAppData>,
-    uri: String,
-    lua_env: Arc<Option<(Lua, Function)>>,
+    state: &Data<XepakAppData>,
     input: RequestInput,
+    lua_fn_cache_key: &str,
+    lua_fn_body: &str,
 ) -> Result<R, XepakError>
 where
     R: FromLuaMulti + 'static,
 {
-    let Some((lua, lua_fn)) = lua_env.as_ref() else {
-        return Err(XepakError::Unexpected(format!(
-            "Query script AST must already exists for handler {uri}"
-        )));
-    };
+    let lua = lua_load_engine(state)?;
+    let lua_fn = lua_load_function(&lua, lua_fn_cache_key, lua_fn_body)?;
 
-    execute_lua_script_inner(lua, lua_fn.clone(), input).await
+    execute_lua_script_inner(&lua, &lua_fn, input).await
 }
 
 /// Execute LUA script in async way.
@@ -478,7 +495,7 @@ where
 /// for rhai but fully async — no blocking threads or handle.block_on calls.
 async fn execute_lua_script_inner<R>(
     lua: &Lua,
-    isolated_fn: Function,
+    isolated_fn: &Function,
     input: RequestInput,
 ) -> Result<R, XepakError>
 where

@@ -274,7 +274,7 @@ impl ResourceRef {
     }
 
     /// Produce nested reference.
-    pub fn nested(&self, id: &str) -> Self {
+    pub fn nested<T: Display>(&self, id: T) -> Self {
         let mut next = self.clone();
         next.ids.push(id.to_string());
         next

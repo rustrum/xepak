@@ -18,7 +18,7 @@ use actix_web::web::ServiceConfig;
 use actix_web::{HttpServer, web::Data};
 
 use crate::XepakError;
-use crate::cfg::{XepakConf, XepakSpecs};
+use crate::cfg::{ResourceRef, XepakConf, XepakSpecs};
 use crate::server::cache::AppCache;
 use crate::server::handler::EndpointHandler;
 use crate::server::processor::PreProcessor;
@@ -101,9 +101,14 @@ pub async fn init_server(
     cache_cleanup(app_data.cache.clone());
 
     // Defining Endpoints here required all nested data to be send+sync
+    let rref = ResourceRef::new("ep");
     let mut endpoints = Vec::new();
-    for espec in specs.endpoint {
-        endpoints.push(EndpointHandler::new(espec, &app_data)?);
+    for (idx, espec) in specs.endpoint.iter().enumerate() {
+        endpoints.push(EndpointHandler::new(
+            rref.nested(idx),
+            espec.clone(),
+            &app_data,
+        )?);
     }
 
     // let especs = specs.endpoint.clone();

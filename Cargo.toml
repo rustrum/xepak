@@ -53,7 +53,7 @@ cbor2 = "1.1.4"
 futures-util = "0.3.34"
 getopt3 = { version = "2.5.0", optional = true }
 # async-trait = "0.1.89"
-mlua = { version = "0.11", features = ["lua55", "vendored", "async", "send"] }
+mlua = { version = "0.11", features = ["lua55", "vendored", "async"] }
 moka = { version = "0.12.16", features = ["future"] }
 rhai = { version = "1.25", features = ["sync", "no_custom_syntax"] }
 # rhai = { version = "1.23", features = ["sync", "no_custom_syntax", "serde"] }
