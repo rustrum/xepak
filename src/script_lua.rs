@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, sync::Arc};
+use std::{cell::RefCell, collections::HashMap, str::FromStr as _, sync::Arc};
 
 use actix_web::web::Data;
 use async_trait::async_trait;
@@ -6,6 +6,7 @@ use mlua::{
     Error as LuaError, ExternalError, FromLua, FromLuaMulti, Function, IntoLua, Lua, Table,
     UserData, UserDataMethods, Value,
 };
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 
 use crate::{
     XepakError,
@@ -378,7 +379,14 @@ pub fn build_lua_engine(app_state: &XepakAppData) -> Result<Lua, XepakError> {
     lua.globals()
         .set("error_server", lua.create_function(error_server)?)?;
 
+    // DB
     register_db_functions(&lua)?;
+
+    // HTTP
+    lua.globals()
+        .set("http_get", lua.create_async_function(http_get)?)?;
+    lua.globals()
+        .set("http_post_json", lua.create_async_function(http_post_json)?)?;
 
     Ok(lua)
 }
@@ -590,6 +598,130 @@ pub fn quick_table_is_tuple(table: &Table) -> bool {
     let tlen = table.len().unwrap_or(0);
     tlen > 0 || (tlen == 0 && table.pairs::<Value, Value>().next().is_none())
 }
+
+//
+// HTTP client functionality
+//
+
+struct LuaHttpResponse {
+    response: Option<reqwest::Response>,
+}
+
+impl LuaHttpResponse {
+    fn inner_or_error(this: &Self) -> mlua::Result<&reqwest::Response> {
+        if let Some(r) = &this.response {
+            Ok(r)
+        } else {
+            Err(XepakError::LuaScript("Response object was cosumed".to_string()).into_lua_err())
+        }
+    }
+
+    fn inner_consume_or_error(this: &mut Self) -> mlua::Result<reqwest::Response> {
+        if let Some(r) = this.response.take() {
+            Ok(r)
+        } else {
+            Err(XepakError::LuaScript("Response object was cosumed".to_string()).into_lua_err())
+        }
+    }
+
+    fn is_success(_lua: &Lua, this: &Self, _: ()) -> mlua::Result<bool> {
+        Ok(Self::inner_or_error(this)?.status().is_success())
+    }
+
+    fn get_status_code(_lua: &Lua, this: &Self, _: ()) -> mlua::Result<u16> {
+        Ok(Self::inner_or_error(this)?.status().as_u16())
+    }
+
+    async fn read_body_string(
+        _lua: Lua,
+        mut this: mlua::UserDataRefMut<Self>,
+        _: (),
+    ) -> mlua::Result<String> {
+        let response = Self::inner_consume_or_error(&mut this)?;
+        let result = response.text().await.map_err(|e| {
+            XepakError::LuaScript(format!("Can't read http response {e}")).into_lua_err()
+        })?;
+        Ok(result)
+    }
+
+    async fn read_body_json(
+        lua: Lua,
+        mut this: mlua::UserDataRefMut<Self>,
+        _: (),
+    ) -> mlua::Result<Value> {
+        let response = Self::inner_consume_or_error(&mut this)?;
+        let result: XepakValue = response.json().await.map_err(|e| {
+            XepakError::LuaScript(format!("Can't read http response {e}")).into_lua_err()
+        })?;
+        result.into_lua(&lua)
+    }
+}
+
+impl From<reqwest::Response> for LuaHttpResponse {
+    fn from(value: reqwest::Response) -> Self {
+        Self {
+            response: Some(value),
+        }
+    }
+}
+
+impl UserData for LuaHttpResponse {
+    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("is_success", Self::is_success);
+        methods.add_method("get_status_code", Self::get_status_code);
+
+        methods.add_async_method_mut("read_body_string", Self::read_body_string);
+        methods.add_async_method_mut("read_body_json", Self::read_body_json);
+    }
+}
+
+fn http_build_header_map(headers: Value) -> mlua::Result<HeaderMap> {
+    let mut hm = HeaderMap::new();
+    if let Value::Table(ht) = headers {
+        for pair in ht.pairs::<String, String>() {
+            let (k, v) = pair?;
+            hm.insert(
+                HeaderName::from_str(&k).map_err(|e| {
+                    XepakError::LuaScript(format!("Header name is not a valid string {e}"))
+                        .into_lua_err()
+                })?,
+                HeaderValue::from_str(&v.to_string()).map_err(|e| {
+                    XepakError::LuaScript(format!("Header value is not a valid string {e}"))
+                        .into_lua_err()
+                })?,
+            );
+        }
+    }
+    Ok(hm)
+}
+
+async fn http_get(_lua: Lua, (uri, headers): (String, Value)) -> mlua::Result<LuaHttpResponse> {
+    let client = reqwest::Client::new();
+    let builder = client.get(uri).headers(http_build_header_map(headers)?);
+
+    let result = builder.send().await.expect("Request must not fail");
+    Ok(result.into())
+}
+
+async fn http_post_json(
+    lua: Lua,
+    (uri, headers, body): (String, Value, Value),
+) -> mlua::Result<LuaHttpResponse> {
+    let client = reqwest::Client::new();
+
+    let body_json = XepakValue::from_lua(body, &lua)?;
+    let builder = client
+        .post(uri)
+        .headers(http_build_header_map(headers)?)
+        .json(&body_json);
+
+    let result = builder.send().await.expect("Request must not fail");
+    Ok(result.into())
+}
+
+//
+// Pre-Processor
+//
 
 pub struct LuaPreProcessor {
     priority: u16,

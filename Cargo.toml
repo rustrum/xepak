@@ -57,6 +57,7 @@ mlua = { version = "0.11", features = ["lua55", "vendored", "async"] }
 moka = { version = "0.12.16", features = ["future"] }
 rhai = { version = "1.25", features = ["sync", "no_custom_syntax"] }
 # rhai = { version = "1.23", features = ["sync", "no_custom_syntax", "serde"] }
+reqwest = { version = "0.13", features = ["json"] }
 sqlx = { version = "0.9", features = ["runtime-tokio", "sqlite"] }
 sqlx-core = "0.9"
 strum = { version = "0.27", features = ["derive"] }
@@ -72,6 +73,5 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 [dev-dependencies]
 cbor2 = "1.1.4"
 maplit = "1.0"
-reqwest = { version = "0.13", features = ["json"] }
 serial_test = "4.0.1"
 url = "2.5"

@@ -48,6 +48,7 @@ pub enum XepakError {
     #[error("Convert error: {0}")]
     Convert(String),
 
+    /// TODO: Should deprecate it
     #[error("Decode error: {0}")]
     Decode(String),
 
