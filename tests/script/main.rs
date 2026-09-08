@@ -2,6 +2,7 @@
 mod common;
 
 mod errors;
+mod http;
 mod queries;
 
 use std::{collections::HashMap, env, path::PathBuf, str::FromStr};

@@ -1,0 +1,52 @@
+[[endpoint]]
+uri = "/script/http/get"
+
+[endpoint.resource]
+type = "data_script"
+script = """
+local resp = http_get(
+    "http://localhost:8228/http/get",
+    { ["x-api-key"] = "GET-API-key" }
+)
+
+return {
+    success = resp:is_success(),
+    status  = resp:get_status_code(),
+    body    = resp:is_success() and resp:read_body_json() or {}
+}
+"""
+
+
+[[endpoint]]
+uri = "/script/http/post"
+
+[endpoint.resource]
+type = "data_script"
+script = """
+local resp = http_post_json(
+    "http://localhost:8228/http/post",
+    { ["x-api-key"] = "POST-API-key" },
+    { message = "Hello from Xepak" }
+)
+
+return {
+    success = resp:is_success(),
+    status  = resp:get_status_code(),
+    body    = resp:is_success() and resp:read_body_json() or {}
+}
+"""
+
+[[endpoint]]
+uri = "/script/http/error"
+
+[endpoint.resource]
+type = "data_script"
+script = """
+local resp = http_get("http://localhost:8228/http/missing", {})
+
+return {
+    success = resp:is_success(),
+    status  = resp:get_status_code(),
+    body    = resp:is_success() and resp:read_body_json() or {}
+}
+"""
