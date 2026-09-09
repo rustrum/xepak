@@ -68,7 +68,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 
 
 [dev-dependencies]
-apate = "0.1.1"
+apate = "0.1.2"
 cbor2 = "1.1.4"
 maplit = "1.0"
 serial_test = "4.0.1"

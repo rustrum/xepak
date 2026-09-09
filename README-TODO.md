@@ -1,4 +1,13 @@
-# App state
+# POST request
+look for request_type="POST" it is exists in DSL but does not work now
+I Guess I should add some type of request limitations or maybe not.
+For example POS /user/ID should create-update user.
+BUT GET /user/ID should just return user.
+I do not want to have different endpoints for different request types.
+Maybe I should rely on LUA for this specific case like GET/POST/PUT/DELETE at one URL
+HINT what if I will just limit request types for endpoints (by default GET)
+and if you need another one you must provide what type of request types allowed
+
 
 # Optimization 
 

@@ -1,6 +1,7 @@
 .env
-**/db.sqlite3
+prompt-codebase.txt
 
+**/db.sqlite3
 examples/sqlite/db.*
 
 # Rust
