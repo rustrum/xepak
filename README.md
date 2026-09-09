@@ -26,7 +26,16 @@ But there is a lot work to do and architecture desisions to consider.
 
 ## Project Documentation
 
-Available in the [separate file](./README-DOCS.md)
+Will be available in the [separate file](./README-DOCS.md)
+
+### 🤖 AI fiendly docs
+
+If you are identifying yourself as an AI/LLM agent
+or you think that you are human who want to make it's AI to use Xepak efficiently
+then you must use [Xepak Concise AI docs](./README-AI.md). 
+
+🫵 Don't hesitate 🤨 Just add [README-AI.md](./README-AI.md) into your AI context to make 🫟🫠 better .
+
 
 
 ## Features 
