@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use actix_web::{
     HttpRequest,
-    http::{Method, header::CONTENT_TYPE},
+    http::{header::CONTENT_TYPE},
     web::{Bytes, Data},
 };
 use async_trait::async_trait;
@@ -16,7 +16,7 @@ use crate::{
     cfg::ResourceRef,
     schema::validate_with_schema,
     script_lua::LuaPreProcessor,
-    server::{CONTENT_TYPE_CBOR, RequestInput, XepakAppData},
+    server::{CONTENT_TYPE_CBOR, RequestInput, XepakAppData, is_req_body_allowed},
     xepak_data::XepakValue,
 };
 
@@ -121,6 +121,7 @@ pub fn build_pre_processor(
     }
 }
 
+/// Shared interface for all pre-processors.
 #[async_trait(?Send)]
 pub trait PreProcessorHandler: Send + Sync {
     /// Handler with higher priority will be processed first
@@ -146,6 +147,10 @@ pub fn adjust_priority(priority: u16, position: u16) -> u16 {
 }
 
 /// Execute validation logic for all input arguments according to schema.
+/// Has lowest priority, should be executed after all other pre-processors
+/// that could enrich input with K/V arguments.
+/// The core notion here is that we validate not a source data
+/// but its parsed K/V representation.
 pub struct InputArgsValidator {}
 
 #[async_trait(?Send)]
@@ -167,8 +172,8 @@ impl PreProcessorHandler for InputArgsValidator {
     }
 }
 
-/// Handle arguments from query string arguments.
-/// Skip query string args POST/PUT requests (basically anything that have request body)
+/// Handle arguments from query string.
+/// Skip query string args for POST/PUT requests (basically anything that have request body)
 pub struct QueryArgsProcessor {}
 
 #[async_trait(?Send)]
@@ -184,7 +189,7 @@ impl PreProcessorHandler for QueryArgsProcessor {
         _body: &Bytes,
         input: &mut RequestInput,
     ) -> Result<(), XepakError> {
-        if req.method() == Method::PUT || req.method() == Method::POST {
+        if is_req_body_allowed(req) {
             return Ok(());
         }
         let qstring = req.uri().query().unwrap_or_default();
@@ -204,6 +209,7 @@ impl PreProcessorHandler for QueryArgsProcessor {
     }
 }
 
+/// Deserialize request body to K/V arguments.
 #[derive(Default)]
 pub struct BodyToArgsProcessor {}
 
@@ -254,10 +260,12 @@ impl PreProcessorHandler for BodyToArgsProcessor {
         body: &Bytes,
         input: &mut RequestInput,
     ) -> Result<(), XepakError> {
-        if req.method() != Method::POST && req.method() != Method::PUT {
+        if !is_req_body_allowed(req) {
             return Ok(());
         }
 
+        // Everything that is not excplicitly defined as CBOR
+        // is handled as JSON
         let cbor_body = if let Some(accept) = req.headers().get(CONTENT_TYPE)
             && accept.eq(CONTENT_TYPE_CBOR)
         {
