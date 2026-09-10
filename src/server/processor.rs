@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use actix_web::{
     HttpRequest,
-    http::{header::CONTENT_TYPE},
+    http::header::CONTENT_TYPE,
     web::{Bytes, Data},
 };
 use async_trait::async_trait;
@@ -216,10 +216,30 @@ pub struct BodyToArgsProcessor {}
 impl BodyToArgsProcessor {
     pub fn handle_cbor_body(
         &self,
-        _body: &Bytes,
-        _input: &mut RequestInput,
+        body: &Bytes,
+        input: &mut RequestInput,
     ) -> Result<(), XepakError> {
-        todo!("Implement CBOR parsing")
+        if body.is_empty() {
+            return Ok(());
+        }
+
+        let req_body: XepakValue = cbor2::from_slice(body)
+            .map_err(|e| XepakError::Input(format!("Wrong CBOR format: {e}")))?;
+
+        let req_body_map = req_body.as_map()?;
+
+        for (key, value) in req_body_map {
+            let xvalue = if value.is_tuple() || value.is_map() {
+                return Err(XepakError::Input(format!(
+                    "(๑•ᗝ•)૭ Root CBOR must NOT have any nested arrays or objects. See \"{key}\" property."
+                )));
+            } else {
+                value.clone()
+            };
+
+            input.set_arg_with_schema(key, xvalue, true)?;
+        }
+        Ok(())
     }
 
     pub fn handle_json_body(
@@ -227,6 +247,10 @@ impl BodyToArgsProcessor {
         body: &Bytes,
         input: &mut RequestInput,
     ) -> Result<(), XepakError> {
+        if body.is_empty() {
+            return Ok(());
+        }
+
         let json_request: serde_json::Value = serde_json::from_slice(body)
             .map_err(|e| XepakError::Input(format!("Wrong JSON format: {e}")))?;
 

@@ -195,6 +195,10 @@ impl LuaRequestContext {
             .unwrap_or(false);
         Ok(Value::Boolean(result))
     }
+
+    fn get_request_method(_lua: &Lua, this: &Self, _: ()) -> mlua::Result<String> {
+        Ok(this.input.method.clone())
+    }
 }
 
 impl UserData for LuaRequestContext {
@@ -207,6 +211,7 @@ impl UserData for LuaRequestContext {
         methods.add_method("get_auth_id", Self::get_auth_id);
         methods.add_method("get_auth_roles", Self::get_auth_roles);
         methods.add_method("has_auth_role", Self::has_auth_role);
+        methods.add_method("get_request_method", Self::get_request_method);
     }
 }
 
