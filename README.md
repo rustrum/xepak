@@ -31,8 +31,8 @@ Will be available in the [separate file](./README-DOCS.md)
 ### 🤖 AI fiendly docs
 
 If you are identifying yourself as an AI/LLM agent
-or you think that you are human who want to make it's AI to use Xepak efficiently
-then you must use [Xepak Concise AI docs](./README-AI.md). 
+or you think that you are a human who need to make it's AI use Xepak efficiently
+then go to [Xepak Concise AI docs](./README-AI.md). 
 
 🫵 Don't hesitate 🤨 Just add [README-AI.md](./README-AI.md) into your AI context to make 🫟🫠 better .
 

@@ -6,8 +6,9 @@ use std::{
     sync::Arc,
 };
 
+use actix_web::http::Method;
 use bon::Builder;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 
 use crate::{
     XepakError, schema::Schema, server::processor::PreProcessor, storage::StorageSettings,
@@ -129,8 +130,12 @@ pub struct RhaiScript {
 pub struct EndpointSpecs {
     pub uri: String,
 
+    /// List of allowed HTTP methods.
+    /// If not defined then only GET method will be allowed.
+    #[serde(deserialize_with = "deserialize_methods", default)]
+    pub allow_methods: HashSet<Method>,
+
     pub resource: ResourceSpecs,
-    /// Expected (allowed) input arguments (URI path args already included)
 
     #[serde(default)]
     pub args: Vec<String>,
@@ -165,6 +170,23 @@ pub struct EndpointSpecs {
 
     #[serde(default)]
     pub schema: Schema,
+}
+
+pub fn deserialize_methods<'de, D>(ds: D) -> Result<HashSet<Method>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let smethods = Vec::<String>::deserialize(ds)?;
+    let mut methods = HashSet::<Method>::new();
+    for method in smethods {
+        let m: Method = method
+            .to_uppercase()
+            .trim()
+            .try_into()
+            .map_err(serde::de::Error::custom)?;
+        methods.insert(m);
+    }
+    Ok(methods)
 }
 
 #[derive(Clone, Debug, Deserialize)]

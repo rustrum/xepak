@@ -1,0 +1,23 @@
+[[endpoint]]
+uri = "/input/method/default"
+
+[endpoint.resource]
+type = "data_script"
+script = """
+return {
+    method = ctx:get_request_method()
+}
+"""
+
+
+[[endpoint]]
+uri = "/input/method/post-put"
+allow_methods = ['POST', 'PUT']
+
+[endpoint.resource]
+type = "data_script"
+script = """
+return {
+    method = ctx:get_request_method()
+}
+"""

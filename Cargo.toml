@@ -3,7 +3,7 @@ resolver = "3"
 members = ["behind", "xepak"]
 
 [workspace.package]
-version = "0.0.1"
+version = "0.0.2"
 edition = "2024"
 homepage = "https://github.com/rustrum/xepak"
 repository = "https://github.com/rustrum/xepak.git"

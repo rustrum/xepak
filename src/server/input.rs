@@ -20,6 +20,9 @@ pub struct RequestInput {
     /// If true - fail on non existing args
     strict_schema: bool,
 
+    /// HTTP request method (GET, POST, etc.)
+    pub(crate) method: String,
+
     /// Arguments parsed from URI (higher priority)
     pub(crate) path_args: Arc<Mutex<HashMap<String, XepakValue>>>,
 
@@ -37,7 +40,13 @@ pub struct RequestInput {
 
 impl RequestInput {
     /// Meant to be executed while handling query string in main logic.
-    pub fn new(schema: Schema, strict_schema: bool, uri_pattern: &str, req_path: &str) -> Self {
+    pub fn new(
+        schema: Schema,
+        strict_schema: bool,
+        method: String,
+        uri_pattern: &str,
+        req_path: &str,
+    ) -> Self {
         // Todo return result that will validate path_args against schema
 
         let mut path = actix_router::Path::new(req_path);
@@ -54,6 +63,7 @@ impl RequestInput {
             schema,
             strict_schema,
             auth: Arc::new(None),
+            method,
             path_args: Arc::new(Mutex::new(path_args)),
             args: Arc::new(Mutex::new(Default::default())),
             limit: 0,
@@ -63,11 +73,13 @@ impl RequestInput {
 
     /// To use in other parts of code not linked with main request processing flow
     /// like script or processors.
+    /// It will be unaware of HTTP request context.
     pub fn new_simple(args: HashMap<String, XepakValue>, limit: usize, offset: usize) -> Self {
         RequestInput {
             auth: Arc::new(None),
             schema: Schema::default(),
             strict_schema: false,
+            method: String::new(),
             path_args: Arc::new(Mutex::new(Default::default())),
             args: Arc::new(Mutex::new(args)),
             limit,

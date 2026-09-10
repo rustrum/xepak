@@ -1,13 +1,9 @@
-# POST request
+# Input validators
 
-look for request_type="POST" it is exists in DSL but does not work now
-I Guess I should add some type of request limitations or maybe not.
-For example POS /user/ID should create-update user.
-BUT GET /user/ID should just return user.
-I do not want to have different endpoints for different request types.
-Maybe I should rely on LUA for this specific case like GET/POST/PUT/DELETE at one URL
-HINT what if I will just limit request types for endpoints (by default GET)
-and if you need another one you must provide what type of request types allowed
+I guess it does not work now. Should enable and add some tests to it.
+
+Should later add ability to have a nested N layer data in request body.
+Now it is just forced to fail if it is more than just a K/V dict.
 
 
 # Optimization 
@@ -31,9 +27,20 @@ MutexGuard also does not look as a reasonable solution.
 
 Multiple data sources (this could be a killer feature)
 
+## CORS processing
+
+Not implemented right now.
+**Do not want to do it right now** - proxy server or API gateway that handle HTTPS should be responsible for it.
+!!! TODO: Add documentation to emphasize this.
+
 
 The "Preflight" Difference (CORS)
 When you make a request from a browser to a different domain (your API):
-Authorization: Bearer: This is a standard header. If your API is configured for CORS, the browser will likely still trigger a "preflight" (OPTIONS) request, but many servers and gateways are pre-configured to handle Authorization automatically.
-api-key or x-api-key: These are considered non-standard custom headers. When a browser sees a custom header, it always triggers a CORS preflight request.
+
+Authorization:Bearer:
+This is a standard header. If your API is configured for CORS, the browser will likely still trigger a "preflight" (OPTIONS) request, but many servers and gateways are pre-configured to handle Authorization automatically.
+
+api-key or x-api-key:
+These are considered non-standard custom headers. When a browser sees a custom header, it always triggers a CORS preflight request.
+
 The Trap: If your server-side CORS policy does not explicitly list api-key in its Access-Control-Allow-Headers list, the browser will block the request entirely. 

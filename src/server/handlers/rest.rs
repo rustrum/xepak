@@ -1,13 +1,13 @@
 use actix_web::{
     Handler, HttpRequest, HttpResponse,
     dev::HttpServiceFactory,
-    http::{StatusCode, header::ACCEPT},
+    http::{Method, StatusCode, header::ACCEPT},
     web::{self, Bytes, Data},
 };
 use rhai::{AST, Engine};
 use std::{pin::Pin, sync::Arc};
 
-use super::{to_cbor_response, to_json_response, EndpointHandlerArgs};
+use super::{EndpointHandlerArgs, to_cbor_response, to_json_response};
 use crate::{
     XepakError,
     cfg::{EndpointSpecs, ResourceRef, ResourceSpecs},
@@ -117,6 +117,21 @@ impl EndpointHandler {
         Ok(processors)
     }
 
+    fn validate_method_allowed(&self, req: &HttpRequest) -> Result<(), XepakError> {
+        let am = &self.ep.allow_methods;
+        if am.is_empty() && (req.method() == Method::GET || req.method() == Method::DELETE) {
+            return Ok(());
+        }
+        if am.contains(req.method()) {
+            return Ok(());
+        }
+
+        Err(XepakError::Input(format!(
+            "Request method {} not allowed!",
+            req.method()
+        )))
+    }
+
     async fn handle(
         &self,
         req: HttpRequest,
@@ -153,9 +168,12 @@ impl EndpointHandler {
         state: &Data<XepakAppData>,
         body: &Bytes,
     ) -> Result<RequestInput, XepakError> {
+        self.validate_method_allowed(req)?;
+
         let mut input = RequestInput::new(
             self.ep.schema.clone(),
             self.ep.strict_schema,
+            req.method().to_string(),
             &self.ep.uri,
             req.path(),
         );

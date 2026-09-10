@@ -193,7 +193,7 @@ pub mod client {
     use super::*;
 
     use reqwest::{
-        Response, StatusCode,
+        Body, Response, StatusCode,
         header::{HeaderMap, HeaderName, HeaderValue},
     };
     use std::{collections::HashMap, fmt::Display};
@@ -256,27 +256,25 @@ pub mod client {
         builder.send().await.expect("Request must not fail")
     }
 
-    pub fn cbor_headers() -> HashMap<String, String> {
-        let mut h = HashMap::new();
-        h.insert("accept".to_string(), CONTENT_TYPE_CBOR.to_string());
-        h
+    pub async fn post<B: Into<Body>>(uri: &str, body: B) -> Response {
+        post_resource(uri, body, HashMap::<String, String>::new()).await
     }
 
-    pub async fn post_resource<T: Display>(
+    pub async fn post_resource<B: Into<Body>, T: Display>(
         uri: &str,
-        query_args: HashMap<String, T>,
+        body: B,
         _headers: HashMap<String, T>,
-    ) {
+    ) -> Response {
         let client = reqwest::Client::new();
 
-        let mut uri = api_url(uri);
+        let uri = api_url(uri);
 
-        if !query_args.is_empty() {
-            let qs = to_query_string(query_args);
-            uri = format!("{uri}?{qs}");
-        }
-
-        let _response = client.post(uri).send().await.expect("Request failed");
+        client
+            .post(uri)
+            .body(body)
+            .send()
+            .await
+            .expect("Request failed")
     }
 
     pub async fn extract_from_json<V: serde::de::DeserializeOwned>(
@@ -295,6 +293,12 @@ pub mod client {
             .json()
             .await
             .expect("Should parse response as JSON")
+    }
+
+    pub fn cbor_headers() -> HashMap<String, String> {
+        let mut h = HashMap::new();
+        h.insert("accept".to_string(), CONTENT_TYPE_CBOR.to_string());
+        h
     }
 
     pub async fn extract_from_cbor<V>(response: Response, expect: Option<StatusCode>) -> V
