@@ -1,33 +1,26 @@
-use std::{pin::Pin, sync::Arc};
-
 use actix_web::{
-    Handler, HttpRequest, HttpResponse, HttpResponseBuilder,
-    body::BoxBody,
+    Handler, HttpRequest, HttpResponse,
     dev::HttpServiceFactory,
-    http::{
-        StatusCode,
-        header::{ACCEPT, CONTENT_TYPE},
-    },
+    http::{StatusCode, header::ACCEPT},
     web::{self, Bytes, Data},
 };
 use rhai::{AST, Engine};
+use std::{pin::Pin, sync::Arc};
 
+use super::{to_cbor_response, to_json_response, EndpointHandlerArgs};
 use crate::{
     XepakError,
     cfg::{EndpointSpecs, ResourceRef, ResourceSpecs},
     script_lua::{execute_lua_script, init_lua_env_fn},
     script_rhai::{build_rhai_ast, build_rhai_engine, execute_script_blocking},
     server::{
-        CONTENT_TYPE_CBOR, CONTENT_TYPE_JSON, LIMIT_HEADER, OFFSET_HEADER, RequestInput,
-        XepakAppData,
+        CONTENT_TYPE_CBOR, RequestInput, XepakAppData,
         processor::{PreProcessorHandler, build_pre_processor, init_required_pre_processors},
         to_error_object,
     },
     storage::{ResourceRequest, SqlxRequestArgs, Storage},
     xepak_data::{XepakType, XepakValue},
 };
-
-type EndpointHandlerArgs = (HttpRequest, Data<XepakAppData>, Bytes);
 
 #[derive(Clone)]
 pub struct EndpointHandler {
@@ -348,57 +341,5 @@ impl HttpServiceFactory for EndpointHandler {
         //     // }))
         //     // .route(web::route().to(self))
         //     .register(config);
-    }
-}
-
-fn to_json_response(
-    code: StatusCode,
-    data: &XepakValue,
-    limit: usize,
-    offset: usize,
-) -> HttpResponse<BoxBody> {
-    match data.to_json() {
-        Ok(body) => {
-            let mut resp = HttpResponseBuilder::new(code);
-            resp.append_header((CONTENT_TYPE, CONTENT_TYPE_JSON));
-            if limit > 0 {
-                resp.append_header((LIMIT_HEADER, limit.to_string()));
-            }
-            if offset > 0 {
-                resp.append_header((OFFSET_HEADER, offset.to_string()));
-            }
-
-            resp.body(body)
-        }
-        Err(e) => {
-            tracing::error!("Can't serialize response: {e}");
-            HttpResponse::InternalServerError().body(format!("{e}"))
-        }
-    }
-}
-
-fn to_cbor_response(
-    code: StatusCode,
-    data: &XepakValue,
-    limit: usize,
-    offset: usize,
-) -> HttpResponse<BoxBody> {
-    match data.to_cbor_vec() {
-        Ok(body) => {
-            let mut resp = HttpResponseBuilder::new(code);
-            resp.append_header((CONTENT_TYPE, CONTENT_TYPE_CBOR));
-            if limit > 0 {
-                resp.append_header((LIMIT_HEADER, limit.to_string()));
-            }
-            if offset > 0 {
-                resp.append_header((OFFSET_HEADER, offset.to_string()));
-            }
-
-            resp.body(body)
-        }
-        Err(e) => {
-            tracing::error!("Can't serialize response: {e}");
-            HttpResponse::InternalServerError().body(format!("{e}"))
-        }
     }
 }

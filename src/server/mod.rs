@@ -1,5 +1,5 @@
 pub mod cache;
-pub mod handler;
+pub mod handlers;
 pub mod input;
 pub mod processor;
 pub mod registry;
@@ -10,17 +10,17 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use actix_web::App;
 use actix_web::dev::Server;
-use actix_web::http::StatusCode;
+use actix_web::http::{Method, StatusCode};
 use actix_web::middleware::Logger;
 use actix_web::web::ServiceConfig;
+use actix_web::{App, HttpRequest};
 use actix_web::{HttpServer, web::Data};
 
 use crate::XepakError;
 use crate::cfg::{ResourceRef, XepakConf, XepakSpecs};
 use crate::server::cache::AppCache;
-use crate::server::handler::EndpointHandler;
+use crate::server::handlers::EndpointHandler;
 use crate::server::processor::PreProcessor;
 use crate::server::registry::AppRegistry;
 use crate::storage::{Storage, init_storage_connectors};
@@ -202,6 +202,11 @@ fn cache_cleanup(cache: AppCache) {
             cache.cleanup().await;
         }
     });
+}
+
+#[inline]
+pub fn is_req_body_allowed(req: &HttpRequest) -> bool {
+    req.method() == Method::POST || req.method() == Method::PUT || req.method() == Method::PATCH
 }
 
 pub fn to_error_object(err: XepakError) -> (StatusCode, XepakValue) {
