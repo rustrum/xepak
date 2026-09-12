@@ -86,22 +86,20 @@ impl LuaAppData {
         }
     }
 
-    fn get_registry_value(lua: &Lua, this: &Self, key: String) -> mlua::Result<Value> {
-        match this.data.get_registry_value(&key) {
-            Some(v) => v.clone().into_lua(lua),
-            None => Ok(Value::Nil),
-        }
+    fn get_registry_value(_lua: &Lua, this: &Self, key: String) -> mlua::Result<XepakValue> {
+        Ok(this
+            .data
+            .get_registry_value(&key)
+            .cloned()
+            .unwrap_or(XepakValue::Null))
     }
 
     async fn cache_get(
-        lua: Lua,
+        _lua: Lua,
         this: mlua::UserDataRef<Self>,
         key: String,
-    ) -> mlua::Result<Value> {
-        match this.data.cache_get(&key).await {
-            Some(v) => v.into_lua(&lua),
-            None => Ok(Value::Nil),
-        }
+    ) -> mlua::Result<XepakValue> {
+        Ok(this.data.cache_get(&key).await.unwrap_or(XepakValue::Null))
     }
 
     async fn cache_set(
@@ -144,11 +142,11 @@ impl LuaRequestContext {
         Ok(this.input.has_any_arg(&arg_name))
     }
 
-    fn get_arg(lua: &Lua, this: &Self, arg_name: String) -> mlua::Result<Value> {
-        match this.input.get_arg_value(&arg_name) {
-            Some(v) => v.into_lua(lua),
-            None => Ok(Value::Nil),
-        }
+    fn get_arg(_lua: &Lua, this: &Self, arg_name: String) -> mlua::Result<XepakValue> {
+        Ok(this
+            .input
+            .get_arg_value(&arg_name)
+            .unwrap_or(XepakValue::Null))
     }
 
     fn set_arg(lua: &Lua, this: &mut Self, (arg_name, value): (String, Value)) -> mlua::Result<()> {
@@ -273,6 +271,25 @@ impl UserData for LuaQueryBuilder {
     }
 }
 
+/// Wrapper to pass blobs inside LUA
+struct LuaBlob(Vec<u8>);
+
+impl LuaBlob {
+    fn new(_: &Lua, bytes_str: String) -> mlua::Result<Self> {
+        Ok(Self(bytes_str.into_bytes()))
+    }
+    /// Returns bytes representation as LUA string
+    fn as_bytes(lua: &Lua, this: &Self, _: ()) -> mlua::Result<Value> {
+        Ok(Value::String(lua.create_string(&this.0)?))
+    }
+}
+
+impl UserData for LuaBlob {
+    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("as_bytes", Self::as_bytes);
+    }
+}
+
 impl IntoLua for XepakValue {
     fn into_lua(self, lua: &Lua) -> mlua::Result<Value> {
         match self {
@@ -281,7 +298,7 @@ impl IntoLua for XepakValue {
             XepakValue::Integer(v) => Ok(Value::Integer(v as i64)),
             XepakValue::Float(v) => Ok(Value::Number(v)),
             XepakValue::Text(v) => Ok(Value::String(lua.create_string(&v)?)),
-            XepakValue::Blob(v) => Ok(Value::String(lua.create_string(&v)?)),
+            XepakValue::Blob(v) => Ok(Value::UserData(lua.create_userdata(LuaBlob(v))?)),
             XepakValue::Map(v) => {
                 let t = lua.create_table()?;
                 for (k, xv) in v {
@@ -347,6 +364,9 @@ impl FromLua for XepakValue {
                 }
                 Ok(XepakValue::Map(map))
             }
+            Value::UserData(ud) if let Ok(ud_ref) = ud.borrow::<LuaBlob>() => {
+                Ok(XepakValue::Blob(ud_ref.0.to_vec()))
+            }
             // TODO lua handles bytes as string so it is not possible to explicitly convert back to Blob
             other => Err(LuaError::runtime(format!(
                 "{} not compatible with XepakValue",
@@ -368,13 +388,17 @@ pub fn build_lua_engine(app_state: &XepakAppData) -> Result<Lua, XepakError> {
 
     lua.globals().set("app", app_data)?;
 
+    // Constructors
     lua.globals()
         .set("query_builder", lua.create_function(LuaQueryBuilder::new)?)?;
+    lua.globals()
+        .set("blob_type", lua.create_function(LuaBlob::new)?)?;
 
     lua.globals()
         .set("log_info", lua.create_function(log_info)?)?;
     lua.globals()
         .set("log_debug", lua.create_function(log_debug)?)?;
+
     lua.globals()
         .set("error_input", lua.create_function(error_input)?)?;
     lua.globals()
@@ -543,7 +567,7 @@ where
                 }
                 xerror
             } else {
-                tracing::error!("Lua scrip error: {e}");
+                tracing::error!("Lua script error: {e}");
                 XepakError::LuaScript(e.to_string())
             })
         }
