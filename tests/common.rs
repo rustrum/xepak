@@ -138,18 +138,26 @@ impl XepakTestServer {
 
 pub mod domain {
     use base64::{Engine as _, engine};
-    use serde::{Deserialize, Deserializer};
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-    #[derive(Deserialize, Debug, PartialEq)]
+    #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
     pub struct TypesRecord {
         pub id: u64,
         #[serde(default)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         pub type_text: Option<String>,
         #[serde(default)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         pub type_int: Option<i64>,
         #[serde(default)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         pub type_real: Option<f64>,
-        #[serde(deserialize_with = "deserialize_blob", default)]
+        #[serde(
+            serialize_with = "serialize_blob",
+            deserialize_with = "deserialize_blob",
+            default
+        )]
+        #[serde(skip_serializing_if = "Option::is_none")]
         pub type_blob: Option<Vec<u8>>,
     }
 
@@ -171,7 +179,7 @@ pub mod domain {
     where
         D: Deserializer<'de>,
     {
-        // Human readable -> JSON -> bytes shold be as string
+        // Human readable -> JSON -> bytes should be as string
         if deserializer.is_human_readable() {
             match Option::<String>::deserialize(deserializer)? {
                 None => Ok(None),
@@ -186,6 +194,23 @@ pub mod domain {
             Option::<Vec<u8>>::deserialize(deserializer)
         }
     }
+
+    pub fn serialize_blob<S>(value: &Option<Vec<u8>>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match value {
+            None => serializer.serialize_none(),
+            Some(bytes) => {
+                if serializer.is_human_readable() {
+                    let encoded = engine::general_purpose::STANDARD.encode(bytes);
+                    serializer.serialize_str(&encoded)
+                } else {
+                    serializer.serialize_bytes(bytes)
+                }
+            }
+        }
+    }
 }
 
 pub mod client {
@@ -198,7 +223,7 @@ pub mod client {
     };
     use std::{collections::HashMap, fmt::Display};
     use url::form_urlencoded;
-    use xepak_rest::server::CONTENT_TYPE_CBOR;
+    use xepak_rest::server::{CONTENT_TYPE_CBOR, CONTENT_TYPE_JSON};
 
     fn api_url(uri: &str) -> String {
         format!("http://localhost:{DEFAULT_TEST_PORT}{uri}")
@@ -260,21 +285,77 @@ pub mod client {
         post_resource(uri, body, HashMap::<String, String>::new()).await
     }
 
+    pub async fn post_cbor<B: serde::Serialize>(uri: &str, body: B) -> Response {
+        post_cbor_accept(uri, body, false).await
+    }
+
+    pub async fn post_cbor_accept<B: serde::Serialize>(
+        uri: &str,
+        body: B,
+        accept_json_instead: bool,
+    ) -> Response {
+        let bytes = cbor2::to_vec(&body).expect("CBOR serialize must work");
+        let mut headers = HashMap::new();
+        headers.insert("content-type".to_string(), CONTENT_TYPE_CBOR.to_string());
+        headers.insert(
+            "accept".to_string(),
+            if accept_json_instead {
+                CONTENT_TYPE_JSON.to_string()
+            } else {
+                CONTENT_TYPE_CBOR.to_string()
+            },
+        );
+        post_resource(uri, bytes, headers).await
+    }
+
+    pub async fn post_json<B: serde::Serialize>(uri: &str, body: B) -> Response {
+        post_json_accept(uri, body, false).await
+    }
+
+    pub async fn post_json_accept<B: serde::Serialize>(
+        uri: &str,
+        body: B,
+        accept_cbor_instead: bool,
+    ) -> Response {
+        let json = serde_json::to_string(&body).expect("JSON serialize must work");
+        let mut headers = HashMap::new();
+        headers.insert("content-type".to_string(), CONTENT_TYPE_JSON.to_string());
+        headers.insert(
+            "accept".to_string(),
+            if accept_cbor_instead {
+                CONTENT_TYPE_CBOR.to_string()
+            } else {
+                CONTENT_TYPE_JSON.to_string()
+            },
+        );
+        post_resource(uri, json, headers).await
+    }
+
     pub async fn post_resource<B: Into<Body>, T: Display>(
         uri: &str,
         body: B,
-        _headers: HashMap<String, T>,
+        headers: HashMap<String, T>,
     ) -> Response {
         let client = reqwest::Client::new();
 
         let uri = api_url(uri);
 
-        client
-            .post(uri)
-            .body(body)
-            .send()
-            .await
-            .expect("Request failed")
+        let mut req = client.post(uri).body(body);
+
+        if !headers.is_empty() {
+            let hm: HeaderMap = headers
+                .into_iter()
+                .map(|(k, v)| {
+                    (
+                        HeaderName::from_str(&k).expect("Valid header key required"),
+                        HeaderValue::from_str(&v.to_string()).expect("Valid header value required"),
+                    )
+                })
+                .collect();
+            req = req.headers(hm);
+        }
+
+        req.send().await.expect("Request failed")
     }
 
     pub async fn extract_from_json<V: serde::de::DeserializeOwned>(

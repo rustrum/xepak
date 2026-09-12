@@ -21,3 +21,41 @@ return {
     method = ctx:get_request_method()
 }
 """
+
+[[endpoint]]
+uri = "/input/body/args/simple"
+allow_methods = ['POST', 'PUT']
+pre_processors = [{type = "parse_body_args"}]
+
+[endpoint.schema]
+type_blob = { type = "blob" }
+
+[endpoint.resource]
+type = "data_script"
+script = """
+local args = {}
+args.id = ctx:get_arg("id")
+args.type_text = ctx:get_arg("type_text")
+args.type_int = ctx:get_arg("type_int")
+args.type_real = ctx:get_arg("type_real")
+args.type_blob = ctx:get_arg("type_blob")
+return args
+"""
+
+
+[[endpoint]]
+uri = "/input/body/args/types-record"
+allow_methods = ['POST', 'PUT']
+single_record_response = true
+pre_processors = [
+    {type = "parse_body_args", null_if_abscent = ["type_text", "type_int", "type_real", "type_blob"]}
+]
+
+[endpoint.schema]
+type_blob = { type = "blob" }
+
+[endpoint.resource]
+type = "query"
+query = "INSERT INTO alltypes (type_text, type_int, type_real, type_blob) VALUES ({{type_text}}, {{type_int}}, {{type_real}}, {{type_blob}}) RETURNING *"
+
+

@@ -20,11 +20,13 @@ use crate::{
     xepak_data::XepakValue,
 };
 
-pub const PRIORITY_FIRST: u16 = 60_000;
+pub const PRIORITY_FIRST: u16 = 30_000;
 
-pub const PRIORITY_NORMAL: u16 = 30_000;
+pub const PRIORITY_NORMAL: u16 = 20_000;
 
 pub const PRIORITY_LAST: u16 = 1000;
+
+const PRIOTIRY_QUERY_ARGS: u16 = PRIORITY_FIRST + 10000;
 
 /// Define request processors variants.
 #[derive(Clone, Debug, Deserialize)]
@@ -36,7 +38,11 @@ pub enum PreProcessor {
     },
 
     /// Extracts body argurments to request object.
-    ParseBodyArgs,
+    ParseBodyArgs {
+        /// If those top level keys were not in request - set them as nulls
+        #[serde(default)]
+        null_if_abscent: Vec<String>,
+    },
 
     SimpleAuthentication {
         /// Allows anonymous authentication
@@ -95,7 +101,9 @@ pub fn build_pre_processor(
                 )))
             }
         }
-        PreProcessor::ParseBodyArgs => Ok(Box::new(BodyToArgsProcessor::default())),
+        PreProcessor::ParseBodyArgs { null_if_abscent } => {
+            Ok(Box::new(BodyToArgsProcessor::new(null_if_abscent.clone())))
+        }
         PreProcessor::SimpleAuthentication { anonymous_auth } => Ok(Box::new(
             SimpleAuthenticationProcessor::new(position, *anonymous_auth),
         )),
@@ -179,7 +187,7 @@ pub struct QueryArgsProcessor {}
 #[async_trait(?Send)]
 impl PreProcessorHandler for QueryArgsProcessor {
     fn priority(&self) -> u16 {
-        PRIORITY_FIRST + 1000
+        PRIOTIRY_QUERY_ARGS
     }
 
     async fn handle(
@@ -210,10 +218,16 @@ impl PreProcessorHandler for QueryArgsProcessor {
 }
 
 /// Deserialize request body to K/V arguments.
-#[derive(Default)]
-pub struct BodyToArgsProcessor {}
+#[derive(Clone)]
+pub struct BodyToArgsProcessor {
+    null_if_abscent: Vec<String>,
+}
 
 impl BodyToArgsProcessor {
+    pub fn new(null_if_abscent: Vec<String>) -> Self {
+        Self { null_if_abscent }
+    }
+
     pub fn handle_cbor_body(
         &self,
         body: &Bytes,
@@ -225,6 +239,12 @@ impl BodyToArgsProcessor {
 
         let req_body: XepakValue = cbor2::from_slice(body)
             .map_err(|e| XepakError::Input(format!("Wrong CBOR format: {e}")))?;
+
+        if !req_body.is_map() {
+            return Err(XepakError::Input(
+                "CBOR request body must be a map/dict".to_string(),
+            ));
+        }
 
         let req_body_map = req_body.as_map()?;
 
@@ -239,6 +259,7 @@ impl BodyToArgsProcessor {
 
             input.set_arg_with_schema(key, xvalue, true)?;
         }
+
         Ok(())
     }
 
@@ -271,6 +292,7 @@ impl BodyToArgsProcessor {
 
             input.set_arg_with_schema(key.clone(), xvalue, true)?;
         }
+
         Ok(())
     }
 }
@@ -288,8 +310,7 @@ impl PreProcessorHandler for BodyToArgsProcessor {
             return Ok(());
         }
 
-        // Everything that is not excplicitly defined as CBOR
-        // is handled as JSON
+        // Everything that is not excplicitly defined as CBOR is handled as JSON
         let cbor_body = if let Some(accept) = req.headers().get(CONTENT_TYPE)
             && accept.eq(CONTENT_TYPE_CBOR)
         {
@@ -299,10 +320,22 @@ impl PreProcessorHandler for BodyToArgsProcessor {
         };
 
         if cbor_body {
-            self.handle_cbor_body(body, input)
+            self.handle_cbor_body(body, input)?;
         } else {
-            self.handle_json_body(body, input)
+            self.handle_json_body(body, input)?;
         }
+
+        for key in &self.null_if_abscent {
+            if !input.has_any_arg(key) {
+                input
+                    .args
+                    .lock()
+                    .unwrap()
+                    .insert(key.clone(), XepakValue::Null);
+            }
+        }
+
+        Ok(())
     }
 
     fn priority(&self) -> u16 {

@@ -15,23 +15,21 @@ I must read project files only if they were not provided in initial prompt!
 ### Batch files read (preferred)
 
 Must try run next cli command to pack all project in a single file:
-`code2prompt . --include="src/**/*,tests/**/*,examples/**/*.toml,examples/**/*.sql,Dockerfile" --include "./README.md,./README-DOCS.md,./README-AI.md" --exclude="agent-gen-docs-instruct.md" -O ./prompt-codebase.txt`
+`code2prompt . --include="src/**/*,tests/**/*,examples/**/*.toml,examples/**/*.sql,Dockerfile" --include "./README.md,./README-DOCS.md,./README-AI.md" --exclude="agent-gen-docs-instruct.md" -O ./prompt-codebase.txt && echo "Total lines count: $(wc -l ./prompt-codebase.txt)"`
 
-Will try to read full file `./prompt-codebase.txt` 
-if reading tool returned part of the file (trimmed content)
-I will try to read again in batches untill the last file line!
-Important not expections!
+IMPORTANT! Will read `./prompt-codebase.txt` in batches because of read file tool internal limits.
+Must validate that numer or readed lines matches value reported in CLI while executing `code2prompt`.
 
 ### Read existing state (if code2prompt fails)
 
-I must read first`README.md` and `README-AI.md`.
+Must skip individual files read only if `prompt-codebase.txt` was not generated.
 
-After then must read all files from:
+Will read first`README.md` and `README-AI.md`.
 - `src` dir `ls -R ./src` - core code functionality
 - `tests` dir `ls -R ./tests` - could spot some light on how to use rust API
 - `examples` dir `ls -R ./examples` - are mostly varios examples of DSL usage
 
-## Validate existing docuementation
+## Validate existing docs
 
 Will validate current docs to check if there any discrepancy with an actual project functionality.
 
