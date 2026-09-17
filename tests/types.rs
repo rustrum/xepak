@@ -9,7 +9,7 @@ use reqwest::StatusCode;
 use serde_json::Value as JsonValue;
 
 use serial_test::serial;
-use xepak_rest::xepak_data::XepakValue;
+use xepak::xepak_data::XepakValue;
 
 // #[tokio::main(flavor = "current_thread")]
 // #[test]

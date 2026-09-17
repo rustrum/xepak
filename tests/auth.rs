@@ -9,7 +9,7 @@ use std::{
     path::PathBuf,
     str::FromStr as _,
 };
-use xepak_rest::cfg::{load_conf_file, load_specs_from_dir};
+use xepak::cfg::{load_conf_file, load_specs_from_dir};
 
 use serial_test::serial;
 
@@ -168,7 +168,7 @@ async fn auth_default_pre_processor() {
     let specs_dir = PathBuf::from_str(SPECS_DIR).expect("Specs dir must exists");
     let mut specs = load_specs_from_dir(specs_dir).expect("Should have valid specs");
 
-    use xepak_rest::server::processor::PreProcessor;
+    use xepak::server::processor::PreProcessor;
     specs
         .default_pre_processors
         .push(PreProcessor::SimpleAuthentication {
