@@ -1,0 +1,9 @@
+[package]
+name = "xepak-behind-rs"
+version = "0.0.1"
+edition = "2024"
+homepage = "https://github.com/rustrum/xepak"
+repository = "https://github.com/rustrum/xepak.git"
+license-file = "COPYRIGHT"
+description = "Xepak owned package to avoid supply chain attacks"
+keywords = []

@@ -4,7 +4,7 @@ use std::{fs, path::PathBuf, str::FromStr};
 
 use actix_web::dev::ServerHandle;
 
-use xepak_rest::{cfg::*, server::init_server};
+use xepak::{cfg::*, server::init_server};
 
 pub const DEFAULT_TEST_PORT: u16 = 4321;
 
@@ -223,7 +223,7 @@ pub mod client {
     };
     use std::{collections::HashMap, fmt::Display};
     use url::form_urlencoded;
-    use xepak_rest::server::{CONTENT_TYPE_CBOR, CONTENT_TYPE_JSON};
+    use xepak::server::{CONTENT_TYPE_CBOR, CONTENT_TYPE_JSON};
 
     fn api_url(uri: &str) -> String {
         format!("http://localhost:{DEFAULT_TEST_PORT}{uri}")

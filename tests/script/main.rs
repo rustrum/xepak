@@ -12,7 +12,7 @@ use maplit::hashmap;
 use reqwest::StatusCode;
 use serde_json::Value as JsonValue;
 use serial_test::serial;
-use xepak_rest::{
+use xepak::{
     cfg::{load_conf_file, load_specs_from_dir},
     server::registry::SecretsRegistrySpec,
     xepak_data::XepakValue,

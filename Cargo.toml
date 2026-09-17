@@ -1,9 +1,17 @@
 [workspace]
 resolver = "3"
-members = ["behind", "xepak"]
+members = [
+"behind",
+".xepak-stubs/xepak-api",
+".xepak-stubs/xepak-api-rs",
+".xepak-stubs/xepak-behind-rs",
+".xepak-stubs/xepak-rest",
+".xepak-stubs/xepak-rest-rs",
+".xepak-stubs/xepak-rs"
+]
 
 [workspace.package]
-version = "0.0.2"
+version = "0.0.3-beta1"
 edition = "2024"
 homepage = "https://github.com/rustrum/xepak"
 repository = "https://github.com/rustrum/xepak.git"
@@ -21,7 +29,7 @@ serde_urlencoded = "0.7"
 toml = "1.1.4"
 
 [package]
-name = "xepak-rest"
+name = "xepak"
 version.workspace = true
 edition.workspace = true
 homepage.workspace = true
@@ -30,7 +38,7 @@ description.workspace = true
 license-file.workspace = true
 
 [[bin]]
-name = "xepak-rest"
+name = "xepak"
 
 [features]
 # having getopt in lib by default would not harm much

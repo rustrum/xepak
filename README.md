@@ -2,6 +2,14 @@
 <img src="./xepak-rest.png" alt="REST service for your DB" />
 </p>
 
+<p align="center" width="100%" style="text-align:center">
+<a href="https://crates.io/crates/xepak"><img src="https://img.shields.io/crates/v/xepak?style=for-the-badge" alt="Crates.io"></a>
+<a href="https://docs.rs/xepak"><img src="https://img.shields.io/docsrs/xepak?style=for-the-badge" alt="Released API docs"></a>
+<a href=""><img src="https://img.shields.io/twitter/follow/rumatoest?style=for-the-badge&color=blue" alt="Follow me on X(twitter)" /></a>
+<a href="https://www.reddit.com/user/rumatoest"><img src="https://img.shields.io/reddit/user-karma/combined/rumatoest?style=for-the-badge&color=f3562e" alt="Follow me on reddit"/></a>
+<!-- https://img.shields.io/hackernews/user-karma/rumatoest?style=for-the-badge&color=ff6600&label=Me+on+Hacker+News -->
+</p>
+
 ## TL;DR
 
 Imagine PostgREST but instead of Haskell with PL/SQL it is based on Rust with LUA and focused on Sqlite (and other DBs).
