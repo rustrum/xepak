@@ -1,6 +1,6 @@
 # Xepak — AI Agent Reference
 
-**Version:** 0.0.1 | **Commit:** 37694fc
+**Version:** 0.0.2 | **Commit:** 0cc2eaa
 
 ---
 
@@ -10,7 +10,8 @@ Xepak is a DSL-based REST API server for SQLite databases, configured entirely v
 
 **Key features:**
 - Declarative endpoint definitions in TOML (no Rust/Go/Haskell needed)
-- JSON + CBOR response formats (negotiated via `Accept` header)
+- JSON + CBOR request/response formats (negotiated via `Accept` / `Content-Type` headers)
+- Per-endpoint HTTP method restriction (`allow_methods`) and flat body input for POST/PUT/PATCH
 - SQLite with WAL mode support, migrations, and connection pooling
 - Simple authentication via API key registry or database-backed token auth
 - Authorization rules engine with role-based access control (`ADMIN AND MANAGER`, `#boss OR (ADMIN AND MANAGER)`)
@@ -26,21 +27,22 @@ Xepak is a DSL-based REST API server for SQLite databases, configured entirely v
 
 ```toml
 port = 8080                          # optional, default: 8080
-specs_dir = "./specs"                # optional, default: "./specs"
+specs_dir = "./specs"                # optional, default: "./specs"; relative paths resolve against config file dir
 
 [[storage]]
 type = "sqlite"
-id = "default"                       # optional identifier for multi-datasource
-file = "/path/to/db.sqlite3"         # empty string = in-memory DB
+id = ""                              # datasource identifier (default: ""); must match `data_source` in resources/processors
+file = "/path/to/db.sqlite3"         # empty string = shared in-memory DB; relative paths resolve against config file dir
 create_db = true                     # create if missing
 wal = true                           # enable WAL mode
 migrations_dir = "sqlite/migrations" # path relative to config dir
 
 [registry]
 auth = [
-    { id = "boss", key = "BossKEY", from_env = false, roles = ["ADMIN", "MANAGER"] },
+    { id = "boss", key = "BossKEY", from_env = false, roles = ["ADMIN", "MANAGER"] },  # from_env=true: `key` holds an ENV variable name
     { id = "manager", key = "ManagerKEY", from_env = false, roles = ["MANAGER"] },
     { id = "user", key = "UserKEY", from_env = false },
+    { id = "", key = "" },            # optional anonymous user entry; its `roles` apply to anonymous requests (see simple_authentication)
 ]
 
 # Optional: secrets registry (values loaded from ENV or raw text)
@@ -69,15 +71,17 @@ default_pre_processors = [
 
 # Endpoint definitions
 [[endpoint]]
-uri = "/users/{user_id:\\d+}"
+uri = "/users/{user_id:\d+}"         # {name} path params are captured automatically; regex allowed after ':'
+allow_methods = ["GET", "DELETE"]    # optional HTTP methods whitelist; if absent only GET and DELETE are accepted
+strict_schema = false                # reject unknown input argument names (default: ignore them)
 single_record_response = true        # return 404 if no record, not empty array
-fetch_limit = 20                     # max rows for paginated queries
+fetch_limit = 20                     # max rows for paginated queries (also the default limit)
 limit_arg = "limit"                  # optional query param name (default: "limit")
 offset_arg = "offset"                # optional query param name (default: "offset")
 
 [endpoint.resource]
 type = "query"                       # resource type (see below)
-data_source = "default"              # optional, references storage id
+data_source = ""                     # optional, references storage id; default "" must match storage id
 query = "SELECT * FROM users WHERE id={{user_id}}"
 
 [[endpoint.pre_processors]]          # endpoint-specific pre-processors
@@ -87,6 +91,13 @@ type = "simple_authentication"
 type = "authorize"
 rules = "#boss OR (ADMIN AND MANAGER)"   # auth rules expression
 ```
+
+### Built-in input processing (no configuration needed)
+
+- URI `{param}` values become text arguments (path args override query/body args with the same name).
+- Query string args are parsed for bodyless methods; for POST/PUT/PATCH they are **ignored**.
+- Request bodies exist only for POST/PUT/PATCH and must be a **flat** JSON object or CBOR map (no nested arrays/objects at root); format chosen by `Content-Type` (`application/cbor`, otherwise JSON).
+- Schema conversion + validation runs last, after all pre-processors.
 
 ### Resource types
 
@@ -101,11 +112,13 @@ rules = "#boss OR (ADMIN AND MANAGER)"   # auth rules expression
 | Type | Description | Key fields |
 |------|-------------|------------|
 | `ref` | Reference to a shared pre-processor | `id: string` |
-| `parse_body_args` | Extracts JSON body into request arguments | — |
+| `parse_body_args` | Merges POST/PUT/PATCH body (flat map) into request arguments; no-op for other methods | `null_if_abscent: [keys]` — set listed missing keys to null |
 | `simple_authentication` | API key lookup in registry | `anonymous_auth: bool` |
 | `token_authentication` | Database-backed token auth | `data_source`, `query`, `cache_ttl_sec` |
 | `authorize` | Role-based authorization rules | `rules: string` |
 | `lua_script` | Lua script as pre-processor (validation, etc.) | `script: string` |
+
+The `token_authentication` query runs with an `{{api-key}}` argument and must return a single row with columns `id` (text) and `roles` (comma-separated text); roles are uppercased. With non-zero `cache_ttl_sec`, successful auth is cached per API key for that many seconds.
 
 ### Auth rules expression syntax
 
@@ -121,6 +134,10 @@ manager AND billing AND accounting
 | `#word` | User ID match | `#boss` matches user with id `"boss"` |
 | `AND` / `OR` | Logical operators (must be UPPERCASE) | — |
 | `( )` | Grouping for precedence | `(A AND B) OR C` |
+
+Only one operator type per group: `(a AND b OR c)` is a config error. Mix via nesting: `admin OR (manager AND (billing OR #superID))`.
+
+An empty `rules` string in the `authorize` processor means "authenticated only" (no role/id checks).
 
 ### Schema validation
 
