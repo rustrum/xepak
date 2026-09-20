@@ -12,22 +12,26 @@ For complex logic insted of PlSQL it using LUA scripting.
 
 I must read project files only if they were not provided in initial prompt!
 
-### Batch files read (preferred)
+### Read project files in batch
 
 Must try run next cli command to pack all project in a single file:
-`code2prompt . --include="src/**/*,tests/**/*,examples/**/*.toml,examples/**/*.sql,Dockerfile" --include "./README.md,./README-DOCS.md,./README-AI.md" --exclude="agent-gen-docs-instruct.md" -O ./prompt-codebase.txt && echo "Total lines count: $(wc -l ./prompt-codebase.txt)"`
+`code2prompt . --include="src/**/*,tests/**/*,examples/**/*.toml,examples/**/*.sql,Dockerfile" --include "./README.md,./README-DOCS.md" --exclude="agent-gen-docs-instruct.md" -O ./prompt-codebase.txt && echo "Total lines count: $(wc -l ./prompt-codebase.txt)"`
 
 IMPORTANT! Will read `./prompt-codebase.txt` in batches because of read file tool internal limits.
 Must validate that numer or readed lines matches value reported in CLI while executing `code2prompt`.
 
-### Read existing state (if code2prompt fails)
+### Read current docs with some files
 
-Must skip individual files read only if `prompt-codebase.txt` was not generated.
+Will read `README-AI.md`.
 
-Will read first`README.md` and `README-AI.md`.
-- `src` dir `ls -R ./src` - core code functionality
-- `tests` dir `ls -R ./tests` - could spot some light on how to use rust API
-- `examples` dir `ls -R ./examples` - are mostly varios examples of DSL usage
+If `prompt-codebase.txt` was generated I will skip read other project files,
+cause they must be consumed in a batch read.
+
+If `code2promt` failed then I must read all project files:
+- human docs from `README.md` and `README-DOCS.md`.
+- directory `src` contains all project code
+- directory `tests` contains test with valid DSL 
+- directory `examples` has example projects configuration, BUT it could be outdated
 
 ## Validate existing docs
 
