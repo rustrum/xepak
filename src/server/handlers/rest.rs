@@ -119,7 +119,7 @@ impl EndpointHandler {
 
     fn validate_method_allowed(&self, req: &HttpRequest) -> Result<(), XepakError> {
         let am = &self.ep.allow_methods;
-        if am.is_empty() && (req.method() == Method::GET || req.method() == Method::DELETE) {
+        if am.is_empty() && req.method() == Method::GET {
             return Ok(());
         }
         if am.contains(req.method()) {

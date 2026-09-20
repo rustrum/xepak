@@ -1,10 +1,44 @@
+# Schema improvements
+
+To support JSON-RPC I should have better schema improvements.
+Need to allow nested structures at least.
+Ideally should check nested structures too.
+
+
+# Blob type updates
+
+Should probably wrap inner value in Arc to prevent cloning big Vec<u8>
+Must think from the perspective of file uploads.
+
+## File upload/serve functionality (next release)
+
+- read data as blob.
+- create lua function that writes bytes to file
+- it must be be in post-processor
+    - resource will create record in DB and return it
+    - LUA post processor will accept this value and will read/write file on disk
+    - if LUA failed it could call DB and remove record
+- retreiving data would require post processor to
+    - reading record from DB or constructing local file path in LUA
+    - it is passed to post-processor that reads data 
+    - !!! or maybe it is a special post processor (without LUA) that accepts k-v map from resources and it could output file as stream from URL
+
+Cool idea for the future. Wrap input reader (to do not read all) instead of using blob. 
+
+
 # Input validators
 
-I guess it does not work now. Should enable and add some tests to it.
+Should enable and add some tests to it.
 
 Should later add ability to have a nested N layer data in request body.
 Now it is just forced to fail if it is more than just a K/V dict.
 
+
+# Sqlite Vector support (do later)
+
+It is possible using sqlite-vec but unfortunately it is an experimental
+library and it does not support indexing.
+It is more reasonable to support PostgreSQL first.
 
 # Optimization 
 

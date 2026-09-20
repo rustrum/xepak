@@ -1,9 +1,9 @@
 # Xepak — AI Agent Reference
-
-**Version:** 0.0.2 | **Commit:** 0cc2eaa
-
+ 
+**Version:** 0.0.3-beta1 | **Commit:** 804b0b3
+ 
 ---
-
+ 
 ## Overview
 
 Xepak is a DSL-based REST API server for SQLite databases, configured entirely via TOML files. It provides CRUD endpoints without writing application code — only configuration and optional Lua scripts for complex logic.
@@ -72,7 +72,7 @@ default_pre_processors = [
 # Endpoint definitions
 [[endpoint]]
 uri = "/users/{user_id:\d+}"         # {name} path params are captured automatically; regex allowed after ':'
-allow_methods = ["GET", "DELETE"]    # optional HTTP methods whitelist; if absent only GET and DELETE are accepted
+allow_methods = ["GET", "DELETE"]    # optional HTTP methods whitelist; if absent only GET accepted
 strict_schema = false                # reject unknown input argument names (default: ignore them)
 single_record_response = true        # return 404 if no record, not empty array
 fetch_limit = 20                     # max rows for paginated queries (also the default limit)
