@@ -27,8 +27,11 @@ uri = "/input/body/args/simple"
 allow_methods = ['POST', 'PUT']
 pre_processors = [{type = "parse_body_args"}]
 
-[endpoint.schema]
-type_blob = { type = "blob" }
+[endpoint.schema.input]
+type = "dict"
+items = {
+    type_blob = { type = "blob" }
+}
 
 [endpoint.resource]
 type = "data_script"
@@ -51,8 +54,11 @@ pre_processors = [
     {type = "parse_body_args", null_if_abscent = ["type_text", "type_int", "type_real", "type_blob"]}
 ]
 
-[endpoint.schema]
-type_blob = { type = "blob" }
+[endpoint.schema.input]
+type = "dict"
+items = {
+    type_blob = { type = "blob" }
+}
 
 [endpoint.resource]
 type = "query"

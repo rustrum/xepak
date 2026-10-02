@@ -10,11 +10,12 @@ use std::{pin::Pin, sync::Arc};
 use super::{EndpointHandlerArgs, to_cbor_response, to_json_response};
 use crate::{
     XepakError,
-    cfg::{EndpointSpecs, ResourceRef, ResourceSpecs},
+    cfg::ResourceRef,
     script_lua::{execute_lua_script, init_lua_env_fn},
     script_rhai::{build_rhai_ast, build_rhai_engine, execute_script_blocking},
     server::{
         CONTENT_TYPE_CBOR, RequestInput, XepakAppData,
+        cfg::{EndpointSpecs, ResourceSpecs},
         processor::{PreProcessorHandler, build_pre_processor, init_required_pre_processors},
         to_error_object,
     },
@@ -159,7 +160,24 @@ impl EndpointHandler {
             }
         };
 
+        // Apply output schema if configured
+        let data = match self.apply_output_schema(data) {
+            Ok(d) => d,
+            Err(err) => {
+                let (status_code, data) = to_error_object(err);
+                return self.data_to_response(&req, Some(&ri), status_code, &data);
+            }
+        };
+
         self.build_response(&req, &ri, data)
+    }
+
+    fn apply_output_schema(&self, data: XepakValue) -> Result<XepakValue, XepakError> {
+        if self.ep.schema.output.is_empty() {
+            return Ok(data);
+        }
+        let schema = &self.ep.schema.output;
+        crate::schema::apply_schema(schema, data, "output", false, true).map_err(Into::into)
     }
 
     async fn pre_process_request(
@@ -171,7 +189,7 @@ impl EndpointHandler {
         self.validate_method_allowed(req)?;
 
         let mut input = RequestInput::new(
-            self.ep.schema.clone(),
+            self.ep.schema.input.clone(),
             self.ep.strict_schema,
             req.method().to_string(),
             &self.ep.uri,

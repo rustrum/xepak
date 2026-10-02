@@ -269,8 +269,11 @@ mod tests {
 
         // Blob serializes as a base64 string, so it can't roundtrip as Blob via JSON
         if let XepakValue::Map(map) = &mut decoded {
-            map.entry("blob".to_string())
-                .and_modify(|e| *e = e.to_type(XepakType::Blob).expect("Must convert to blob"));
+            map.entry("blob".to_string()).and_modify(|e| {
+                *e = e
+                    .to_type(XepakType::Blob, true)
+                    .expect("Must convert to blob")
+            });
         }
         assert_eq!(decoded, expected);
 

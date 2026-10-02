@@ -15,6 +15,7 @@ use crate::{
 /// Also it could be updated from resource script before executing output query.
 #[derive(Debug, Clone)]
 pub struct RequestInput {
+    /// Input schema
     pub(crate) schema: Schema,
 
     /// If true - fail on non existing args
@@ -144,21 +145,26 @@ impl RequestInput {
         Some(ivalue as usize)
     }
 
-    /// Set argument value and apply schema conversion to it if any defined.
-    /// Strict [`Schema`] rules will apply only if `enforce_schema = true`,
-    /// this is needed to avoid schema.
-    pub fn set_arg_with_schema(
+    /// Set top level named argument value and apply schema conversion to it if any defined.
+    /// Strict [`Schema`] rules will apply only if `enforce_schema = true`.
+    pub fn set_named_arg_with_schema(
         &mut self,
         name: String,
         value: XepakValue,
         enforce_schema: bool,
     ) -> Result<(), XepakError> {
-        let value = convert_with_schema(
-            &self.schema,
-            name.as_str(),
-            value,
-            self.strict_schema && enforce_schema,
-        )?;
+        let arg_name = name.as_str();
+        let value = if self.strict_schema && enforce_schema {
+            let schema = self.schema.get_arg_schema_strict(arg_name)?;
+            convert_with_schema(schema, arg_name, value)?
+        } else {
+            if let Some(schema) = self.schema.get_arg_schema(arg_name) {
+                convert_with_schema(schema, arg_name, value)?
+            } else {
+                value
+            }
+        };
+
         self.args.lock().unwrap().insert(name, value);
         Ok(())
     }

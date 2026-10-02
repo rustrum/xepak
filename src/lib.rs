@@ -1,12 +1,13 @@
 pub mod auth;
 pub mod cfg;
-pub mod schema;
 pub mod script_lua;
 pub mod script_rhai;
 pub mod server;
 mod sql_key_args;
 pub mod storage;
 pub mod xepak_data;
+
+pub use xepak_data::schema;
 
 use std::sync::Arc;
 
@@ -100,6 +101,7 @@ impl From<XepakDataError> for XepakError {
                 XepakError::Convert(value.to_string())
             }
             XepakDataError::Decode(msg) => XepakError::Decode(msg),
+            XepakDataError::Validate(msg) => XepakError::Input(msg),
         }
     }
 }

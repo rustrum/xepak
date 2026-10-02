@@ -1,11 +1,14 @@
 use std::{pin::Pin, sync::Arc};
 
 use actix_web::{Handler, HttpResponse, dev::HttpServiceFactory, web};
+use serde::{Deserialize, Serialize};
 
 use crate::{
-    cfg::{EndpointSpecs, ResourceRef},
-    server::{handlers::EndpointHandlerArgs, processor::PreProcessorHandler},
+    cfg::ResourceRef,
+    server::{cfg::EndpointSpecs, handlers::EndpointHandlerArgs, processor::PreProcessorHandler},
 };
+
+pub const JSON_RPC_VERSION: &str = "2.0";
 
 #[derive(Clone)]
 pub struct RpcHandler {
@@ -13,6 +16,10 @@ pub struct RpcHandler {
     ep: Arc<EndpointSpecs>,
     resource_fn_key: String,
     processors: Arc<Vec<Box<dyn PreProcessorHandler>>>,
+}
+
+impl RpcHandler {
+    fn parse(&self) {}
 }
 
 impl Handler<EndpointHandlerArgs> for RpcHandler {
@@ -51,4 +58,42 @@ impl HttpServiceFactory for RpcHandler {
         //     // .route(web::route().to(self))
         //     .register(config);
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum RpcId {
+    Number(i64),
+    String(String),
+    Null,
+}
+
+/// JSON-RPC 2.0 request envelope.
+#[derive(Deserialize)]
+struct JsonRpcRequest<T> {
+    jsonrpc: String,
+    id: Option<RpcId>,
+    method: String,
+    params: Option<T>,
+}
+
+#[derive(Serialize)]
+struct JsonRpcResponse<T> {
+    jsonrpc: String,
+    id: Option<RpcId>,
+    result: Option<T>,
+}
+
+#[derive(Serialize)]
+struct JsonRpcError {
+    jsonrpc: String,
+    id: Option<RpcId>,
+    error: JsonRpcErrorPayload,
+}
+
+#[derive(Serialize)]
+struct JsonRpcErrorPayload {
+    code: isize,
+    message: String,
+    data: Option<String>,
 }
