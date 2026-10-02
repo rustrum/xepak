@@ -265,7 +265,15 @@ impl XepakValue {
         })
     }
 
-    pub fn to_type(&self, to_type: XepakType) -> Result<XepakValue, XepakDataError> {
+    pub fn to_type(
+        &self,
+        to_type: XepakType,
+        nulls_allowed: bool,
+    ) -> Result<XepakValue, XepakDataError> {
+        if self.is_null() && nulls_allowed {
+            return Ok(Self::Null);
+        }
+
         let value = match to_type {
             XepakType::Null => Self::Null,
             XepakType::Boolean => Self::Boolean(self.as_bool()?),
@@ -292,6 +300,12 @@ impl PartialEq for XepakValue {
             (Self::Map(l0), Self::Map(r0)) => l0 == r0,
             _ => core::mem::discriminant(self) == core::mem::discriminant(other),
         }
+    }
+}
+
+impl From<bool> for XepakValue {
+    fn from(value: bool) -> Self {
+        Self::Boolean(value)
     }
 }
 

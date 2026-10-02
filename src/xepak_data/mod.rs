@@ -1,6 +1,7 @@
 //! Xepak data module represents unified/dynamic data types wrappers that
 //! transcend all application and could be converted to/from JSON/CBOR/SQL and scripting types.
 
+pub mod schema;
 pub mod serde;
 pub mod sql;
 pub mod value;
@@ -38,6 +39,9 @@ pub enum XepakDataError {
 
     #[error("Xepak value decode error: {0}")]
     Decode(String),
+
+    #[error("Validation failed: {0}")]
+    Validate(String),
     // #[error("Unexpected: {0}")]
     // Unexpected(String),
     //

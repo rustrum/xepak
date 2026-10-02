@@ -1,6 +1,6 @@
 .env
 prompt-codebase.txt
-agentwork
+agents_work
 
 **/db.sqlite3
 examples/sqlite/db.*

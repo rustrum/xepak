@@ -21,12 +21,24 @@ request_type = "POST"
 # move single record to different level maybe or not ?
 single_record_response = true
 
-[endpoint.schema]
-id = { type = "int", scope = "output" }
-title = { type = "text", scope = "input", required = true, validate = [
-    { kind = "range", from = 5, to = 255 },
-] }
-content = { type = "text", apply_to = "all" }
+[endpoint.schema.input]
+type = "dict"
+items = {
+    title = {
+        type = "text",
+        required = true,
+        validate = [
+            { kind = "range", from = 5, to = 255 },
+        ]
+    },
+    content = { type = "text" }
+}
+
+[endpoint.schema.output]
+type = "dict"
+items = {
+    id = { type = "int" }
+}
 
 # Access check and cache could also be a processor I guess ?
 [[endpoint.pre_processors]]

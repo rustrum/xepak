@@ -152,7 +152,7 @@ impl LuaRequestContext {
     fn set_arg(lua: &Lua, this: &mut Self, (arg_name, value): (String, Value)) -> mlua::Result<()> {
         let xvalue = XepakValue::from_lua(value, lua)?;
         this.input
-            .set_arg_with_schema(arg_name, xvalue, true)
+            .set_named_arg_with_schema(arg_name, xvalue, true)
             .map_err(ExternalError::into_lua_err)
     }
 

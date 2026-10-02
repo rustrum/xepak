@@ -1,3 +1,8 @@
+# Overall
+
+- Should I rename endpoint resource?
+
+
 # Schema improvements
 
 To support JSON-RPC I should have better schema improvements.
@@ -40,9 +45,9 @@ It is possible using sqlite-vec but unfortunately it is an experimental
 library and it does not support indexing.
 It is more reasonable to support PostgreSQL first.
 
-# Optimization 
+# Optimization
 
-## Optimise RequestInput or not?
+## Do it with RequestInput or not?
 
 Execution inside script require additional clone/+Arch reference.
 Thus I can not mutate RequestInput via set_arg from script.

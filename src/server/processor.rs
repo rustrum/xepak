@@ -14,7 +14,7 @@ use crate::{
         AuthorizeProcessor, SimpleAuthenticationProcessor, token::TokenAuthenticationProcessor,
     },
     cfg::ResourceRef,
-    schema::validate_with_schema,
+    schema::validate_dict_with_schema,
     script_lua::LuaPreProcessor,
     server::{CONTENT_TYPE_CBOR, RequestInput, XepakAppData, is_req_body_allowed},
     xepak_data::XepakValue,
@@ -174,8 +174,8 @@ impl PreProcessorHandler for InputArgsValidator {
         _body: &Bytes,
         input: &mut RequestInput,
     ) -> Result<(), XepakError> {
-        validate_with_schema(&input.schema, &input.path_args.lock().unwrap())?;
-        validate_with_schema(&input.schema, &input.args.lock().unwrap())?;
+        validate_dict_with_schema(&input.schema, &input.path_args.lock().unwrap())?;
+        validate_dict_with_schema(&input.schema, &input.args.lock().unwrap())?;
         Ok(())
     }
 }
@@ -210,7 +210,7 @@ impl PreProcessorHandler for QueryArgsProcessor {
             };
 
         for (k, v) in query_args {
-            input.set_arg_with_schema(k, v, true)?;
+            input.set_named_arg_with_schema(k, v, true)?;
         }
 
         Ok(())
@@ -257,7 +257,7 @@ impl BodyToArgsProcessor {
                 value.clone()
             };
 
-            input.set_arg_with_schema(key, xvalue, true)?;
+            input.set_named_arg_with_schema(key, xvalue, true)?;
         }
 
         Ok(())
@@ -290,7 +290,7 @@ impl BodyToArgsProcessor {
                 value.try_into()?
             };
 
-            input.set_arg_with_schema(key.clone(), xvalue, true)?;
+            input.set_named_arg_with_schema(key.clone(), xvalue, true)?;
         }
 
         Ok(())

@@ -6,12 +6,13 @@ use std::{
     sync::Arc,
 };
 
-use actix_web::http::Method;
 use bon::Builder;
-use serde::{Deserialize, Deserializer};
+use serde::Deserialize;
 
 use crate::{
-    XepakError, schema::Schema, server::processor::PreProcessor, storage::StorageSettings,
+    XepakError,
+    server::{cfg::EndpointSpecs, processor::PreProcessor},
+    storage::StorageSettings,
 };
 
 /// Main configuration file that properties could be overwritten via ENV or not ? (TODO).
@@ -126,99 +127,6 @@ pub struct RhaiScript {
     pub script: String,
 }
 
-#[derive(Builder, Clone, Debug, Deserialize)]
-pub struct EndpointSpecs {
-    pub uri: String,
-
-    /// List of allowed HTTP methods.
-    /// If not defined then only GET method will be allowed.
-    #[serde(deserialize_with = "deserialize_methods", default)]
-    pub allow_methods: HashSet<Method>,
-
-    pub resource: ResourceSpecs,
-
-    #[serde(default)]
-    pub args: Vec<String>,
-
-    // pub validators: Vec<Validator>,
-    #[serde(default = "default_limit_key")]
-    pub limit_arg: String,
-
-    /// Max limit value for paginated queries
-    #[serde(default)]
-    pub fetch_limit: usize,
-
-    #[serde(default = "default_offset_key")]
-    pub offset_arg: String,
-
-    /// Response will be a single record instead of a list.
-    /// Will return 404 if no record available
-    #[serde(default)]
-    pub single_record_response: bool,
-
-    /// Do not use default pre processors
-    /// for the current endpoint.
-    #[serde(default)]
-    pub pre_processors_ignore_default: bool,
-
-    /// This logic handle requests to extract/validate data
-    #[serde(default)]
-    pub pre_processors: Vec<PreProcessor>,
-
-    #[serde(default)]
-    pub strict_schema: bool,
-
-    #[serde(default)]
-    pub schema: Schema,
-}
-
-pub fn deserialize_methods<'de, D>(ds: D) -> Result<HashSet<Method>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let smethods = Vec::<String>::deserialize(ds)?;
-    let mut methods = HashSet::<Method>::new();
-    for method in smethods {
-        let m: Method = method
-            .to_uppercase()
-            .trim()
-            .try_into()
-            .map_err(serde::de::Error::custom)?;
-        methods.insert(m);
-    }
-    Ok(methods)
-}
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum ResourceSpecs {
-    Query {
-        #[serde(default)]
-        data_source: String,
-        query: String,
-    },
-
-    // Will be renamed to QueryScript
-    QueryScriptLua {
-        #[serde(default)]
-        data_source: String,
-        script: String,
-    },
-
-    DataScript {
-        #[serde(default)]
-        data_source: String,
-        script: String,
-    },
-
-    // Almost deprecated
-    QueryScriptRhai {
-        #[serde(default)]
-        data_source: String,
-        script: String,
-    },
-}
-
 pub fn load_conf_file(file_path: &str) -> Result<XepakConf, XepakError> {
     let path = PathBuf::from(&file_path);
 
@@ -271,14 +179,6 @@ fn default_port() -> u16 {
 
 fn default_specs_dir() -> PathBuf {
     PathBuf::from("./specs")
-}
-
-fn default_limit_key() -> String {
-    "limit".to_string()
-}
-
-fn default_offset_key() -> String {
-    "offset".to_string()
 }
 
 /// Represents kinda unique id/path related to configuration.

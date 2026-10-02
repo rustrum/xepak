@@ -1,4 +1,5 @@
 pub mod cache;
+pub mod cfg;
 pub mod handlers;
 pub mod input;
 pub mod processor;
