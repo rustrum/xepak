@@ -49,7 +49,7 @@ impl XepakConf {
 #[derive(Builder, Clone, Debug, Default, Deserialize)]
 pub struct XepakSpecs {
     #[serde(default)]
-    pub script: Vec<RhaiScript>,
+    pub script: Vec<Script>,
 
     #[serde(default)]
     pub endpoint: Vec<EndpointSpecs>,
@@ -116,13 +116,9 @@ impl XepakSpecs {
     }
 }
 
-#[derive(Builder, Clone, Debug, Deserialize)]
-pub struct XepakAuthSpecs {
-    // TODO: configure different types of auth specs
-}
-
+/// LUA script that can be shared across application by it's ID
 #[derive(Clone, Debug, Default, Deserialize)]
-pub struct RhaiScript {
+pub struct Script {
     pub id: String,
     pub script: String,
 }

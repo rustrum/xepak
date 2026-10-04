@@ -1,6 +1,6 @@
 // mod mcp;
 mod rest;
-// mod rpc;
+mod rpc;
 
 // pub use mcp::*;
 pub use rest::*;

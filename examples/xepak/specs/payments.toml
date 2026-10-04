@@ -18,34 +18,21 @@ type = "authorize"
 rules = "#boss OR (ADMIN AND MANAGER)"
 
 [endpoint.resource]
-type = "query_script_rhai"
+type = "query_script_lua"
 script = """
-// Just reusing existing input context where 'payment_id' argument exists.
-let allowed = storage_query_value(
+
+-- Just reusing existing input context where 'payment_id' argument exists.
+local allowed = storage_query_value(
     "SELECT COALESCE(reprocess_trigger <= datetime('now', '-20 seconds'), 1) FROM payments WHERE id = {{payment_id}}",
-    ctx.load_input()
+    ctx:load_input()
 );
 
-
-/*
-// Alternative example. Building custom query arguments dict.
-let allowed = storage_query_value(
-    "SELECT COALESCE(reprocess_trigger <= datetime('now', '-20 seconds'), 1) FROM payments WHERE id = {{id}}",
-    #{id: ctx.get_arg("payment_id")}
-);
-*/
-
-print(`Reprocess trigger allowed value is ${allowed}`);
-
-// And now we could conditionally stop further processing
-// NOTE: sqlite returns integer instead boolean and it is not auto converted in Rhai
-if allowed != 1 {
+-- And now we could conditionally stop further processing
+-- NOTE: sqlite returns integer instead boolean and it is not auto converted in Lua
+if allowed ~= 1 then
     error_input("Can't trigger reprocessing more than once in a 20 seconds");
-}
+end
 
-// Returning the query to be executed by endpoint handler.
-return #"
-UPDATE payments SET reprocess_trigger = current_timestamp WHERE id = {{payment_id}}
-RETURNING id, reprocess_trigger
-"#;
+-- Returning the query to be executed by endpoint handler.
+return "UPDATE payments SET reprocess_trigger = current_timestamp WHERE id = {{payment_id}} RETURNING id, reprocess_trigger";
 """

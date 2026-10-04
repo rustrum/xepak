@@ -4,8 +4,7 @@ use actix_web::{Handler, HttpResponse, dev::HttpServiceFactory, web};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    cfg::ResourceRef,
-    server::{cfg::EndpointSpecs, handlers::EndpointHandlerArgs, processor::PreProcessorHandler},
+    cfg::ResourceRef, server::{cfg::{EndpointRpcSpecs, EndpointSpecs}, handlers::EndpointHandlerArgs, processor::PreProcessorHandler},
 };
 
 pub const JSON_RPC_VERSION: &str = "2.0";
@@ -13,9 +12,9 @@ pub const JSON_RPC_VERSION: &str = "2.0";
 #[derive(Clone)]
 pub struct RpcHandler {
     _rref: ResourceRef,
-    ep: Arc<EndpointSpecs>,
+    ep: Arc<EndpointRpcSpecs>,
     resource_fn_key: String,
-    processors: Arc<Vec<Box<dyn PreProcessorHandler>>>,
+    pre_processors: Arc<Vec<Box<dyn PreProcessorHandler>>>,
 }
 
 impl RpcHandler {

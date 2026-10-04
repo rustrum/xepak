@@ -316,9 +316,9 @@ dependencies = [
 
 [[package]]
 name = "apate"
-version = "0.1.2"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "713c9c7b27dcff950516739ac7133dbc1bed2d36a650014fe145a6df3f33a706"
+checksum = "d6404e57c3c1ef2e972bc5892337ccda629e3b311a6670d2612bc6c01fce6424"
 dependencies = [
  "actix-router",
  "actix-web",
@@ -4009,7 +4009,6 @@ dependencies = [
  "mlua",
  "moka",
  "reqwest",
- "rhai",
  "serde",
  "serde_json",
  "serde_urlencoded",

@@ -6,6 +6,6 @@ ignore = [
     "RUSTSEC-2026-0258",
     # Reqwest mostly
     "RUSTSEC-2024-0336",
-    #Rhai
+    #Apate transitive dependency
     "RUSTSEC-2026-0249",
 ]

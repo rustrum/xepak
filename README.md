@@ -65,7 +65,7 @@ Right now aut module is very simple but usable:
  - for each non public endpoint you should add authentication processor
  - if you need fine grained access - add authorization processor with auth expression string
 
-### Scripting support
+### LUA scripting
 
 Scripting support is needed to build complex queries and perfom data integrity and access control.
 
@@ -76,17 +76,6 @@ With scripting you can:
   - filter out results based on user configuration from DB
   - validate input data before executing INSERT
   - etc.
-
-Right now Xepak supports two scripting languages.
-
-- **LUA** is the main scripting language.
-- **Rhai** is also a scripting lanuage.
-
-**Performance considerations**
-
-Now it is impossible to determine will Rhai be slower in real world scenarios or not.
-There are many factors that would affect final performance expect script execution speed.
-But if LUA will outperform Rhai in tests then Rhai will be dismissed.
 
 
 ## License

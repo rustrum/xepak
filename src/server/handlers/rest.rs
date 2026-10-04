@@ -4,7 +4,6 @@ use actix_web::{
     http::{Method, StatusCode, header::ACCEPT},
     web::{self, Bytes, Data},
 };
-use rhai::{AST, Engine};
 use std::{pin::Pin, sync::Arc};
 
 use super::{EndpointHandlerArgs, to_cbor_response, to_json_response};
@@ -12,7 +11,6 @@ use crate::{
     XepakError,
     cfg::ResourceRef,
     script_lua::{execute_lua_script, init_lua_env_fn},
-    script_rhai::{build_rhai_ast, build_rhai_engine, execute_script_blocking},
     server::{
         CONTENT_TYPE_CBOR, RequestInput, XepakAppData,
         cfg::{EndpointSpecs, ResourceSpecs},
@@ -27,8 +25,6 @@ use crate::{
 pub struct EndpointHandler {
     _rref: ResourceRef,
     ep: Arc<EndpointSpecs>,
-    rhai_engine: Arc<Option<Engine>>,
-    handler_rhai: Arc<Option<AST>>,
     resource_fn_key: String,
     processors: Arc<Vec<Box<dyn PreProcessorHandler>>>,
 }
@@ -39,24 +35,8 @@ impl EndpointHandler {
         ep: EndpointSpecs,
         app: &XepakAppData,
     ) -> Result<Self, XepakError> {
-        let mut rhai_engine = None;
 
-        let handler_rhai = match &ep.resource {
-            ResourceSpecs::QueryScriptRhai { script, .. } => {
-                if rhai_engine.is_none() {
-                    rhai_engine = Some(build_rhai_engine(app));
-                }
 
-                let Some(rhai) = &rhai_engine else {
-                    return Err(XepakError::Unexpected(
-                        "Engine must exists here".to_string(),
-                    ));
-                };
-
-                Some(build_rhai_ast(rhai, script)?)
-            }
-            _ => None,
-        };
 
         // This is just a validation to fail early if LUA syntax incorrect
         match &ep.resource {
@@ -72,8 +52,7 @@ impl EndpointHandler {
             resource_fn_key: rref.nested("resource-fn").to_string(),
             _rref: rref,
             ep: Arc::new(ep),
-            rhai_engine: Arc::new(rhai_engine),
-            handler_rhai: Arc::new(handler_rhai),
+
             // handler_lua: Arc::new(handler_lua),
             processors: Arc::new(pre_processors),
         })
@@ -219,34 +198,7 @@ impl EndpointHandler {
                 let rr = ResourceRequest::new(query, input);
                 self.run_query(ds, rr).await
             }
-            ResourceSpecs::QueryScriptRhai { data_source, .. } => {
-                let Some(ds) = state.get_data_source(data_source) else {
-                    return Err(XepakError::Cfg(format!(
-                        "Data source does not exists \"{data_source}\""
-                    )));
-                };
 
-                let result = execute_script_blocking(
-                    state.clone(),
-                    self.ep.uri.clone(),
-                    self.rhai_engine.clone(),
-                    self.handler_rhai.clone(),
-                    input.clone(),
-                )
-                .await?;
-
-                let query = if result.is_string() {
-                    result.to_string()
-                } else {
-                    tracing::error!("Rhai script must return string instead: {result:?}");
-                    return Err(XepakError::Unexpected(format!(
-                        "Rhai script must return string instead: {result:?}"
-                    )));
-                };
-
-                let rr = ResourceRequest::new(&query, input);
-                self.run_query(ds, rr).await
-            }
             ResourceSpecs::QueryScriptLua {
                 data_source,
                 script,
