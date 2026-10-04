@@ -62,7 +62,6 @@ Documentation must be in AI-friendly format:
  - do not duplicate information
  - only AI-friendly explanation and formatting allowed
  - I must not copy examples as-is I must generalize things do avoid dummy duplication
- - I MUST exclude all mentions of Rhai scripting from documentation because it is not fully supported yet
 
 Docs header must contains project version from `Cargo.toml` and latest git commit hash.
 

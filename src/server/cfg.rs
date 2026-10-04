@@ -39,12 +39,6 @@ pub enum ResourceSpecs {
         script: String,
     },
 
-    // Almost deprecated
-    QueryScriptRhai {
-        #[serde(default)]
-        data_source: String,
-        script: String,
-    },
 }
 
 #[derive(Builder, Clone, Debug, Deserialize)]
@@ -98,6 +92,14 @@ pub struct EndpointRpcSpecs {
     /// URI template for this RPC
     pub uri: String,
 
+    pub methods: Vec<EndpointRpcMethod>,
+}
+
+#[derive(Builder, Clone, Debug, Deserialize)]
+pub struct EndpointRpcMethod {
+    #[serde(default)]
+    pub schema: EndpointSchemas,
+
     pub resource: ResourceSpecs,
 
     /// Max limit value for paginated queries
@@ -105,7 +107,7 @@ pub struct EndpointRpcSpecs {
     pub fetch_limit: usize,
 
     /// Response will be a single record instead of a list.
-    /// Will return 404 if no record available
+    /// Will return empty dict if no record available
     #[serde(default)]
     pub single_record_response: bool,
 
@@ -117,12 +119,6 @@ pub struct EndpointRpcSpecs {
     /// This logic handle requests to extract/validate data
     #[serde(default)]
     pub pre_processors: Vec<PreProcessor>,
-
-    #[serde(default)]
-    pub strict_schema: bool,
-
-    #[serde(default)]
-    pub schema: EndpointSchemas,
 }
 
 pub fn deserialize_methods<'de, D>(ds: D) -> Result<HashSet<Method>, D::Error>

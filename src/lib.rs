@@ -1,7 +1,6 @@
 pub mod auth;
 pub mod cfg;
 pub mod script_lua;
-pub mod script_rhai;
 pub mod server;
 mod sql_key_args;
 pub mod storage;
@@ -11,7 +10,6 @@ pub use xepak_data::schema;
 
 use std::sync::Arc;
 
-use rhai::{EvalAltResult, ParseError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -53,11 +51,6 @@ pub enum XepakError {
     #[error("Decode error: {0}")]
     Decode(String),
 
-    #[error("Script parse error: {0}")]
-    ScriptParse(#[from] ParseError),
-
-    #[error("Script execution error: {0}")]
-    Script(#[from] Arc<EvalAltResult>),
 
     #[error("Lua script error: {0}")]
     LuaScript(String),

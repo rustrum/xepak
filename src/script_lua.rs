@@ -536,8 +536,7 @@ where
 
 /// Execute LUA script in async way.
 /// Each request gets its own Lua VM so concurrent requests on the same actix worker
-/// thread cannot share or corrupt the `ctx` global. Analogous to execute_script_blocking
-/// for rhai but fully async — no blocking threads or handle.block_on calls.
+/// thread cannot share or corrupt the `ctx` global.
 async fn execute_lua_script_inner<R>(
     lua: &Lua,
     isolated_fn: &Function,
