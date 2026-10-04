@@ -1,6 +1,6 @@
 # Xepak — AI Agent Reference
  
-**Version:** 0.0.3-beta1 | **Commit:** 804b0b3
+**Version:** 0.0.3-beta1 | **Commit:** faade58
  
 ---
  
@@ -141,17 +141,44 @@ An empty `rules` string in the `authorize` processor means "authenticated only" 
 
 ### Schema validation
 
-```toml
-[endpoint.schema]
-title = { type = "text", scope = "input", required = true, validate = [
-    { kind = "range", from = 5, to = 255 },
-]}
-content = { type = "text", scope = "all" }
+Schemas are split into `input` and `output` sub-tables. Both use the same `Schema` structure:
 
-# Schema types: text, boolean, int, float, blob, tuple, map
-# Scope values: all (default), input, output
-# Validators: range, range_float, not_null, and, or
+```toml
+[endpoint.schema.input]
+type = "dict"
+items = {
+    title = { type = "text", required = true, validate = [
+        { kind = "range", from = 5, to = 255 },
+    ]},
+    content = { type = "text" },
+}
+
+[endpoint.schema.output]
+type = "dict"
+items = {
+    id = { type = "int" },
+}
 ```
+
+| Schema `type` | Description |
+|---------------|-------------|
+| `text` | String value |
+| `boolean` | Boolean value |
+| `int` | Integer value |
+| `float` | Float value |
+| `blob` | Binary data (base64 in JSON) |
+| `tuple` | Ordered array; use `items` (list of schemas) and optional `items_repeat` |
+| `dict` | Key-value map; use `items` (map of name→schema) |
+
+**Validators** (applied via `validate` field, array form auto-wraps in `and`):
+
+| `kind` | Fields | Applies to |
+|--------|--------|------------|
+| `range` | `from`, `to` (int) | text length, int/float value, tuple length |
+| `range_float` | `from`, `to` (float) | same as range but with float bounds |
+| `not_null` | — | rejects null/undefined |
+| `and` | `nested` (list) | all must pass |
+| `or` | `nested` (list) | at least one must pass |
 
 ### Query argument syntax
 
@@ -180,6 +207,12 @@ local name = ctx:get_arg("name")
 
 -- Set argument value with schema conversion applied
 ctx:set_arg("user_id", user.id)
+
+-- Get full request input (usable as args for storage_query*)
+local input = ctx:load_input()
+
+-- HTTP method of the current request ("GET", "POST", etc.)
+local method = ctx:get_request_method()
 
 -- Authentication data (available after auth pre-processor runs)
 local auth_id = ctx:get_auth_id()       -- returns string or nil
@@ -210,17 +243,30 @@ query:add_joined_parts("WHERE", where_parts, "OR", "")
 return query:build()
 ```
 
+### Blob constructor
+
+```lua
+-- Create a blob (binary) value from a Lua string (bytes)
+local b = blob_type("\x01\x02\x03")
+
+-- Read bytes back
+local bytes = b:as_bytes()  -- returns Lua string
+```
+
 ### Database functions
 
 ```lua
+-- All take (query_string, args) where args is a Lua table or ctx:load_input()
+-- {{name}} placeholders in query are bound from args table
+
 -- Query multiple rows → returns Lua table of tables (1-indexed)
 local rows = storage_query("SELECT * FROM users WHERE id={{id}}", {id = 42})
 
--- Query single row → returns Lua table or nil
+-- Query single row → returns Lua table (map) or nil
 local user = storage_query_one("SELECT * FROM users WHERE id={{id}}", {id = 42})
 
--- Query single value (first column of first row) → returns number/string/nil
-local count = storage_query_value("SELECT COUNT(*) FROM users")
+-- Query single value (first column of first row) → returns scalar or nil
+local count = storage_query_value("SELECT COUNT(*) FROM users", {})
 ```
 
 ### Cache API
@@ -316,13 +362,17 @@ query = "SELECT * FROM users WHERE id={{user_id}}"
 # Create user with schema validation (use POST method)
 [[endpoint]]
 uri = "/user"
+allow_methods = ["POST"]
 single_record_response = true
 
-[endpoint.schema]
-username = { type = "text", scope = "input", required = true, validate = [
-    { kind = "range", from = 3, to = 50 },
-]}
-password = { type = "text", scope = "input", required = true }
+[endpoint.schema.input]
+type = "dict"
+items = {
+    username = { type = "text", required = true, validate = [
+        { kind = "range", from = 3, to = 50 },
+    ]},
+    password = { type = "text", required = true },
+}
 
 [[endpoint.pre_processors]]
 type = "parse_body_args"
@@ -687,10 +737,14 @@ Content-Type is set based on the `Accept` header:
 ## CLI Usage
 
 ```bash
-xepak-rest [OPTIONS] <config_file>
+xepak [-p PORT] [-l LOG_LEVEL] <config_file>
 
 Options:
-  -p, --port PORT        Port to listen on (env: XEPAK_PORT)
-  -l, --log LEVEL        Log level filter (env: default)
+  -p PORT        Port to listen on (env: XEPAK_PORT)
+  -l LOG_LEVEL   Tracing filter directive (e.g. "debug", "info,my_crate=debug")
+
+Env vars:
+  XEPAK_PORT     Port (used if -p not provided)
+  XEPAK_CONFIG   Path to config file (used if no positional arg)
 ```
 
