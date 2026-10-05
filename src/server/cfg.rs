@@ -38,7 +38,6 @@ pub enum ResourceSpecs {
         data_source: String,
         script: String,
     },
-
 }
 
 #[derive(Builder, Clone, Debug, Deserialize)]

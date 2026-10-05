@@ -146,6 +146,10 @@ impl LuaRequestContext {
         Ok(this
             .input
             .get_arg_value(&arg_name)
+            .map(|v| match v {
+                std::borrow::Cow::Borrowed(v) => v.clone(),
+                std::borrow::Cow::Owned(v) => v,
+            })
             .unwrap_or(XepakValue::Null))
     }
 
@@ -299,7 +303,7 @@ impl IntoLua for XepakValue {
             XepakValue::Float(v) => Ok(Value::Number(v)),
             XepakValue::Text(v) => Ok(Value::String(lua.create_string(&v)?)),
             XepakValue::Blob(v) => Ok(Value::UserData(lua.create_userdata(LuaBlob(v))?)),
-            XepakValue::Map(v) => {
+            XepakValue::Dict(v) => {
                 let t = lua.create_table()?;
                 for (k, xv) in v {
                     t.set(k, xv.into_lua(lua)?)?;
@@ -362,7 +366,7 @@ impl FromLua for XepakValue {
                     };
                     map.insert(key, XepakValue::from_lua(v, _lua)?);
                 }
-                Ok(XepakValue::Map(map))
+                Ok(XepakValue::Dict(map))
             }
             Value::UserData(ud) if let Ok(ud_ref) = ud.borrow::<LuaBlob>() => {
                 Ok(XepakValue::Blob(ud_ref.0.to_vec()))

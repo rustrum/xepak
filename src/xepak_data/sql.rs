@@ -4,17 +4,33 @@ use super::XepakValue;
 
 impl XepakValue {
     pub fn bind_sqlx<'a>(
-        self,
+        &self,
         query: sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments>,
     ) -> sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments> {
-        match &self {
+        match self {
             XepakValue::Null => query.bind(None::<String>),
             XepakValue::Boolean(v) => query.bind(*v),
             XepakValue::Integer(v) => query.bind(*v as i64),
             XepakValue::Float(v) => query.bind(*v),
             XepakValue::Text(v) => query.bind(v.clone()),
             XepakValue::Blob(v) => query.bind(v.clone()),
-            XepakValue::Tuple(_) | XepakValue::Map(_) => query.bind(self.as_string()),
+            XepakValue::Tuple(_) | XepakValue::Dict(_) => query.bind(self.as_string()),
+        }
+    }
+
+    /// Not shure that it will provide some optimisations but anyway.
+    pub fn bind_sql_move<'a>(
+        self,
+        query: sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments>,
+    ) -> sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments> {
+        match self {
+            XepakValue::Null => query.bind(None::<String>),
+            XepakValue::Boolean(v) => query.bind(v),
+            XepakValue::Integer(v) => query.bind(v as i64),
+            XepakValue::Float(v) => query.bind(v),
+            XepakValue::Text(v) => query.bind(v),
+            XepakValue::Blob(v) => query.bind(v),
+            XepakValue::Tuple(_) | XepakValue::Dict(_) => query.bind(self.as_string()),
         }
     }
 }

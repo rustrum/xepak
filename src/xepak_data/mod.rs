@@ -26,7 +26,7 @@ pub enum XepakType {
     Float,
     Blob,
     Tuple,
-    Map,
+    Dict,
 }
 
 #[derive(Error, Debug, Clone)]

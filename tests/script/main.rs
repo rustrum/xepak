@@ -36,7 +36,7 @@ async fn script_access_registry_kv() {
         "host".to_string() => XepakValue::Text("localhost".to_string()),
         "weird.key".to_string() => XepakValue::Text("some_value".to_string()),
     };
-    assert_eq!(result.get("map_val"), Some(&XepakValue::Map(expected_map)),);
+    assert_eq!(result.get("map_val"), Some(&XepakValue::Dict(expected_map)),);
 }
 
 #[tokio::test]

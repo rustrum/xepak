@@ -35,9 +35,6 @@ impl EndpointHandler {
         ep: EndpointSpecs,
         app: &XepakAppData,
     ) -> Result<Self, XepakError> {
-
-
-
         // This is just a validation to fail early if LUA syntax incorrect
         match &ep.resource {
             ResourceSpecs::QueryScriptLua { script, .. }
@@ -107,7 +104,7 @@ impl EndpointHandler {
         }
 
         Err(XepakError::Input(format!(
-            "Request method {} not allowed!",
+            "(๑•ᗝ•)૭ Request method {} not allowed!",
             req.method()
         )))
     }
@@ -282,7 +279,7 @@ impl EndpointHandler {
 
                 self.data_to_response(req, Some(input), status_code, &err_data)
             }
-            XepakType::Map | XepakType::Tuple => {
+            XepakType::Dict | XepakType::Tuple => {
                 self.data_to_response(req, Some(input), StatusCode::OK, &data)
             }
             _ => {
