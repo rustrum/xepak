@@ -25,7 +25,7 @@ use crate::server::handlers::EndpointHandler;
 use crate::server::processor::PreProcessor;
 use crate::server::registry::AppRegistry;
 use crate::storage::{Storage, init_storage_connectors};
-use crate::xepak_data::XepakValue;
+use crate::xepak_data::{XepakDataError, XepakValue};
 
 pub use input::RequestInput;
 
@@ -239,4 +239,8 @@ pub fn to_error_object(err: XepakError) -> (StatusCode, XepakValue) {
         }
     }
     (code, result.into())
+}
+
+pub fn to_input_error(data_error: XepakDataError) -> XepakError {
+    XepakError::Input(data_error.to_string())
 }

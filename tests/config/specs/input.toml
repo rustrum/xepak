@@ -22,6 +22,7 @@ return {
 }
 """
 
+
 [[endpoint]]
 uri = "/input/body/args/simple"
 allow_methods = ['POST', 'PUT']
@@ -42,6 +43,25 @@ args.type_text = ctx:get_arg("type_text")
 args.type_int = ctx:get_arg("type_int")
 args.type_real = ctx:get_arg("type_real")
 args.type_blob = ctx:get_arg("type_blob")
+return args
+"""
+
+
+[[endpoint]]
+uri = "/input/body/args/tuple"
+allow_methods = ['POST', 'PUT']
+pre_processors = [{type = "parse_body_args"}]
+
+[endpoint.resource]
+type = "data_script"
+script = """
+log_info("starting")
+local args = {
+  ctx:get_arg("0"),
+  ctx:get_arg("1"),
+  ctx:get_arg("2"),
+  ctx:get_arg("3"),
+}
 return args
 """
 

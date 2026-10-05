@@ -6,6 +6,7 @@ use reqwest::StatusCode;
 use serde_json::Value as JsonValue;
 
 use serial_test::serial;
+use xepak::xepak_data::XepakValue;
 
 #[tokio::test]
 #[serial]
@@ -34,7 +35,6 @@ async fn allow_methods_config() {
     assert_eq!(body["code"], "bad_request");
     assert_eq!(body["message"], "(๑•ᗝ•)૭ Request method GET not allowed!");
 }
-
 
 async fn record_send_receive(
     record: &TypesRecord,
@@ -147,4 +147,28 @@ async fn test_body_args_simple_echo() {
     payload_inout_tests(true, true, "/input/body/args/simple", true).await;
     payload_inout_tests(false, true, "/input/body/args/simple", true).await;
     payload_inout_tests(true, false, "/input/body/args/simple", true).await;
+
+    // Checking input as a tuple instead of map
+    // Also validate access to tuple lements by string key IDs: "1","0", etc.
+    let input = XepakValue::from(vec![
+        XepakValue::from(true),
+        XepakValue::from(1),
+        XepakValue::from(4.2),
+        XepakValue::from("Text"),
+    ]);
+
+    let resp = client::post_json_accept("/input/body/args/tuple", input.clone(), false).await;
+
+    assert_eq!(
+        resp.status(),
+        StatusCode::OK,
+        "Response must be 200 OK {}",
+        resp.text().await.unwrap()
+    );
+
+    let bytes = resp.bytes().await.expect("Must read response body");
+    let resp_value: XepakValue =
+        serde_json::from_slice(&bytes).expect("Must deserialize JSON response as TypesRecord");
+
+    assert_eq!(input, resp_value);
 }
