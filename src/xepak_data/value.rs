@@ -58,6 +58,15 @@ impl XepakValue {
         matches!(self, Self::Tuple(_))
     }
 
+    /// If value is a tuple return it's size or None
+    pub fn tuple_len(&self) -> Option<usize> {
+        if let Self::Tuple(value) = self {
+            Some(value.len())
+        } else {
+            None
+        }
+    }
+
     /// If value is a dict returns if it contains given key or false.
     pub fn dict_contains(&self, key: &str) -> bool {
         if let Self::Dict(value) = self {
@@ -278,7 +287,7 @@ impl XepakValue {
     }
 
     pub fn as_map(&self) -> Result<HashMap<String, XepakValue>, XepakDataError> {
-        const TO_TYPE: XepakType = XepakType::Blob;
+        const TO_TYPE: XepakType = XepakType::Dict;
         Ok(match self {
             XepakValue::Null => HashMap::new(),
             XepakValue::Dict(v) => v.clone(),

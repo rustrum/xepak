@@ -15,7 +15,7 @@ use crate::{
     },
     cfg::ResourceRef,
     script_lua::LuaPreProcessor,
-    server::{CONTENT_TYPE_CBOR, RequestInput, XepakAppData, is_req_body_allowed},
+    server::{CONTENT_TYPE_CBOR, RequestInput, XepakAppData, is_req_body_allowed, to_input_error},
     xepak_data::XepakValue,
 };
 
@@ -210,7 +210,9 @@ impl BodyToArgsProcessor {
         let body_value: XepakValue = cbor2::from_slice(body)
             .map_err(|e| XepakError::Input(format!("Wrong CBOR format: {e}")))?;
 
-        input.body_args = input.apply_schema_to("", body_value, true)?;
+        input.body_args = input
+            .apply_schema_to("", body_value, true)
+            .map_err(to_input_error)?;
 
         Ok(())
     }
@@ -227,7 +229,9 @@ impl BodyToArgsProcessor {
         let body_value: XepakValue = serde_json::from_slice(body)
             .map_err(|e| XepakError::Input(format!("Wrong JSON format: {e}")))?;
 
-        input.body_args = input.apply_schema_to("", body_value, true)?;
+        input.body_args = input
+            .apply_schema_to("", body_value, true)
+            .map_err(to_input_error)?;
 
         Ok(())
     }
@@ -254,7 +258,6 @@ impl PreProcessorHandler for BodyToArgsProcessor {
         } else {
             false
         };
-
         if cbor_body {
             self.handle_cbor_body(body, input)?;
         } else {

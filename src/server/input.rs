@@ -8,7 +8,7 @@ use crate::{
     XepakError,
     schema::{Schema, apply_schema, convert_with_schema},
     storage::{SqlxRequestArgs, StorageRequestArgs},
-    xepak_data::XepakValue,
+    xepak_data::{XepakDataError, XepakValue},
 };
 
 /// Contains aggregated/formatted input from request that will be used to querying resource.
@@ -108,7 +108,7 @@ impl RequestInput {
         if self.path_args.dict_contains(arg_name) {
             return true;
         }
-        if self.body_args.dict_contains(arg_name) {
+        if self.has_body_arg(arg_name) {
             return true;
         }
         self.get_args.dict_contains(arg_name)
@@ -127,7 +127,7 @@ impl RequestInput {
             return path_arg.map(Cow::Borrowed);
         }
 
-        let body_arg = self.body_args.dict_get(name);
+        let body_arg = self.get_body_arg(name);
         if body_arg.is_some() {
             return body_arg.map(Cow::Borrowed);
         }
@@ -138,6 +138,33 @@ impl RequestInput {
         }
 
         None
+    }
+
+    fn has_body_arg(&self, key: &str) -> bool {
+        if let Some(len) = self.body_args.tuple_len() {
+            return if let Some(idx) = self.key_to_usize(key) {
+                idx < len
+            } else {
+                false
+            };
+        }
+        self.body_args.dict_contains(key)
+    }
+
+    fn get_body_arg(&self, key: &str) -> Option<&XepakValue> {
+        if self.body_args.is_tuple() {
+            return if let Some(idx) = self.key_to_usize(key) {
+                self.body_args.tuple_get(idx)
+            } else {
+                None
+            };
+        }
+        self.body_args.dict_get(key)
+    }
+
+    fn key_to_usize(&self, key: &str) -> Option<usize> {
+        // lets keep it simple for now
+        key.parse().ok()
     }
 
     pub fn get_limit(&self) -> usize {
@@ -186,14 +213,13 @@ impl RequestInput {
         key_ref: &str,
         value: XepakValue,
         validate: bool,
-    ) -> Result<XepakValue, XepakError> {
-        Ok(apply_schema(
-            &self.schema,
-            value,
-            key_ref,
-            self.strict_schema,
-            validate,
-        )?)
+    ) -> Result<XepakValue, XepakDataError> {
+        if self.schema.is_empty() {
+            // Empty schema - nothing to apply
+            Ok(value)
+        } else {
+            apply_schema(&self.schema, value, key_ref, self.strict_schema, validate)
+        }
     }
 
     /// Set top level named argument value and apply schema conversion to it if any defined.

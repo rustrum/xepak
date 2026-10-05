@@ -281,16 +281,21 @@ mod tests {
 
         assert!(lexer.next_key_arg().is_none());
 
-        let mut lexer =
-            SqlLexer::new("SELECT * FROM users LIMIT {{--LIMIT--}} OFFSET {{__OFFSET__}}");
+        let mut lexer = SqlLexer::new(
+            "SELECT * FROM users WHERE id={{123}} LIMIT {{--LIMIT--}} OFFSET {{__OFFSET__}}",
+        );
+
+        let (key, range) = lexer.next_key_arg().unwrap();
+        assert_eq!(key, "123");
+        assert_eq!(range, 29..=35);
 
         let (key, range) = lexer.next_key_arg().unwrap();
         assert_eq!(key, "--LIMIT--");
-        assert_eq!(range, 26..=38);
+        assert_eq!(range, 43..=55);
 
         let (key, range) = lexer.next_key_arg().unwrap();
         assert_eq!(key, "__OFFSET__");
-        assert_eq!(range, 47..=60);
+        assert_eq!(range, 64..=77);
 
         assert!(lexer.next_key_arg().is_none());
     }
