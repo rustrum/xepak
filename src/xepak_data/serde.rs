@@ -41,7 +41,7 @@ impl serde::Serialize for XepakValue {
                     ser.serialize_bytes(v)
                 }
             }
-            XepakValue::Map(v) => {
+            XepakValue::Dict(v) => {
                 // let non_null_keys = v.iter().filter(|(_, v)| !v.is_null()).count();
                 // let mut map = ser.serialize_map(Some(non_null_keys))?;
                 let mut map = ser.serialize_map(Some(v.len()))?;
@@ -217,7 +217,7 @@ impl<'de> Visitor<'de> for DeserializeVisitor {
         while let Some((key, value)) = map.next_entry()? {
             values.insert(key, value);
         }
-        Ok(XepakValue::Map(values))
+        Ok(XepakValue::Dict(values))
     }
 }
 
@@ -238,7 +238,7 @@ mod tests {
     use maplit::hashmap;
 
     fn dict_all_types() -> XepakValue {
-        XepakValue::Map(hashmap! {
+        XepakValue::Dict(hashmap! {
             "null".to_string() => XepakValue::Null,
             "bool".to_string() => XepakValue::Boolean(true),
             "int".to_string() => XepakValue::Integer(42),
@@ -249,7 +249,7 @@ mod tests {
                 XepakValue::Integer(1),
                 XepakValue::Integer(2),
             ]),
-            "map".to_string() => XepakValue::Map(
+            "map".to_string() => XepakValue::Dict(
                 hashmap! {
                     "a".to_string() => XepakValue::Integer(1),
                     "b".to_string() => XepakValue::Float(1.12),
@@ -268,7 +268,7 @@ mod tests {
         let mut decoded: XepakValue = serde_json::from_str(&json).unwrap();
 
         // Blob serializes as a base64 string, so it can't roundtrip as Blob via JSON
-        if let XepakValue::Map(map) = &mut decoded {
+        if let XepakValue::Dict(map) = &mut decoded {
             map.entry("blob".to_string()).and_modify(|e| {
                 *e = e
                     .to_type(XepakType::Blob, true)

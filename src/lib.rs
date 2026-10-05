@@ -51,7 +51,6 @@ pub enum XepakError {
     #[error("Decode error: {0}")]
     Decode(String),
 
-
     #[error("Lua script error: {0}")]
     LuaScript(String),
 

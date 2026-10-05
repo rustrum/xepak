@@ -14,7 +14,6 @@ use crate::{
         AuthorizeProcessor, SimpleAuthenticationProcessor, token::TokenAuthenticationProcessor,
     },
     cfg::ResourceRef,
-    schema::validate_dict_with_schema,
     script_lua::LuaPreProcessor,
     server::{CONTENT_TYPE_CBOR, RequestInput, XepakAppData, is_req_body_allowed},
     xepak_data::XepakValue,
@@ -71,10 +70,7 @@ pub enum PreProcessor {
 }
 
 pub fn init_required_pre_processors() -> Vec<Box<dyn PreProcessorHandler>> {
-    vec![
-        Box::new(QueryArgsProcessor {}),
-        Box::new(InputArgsValidator {}),
-    ]
+    vec![Box::new(QueryArgsProcessor {})]
 }
 
 pub fn build_pre_processor(
@@ -154,32 +150,6 @@ pub fn adjust_priority(priority: u16, position: u16) -> u16 {
     priority - position
 }
 
-/// Execute validation logic for all input arguments according to schema.
-/// Has lowest priority, should be executed after all other pre-processors
-/// that could enrich input with K/V arguments.
-/// The core notion here is that we validate not a source data
-/// but its parsed K/V representation.
-pub struct InputArgsValidator {}
-
-#[async_trait(?Send)]
-impl PreProcessorHandler for InputArgsValidator {
-    fn priority(&self) -> u16 {
-        PRIORITY_LAST
-    }
-
-    async fn handle(
-        &self,
-        _req: &HttpRequest,
-        _state: &Data<XepakAppData>,
-        _body: &Bytes,
-        input: &mut RequestInput,
-    ) -> Result<(), XepakError> {
-        validate_dict_with_schema(&input.schema, &input.path_args.lock().unwrap())?;
-        validate_dict_with_schema(&input.schema, &input.args.lock().unwrap())?;
-        Ok(())
-    }
-}
-
 /// Handle arguments from query string.
 /// Skip query string args for POST/PUT requests (basically anything that have request body)
 pub struct QueryArgsProcessor {}
@@ -209,9 +179,9 @@ impl PreProcessorHandler for QueryArgsProcessor {
                 Default::default()
             };
 
-        for (k, v) in query_args {
-            input.set_named_arg_with_schema(k, v, true)?;
-        }
+        let qa_value = XepakValue::from(query_args);
+
+        input.get_args = input.apply_schema_to("GET", qa_value, true)?;
 
         Ok(())
     }
@@ -237,28 +207,10 @@ impl BodyToArgsProcessor {
             return Ok(());
         }
 
-        let req_body: XepakValue = cbor2::from_slice(body)
+        let body_value: XepakValue = cbor2::from_slice(body)
             .map_err(|e| XepakError::Input(format!("Wrong CBOR format: {e}")))?;
 
-        if !req_body.is_map() {
-            return Err(XepakError::Input(
-                "CBOR request body must be a map/dict".to_string(),
-            ));
-        }
-
-        let req_body_map = req_body.as_map()?;
-
-        for (key, value) in req_body_map {
-            let xvalue = if value.is_tuple() || value.is_map() {
-                return Err(XepakError::Input(format!(
-                    "(๑•ᗝ•)૭ Root CBOR must NOT have any nested arrays or objects. See \"{key}\" property."
-                )));
-            } else {
-                value.clone()
-            };
-
-            input.set_named_arg_with_schema(key, xvalue, true)?;
-        }
+        input.body_args = input.apply_schema_to("", body_value, true)?;
 
         Ok(())
     }
@@ -272,26 +224,10 @@ impl BodyToArgsProcessor {
             return Ok(());
         }
 
-        let json_request: serde_json::Value = serde_json::from_slice(body)
+        let body_value: XepakValue = serde_json::from_slice(body)
             .map_err(|e| XepakError::Input(format!("Wrong JSON format: {e}")))?;
 
-        let Some(json_object) = json_request.as_object() else {
-            return Err(XepakError::Input(
-                "JSON request body only allowed to be an object".to_string(),
-            ));
-        };
-
-        for (key, value) in json_object {
-            let xvalue = if value.is_array() || value.is_object() {
-                return Err(XepakError::Input(format!(
-                    "(๑•ᗝ•)૭ Root JSON must NOT have any nested arrays or objects. See \"{key}\" property."
-                )));
-            } else {
-                value.try_into()?
-            };
-
-            input.set_named_arg_with_schema(key.clone(), xvalue, true)?;
-        }
+        input.body_args = input.apply_schema_to("", body_value, true)?;
 
         Ok(())
     }

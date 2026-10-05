@@ -83,7 +83,7 @@ impl Schema {
             Schema::Text { .. } => XepakType::Text,
             Schema::Blob { .. } => XepakType::Blob,
             Schema::Tuple { .. } => XepakType::Tuple,
-            Schema::Dict { .. } => XepakType::Map,
+            Schema::Dict { .. } => XepakType::Dict,
         }
     }
 
@@ -324,7 +324,7 @@ pub fn convert_with_schema(
         XepakType::Float => XepakValue::Float(value.as_float()?),
         XepakType::Blob => XepakValue::Blob(value.as_blob()?),
         XepakType::Tuple => XepakValue::Tuple(value.as_tuple()?),
-        XepakType::Map => XepakValue::Map(value.as_map()?),
+        XepakType::Dict => XepakValue::Dict(value.as_map()?),
     })
 }
 

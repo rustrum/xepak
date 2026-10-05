@@ -82,7 +82,7 @@ impl TokenAuthenticationProcessor {
             ));
         };
 
-        let XepakValue::Map(row) = result else {
+        let XepakValue::Dict(row) = result else {
             return Err(XepakError::Unexpected(
                 "Wrong row shape returned from DB".to_string(),
             ));

@@ -1,11 +1,12 @@
 use std::{
+    borrow::Cow,
     collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
 };
 
 use crate::{
     XepakError,
-    schema::{Schema, convert_with_schema},
+    schema::{Schema, apply_schema, convert_with_schema},
     storage::{SqlxRequestArgs, StorageRequestArgs},
     xepak_data::XepakValue,
 };
@@ -18,14 +19,22 @@ pub struct RequestInput {
     /// Input schema
     pub(crate) schema: Schema,
 
-    /// If true - fail on non existing args
+    /// If true - fail on keyargs not defined in the schema
     strict_schema: bool,
 
     /// HTTP request method (GET, POST, etc.)
     pub(crate) method: String,
 
-    /// Arguments parsed from URI (higher priority)
-    pub(crate) path_args: Arc<Mutex<HashMap<String, XepakValue>>>,
+    /// Arguments parsed from URI template
+    /// Always stored as s [`XepakValue::Dict`] if values exists.
+    pub(crate) path_args: XepakValue,
+
+    /// Arguments from querystring.
+    /// Always stored as s [`XepakValue::Dict`] if values exists.
+    pub(crate) get_args: XepakValue,
+
+    /// Arguments parsed from POST/PUT request body
+    pub(crate) body_args: XepakValue,
 
     /// Final input args storage with schema applied
     pub(crate) args: Arc<Mutex<HashMap<String, XepakValue>>>,
@@ -55,7 +64,7 @@ impl RequestInput {
         let resource = actix_router::ResourceDef::new(uri_pattern);
         resource.capture_match_info(&mut path);
 
-        let path_args = path
+        let path_args: HashMap<String, XepakValue> = path
             .iter()
             .map(|(k, v)| (k.to_string(), XepakValue::Text(v.to_string())))
             .collect();
@@ -65,7 +74,9 @@ impl RequestInput {
             strict_schema,
             auth: Arc::new(None),
             method,
-            path_args: Arc::new(Mutex::new(path_args)),
+            path_args: path_args.into(),
+            get_args: XepakValue::Null,
+            body_args: XepakValue::Null,
             args: Arc::new(Mutex::new(Default::default())),
             limit: 0,
             offset: 0,
@@ -81,7 +92,9 @@ impl RequestInput {
             schema: Schema::default(),
             strict_schema: false,
             method: String::new(),
-            path_args: Arc::new(Mutex::new(Default::default())),
+            path_args: XepakValue::Null,
+            get_args: XepakValue::Null,
+            body_args: XepakValue::Null,
             args: Arc::new(Mutex::new(args)),
             limit,
             offset,
@@ -89,19 +102,42 @@ impl RequestInput {
     }
 
     pub fn has_any_arg(&self, arg_name: &str) -> bool {
-        if self.path_args.lock().unwrap().contains_key(arg_name) {
+        if self.args.lock().unwrap().contains_key(arg_name) {
             return true;
         }
-        self.args.lock().unwrap().contains_key(arg_name)
+        if self.path_args.dict_contains(arg_name) {
+            return true;
+        }
+        if self.body_args.dict_contains(arg_name) {
+            return true;
+        }
+        self.get_args.dict_contains(arg_name)
     }
 
-    pub fn get_arg_value(&self, argument: &str) -> Option<XepakValue> {
-        let path_arg = self.path_args.lock().unwrap().get(argument).cloned();
-        if path_arg.is_none() {
-            self.args.lock().unwrap().get(argument).cloned()
-        } else {
-            path_arg
+    pub fn get_arg_value(&self, name: &str) -> Option<Cow<'_, XepakValue>> {
+        // Custom defined args has higher priority
+        let args_lock = self.args.lock().unwrap();
+        if args_lock.contains_key(name) {
+            return args_lock.get(name).cloned().map(Cow::Owned);
         }
+
+        // URI path args have priority over other types
+        let path_arg = self.path_args.dict_get(name);
+        if path_arg.is_some() {
+            return path_arg.map(Cow::Borrowed);
+        }
+
+        let body_arg = self.body_args.dict_get(name);
+        if body_arg.is_some() {
+            return body_arg.map(Cow::Borrowed);
+        }
+
+        let get_arg = self.get_args.dict_get(name);
+        if get_arg.is_some() {
+            return get_arg.map(Cow::Borrowed);
+        }
+
+        None
     }
 
     pub fn get_limit(&self) -> usize {
@@ -143,6 +179,21 @@ impl RequestInput {
         }
 
         Some(ivalue as usize)
+    }
+
+    pub(crate) fn apply_schema_to(
+        &self,
+        key_ref: &str,
+        value: XepakValue,
+        validate: bool,
+    ) -> Result<XepakValue, XepakError> {
+        Ok(apply_schema(
+            &self.schema,
+            value,
+            key_ref,
+            self.strict_schema,
+            validate,
+        )?)
     }
 
     /// Set top level named argument value and apply schema conversion to it if any defined.
@@ -203,7 +254,9 @@ impl SqlxRequestArgs for RequestInput {
                 "Can't bind argument '{arg_name}' - does not exists in request."
             )));
         };
-
-        Ok(value.bind_sqlx(query))
+        Ok(match value {
+            Cow::Borrowed(v) => v.bind_sqlx(query),
+            Cow::Owned(v) => v.bind_sql_move(query),
+        })
     }
 }

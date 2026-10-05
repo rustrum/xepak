@@ -28,7 +28,7 @@ pub enum XepakValue {
 
     Tuple(Vec<XepakValue>),
 
-    Map(HashMap<String, XepakValue>),
+    Dict(HashMap<String, XepakValue>),
 }
 
 impl XepakValue {
@@ -42,7 +42,7 @@ impl XepakValue {
             Self::Text(_) => XepakType::Text,
             Self::Blob(_) => XepakType::Blob,
             Self::Tuple(_) => XepakType::Tuple,
-            Self::Map(_) => XepakType::Map,
+            Self::Dict(_) => XepakType::Dict,
         }
     }
 
@@ -51,11 +51,38 @@ impl XepakValue {
     }
 
     pub fn is_map(&self) -> bool {
-        matches!(self, Self::Map(_))
+        matches!(self, Self::Dict(_))
     }
 
     pub fn is_tuple(&self) -> bool {
         matches!(self, Self::Tuple(_))
+    }
+
+    /// If value is a dict returns if it contains given key or false.
+    pub fn dict_contains(&self, key: &str) -> bool {
+        if let Self::Dict(value) = self {
+            value.contains_key(key)
+        } else {
+            false
+        }
+    }
+
+    /// If value is a dict returns inner value by key or None for all other cases.
+    pub fn dict_get(&self, key: &str) -> Option<&XepakValue> {
+        if let Self::Dict(value) = self {
+            value.get(key)
+        } else {
+            None
+        }
+    }
+
+    /// If value is a tuple returns inner value by index or None for all other cases.
+    pub fn tuple_get(&self, id: usize) -> Option<&XepakValue> {
+        if let Self::Tuple(value) = self {
+            value.get(id)
+        } else {
+            None
+        }
     }
 
     pub fn from_str_as(v: &str, parse_as: XepakType) -> Result<Self, XepakDataError> {
@@ -82,7 +109,7 @@ impl XepakValue {
             XepakType::Text => Self::Text(v.to_string()),
             XepakType::Blob => unimplemented!(),
             XepakType::Tuple => unimplemented!(),
-            XepakType::Map => unimplemented!(),
+            XepakType::Dict => unimplemented!(),
         };
         Ok(xv)
     }
@@ -90,7 +117,7 @@ impl XepakValue {
     pub fn as_int(&self) -> Result<i128, XepakDataError> {
         const TO_TYPE: XepakType = XepakType::Int;
         match self {
-            XepakValue::Null | XepakValue::Blob(_) | XepakValue::Tuple(_) | XepakValue::Map(_) => {
+            XepakValue::Null | XepakValue::Blob(_) | XepakValue::Tuple(_) | XepakValue::Dict(_) => {
                 Err(XepakDataError::ConvertValue(
                     self.get_type(),
                     TO_TYPE,
@@ -135,14 +162,14 @@ impl XepakValue {
             XepakValue::Text(v) => v.clone(),
             XepakValue::Blob(v) => base64::engine::general_purpose::STANDARD.encode(v),
             XepakValue::Tuple(v) => serde_json::to_string(v).unwrap_or_else(|_| "[]".to_string()),
-            XepakValue::Map(v) => serde_json::to_string(v).unwrap_or_else(|_| "{}".to_string()),
+            XepakValue::Dict(v) => serde_json::to_string(v).unwrap_or_else(|_| "{}".to_string()),
         }
     }
 
     pub fn as_bool(&self) -> Result<bool, XepakDataError> {
         const TO_TYPE: XepakType = XepakType::Boolean;
         Ok(match self {
-            XepakValue::Null | XepakValue::Blob(_) | XepakValue::Tuple(_) | XepakValue::Map(_) => {
+            XepakValue::Null | XepakValue::Blob(_) | XepakValue::Tuple(_) | XepakValue::Dict(_) => {
                 return Err(XepakDataError::ConvertValue(
                     self.get_type(),
                     TO_TYPE,
@@ -185,7 +212,7 @@ impl XepakValue {
     pub fn as_float(&self) -> Result<f64, XepakDataError> {
         const TO_TYPE: XepakType = XepakType::Float;
         Ok(match self {
-            XepakValue::Null | XepakValue::Blob(_) | XepakValue::Tuple(_) | XepakValue::Map(_) => {
+            XepakValue::Null | XepakValue::Blob(_) | XepakValue::Tuple(_) | XepakValue::Dict(_) => {
                 return Err(XepakDataError::ConvertValue(
                     self.get_type(),
                     TO_TYPE,
@@ -254,7 +281,7 @@ impl XepakValue {
         const TO_TYPE: XepakType = XepakType::Blob;
         Ok(match self {
             XepakValue::Null => HashMap::new(),
-            XepakValue::Map(v) => v.clone(),
+            XepakValue::Dict(v) => v.clone(),
             _ => {
                 return Err(XepakDataError::ConvertValue(
                     self.get_type(),
@@ -282,7 +309,7 @@ impl XepakValue {
             XepakType::Text => Self::Text(self.as_string()),
             XepakType::Blob => Self::Blob(self.as_blob()?),
             XepakType::Tuple => Self::Tuple(self.as_tuple()?),
-            XepakType::Map => Self::Map(self.as_map()?),
+            XepakType::Dict => Self::Dict(self.as_map()?),
         };
         Ok(value)
     }
@@ -297,7 +324,7 @@ impl PartialEq for XepakValue {
             (Self::Text(l0), Self::Text(r0)) => l0 == r0,
             (Self::Blob(l0), Self::Blob(r0)) => l0 == r0,
             (Self::Tuple(l0), Self::Tuple(r0)) => l0 == r0,
-            (Self::Map(l0), Self::Map(r0)) => l0 == r0,
+            (Self::Dict(l0), Self::Dict(r0)) => l0 == r0,
             _ => core::mem::discriminant(self) == core::mem::discriminant(other),
         }
     }
@@ -335,7 +362,7 @@ impl From<i128> for XepakValue {
 
 impl From<HashMap<String, XepakValue>> for XepakValue {
     fn from(value: HashMap<String, XepakValue>) -> Self {
-        Self::Map(value)
+        Self::Dict(value)
     }
 }
 

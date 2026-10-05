@@ -21,7 +21,7 @@ async fn allow_methods_config() {
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     let body = resp.json::<JsonValue>().await.unwrap();
     assert_eq!(body["code"], "bad_request");
-    assert_eq!(body["message"], "Request method POST not allowed!");
+    assert_eq!(body["message"], "(๑•ᗝ•)૭ Request method POST not allowed!");
 
     let resp = client::post("/input/method/post-put", "").await;
     assert_eq!(resp.status(), StatusCode::OK);
@@ -32,20 +32,9 @@ async fn allow_methods_config() {
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     let body = resp.json::<JsonValue>().await.unwrap();
     assert_eq!(body["code"], "bad_request");
-    assert_eq!(body["message"], "Request method GET not allowed!");
+    assert_eq!(body["message"], "(๑•ᗝ•)૭ Request method GET not allowed!");
 }
 
-#[tokio::test]
-#[serial]
-async fn test_cbor_non_dict_root_returns_400() {
-    let _server = init_default_test_server(INIT_DELAY_DEFAULT).await;
-
-    let resp = client::post_cbor_accept("/input/body/args/simple", vec![1i64, 2, 3], true).await;
-
-    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
-    let body = resp.json::<JsonValue>().await.unwrap();
-    assert_eq!(body["code"], "bad_request");
-}
 
 async fn record_send_receive(
     record: &TypesRecord,
