@@ -1,7 +1,5 @@
 mod common;
 
-use std::collections::HashMap;
-
 use base64::Engine;
 use common::domain::TypesRecord;
 use common::*;
@@ -10,6 +8,8 @@ use serde_json::Value as JsonValue;
 
 use serial_test::serial;
 use xepak::xepak_data::XepakValue;
+
+use crate::common::client::HeadersBuilder;
 
 // #[tokio::main(flavor = "current_thread")]
 // #[test]
@@ -84,14 +84,10 @@ async fn same_response_json_cbor() {
     assert_eq!(Some(3.3), json_data.type_real);
     assert_eq!(Some(vec![0x2b]), json_data.type_blob);
 
-    let cresponse = client::get_resource(
-        "/alltypes/3",
-        HashMap::<String, String>::new(),
-        client::cbor_headers(),
-    )
-    .await;
+    let response =
+        client::get_with_headers("/alltypes/3", HeadersBuilder::new().accept_cbor()).await;
 
-    let cbor_data: TypesRecord = client::extract_from_cbor(cresponse, Some(StatusCode::OK)).await;
+    let cbor_data: TypesRecord = client::extract_from_cbor(response, Some(StatusCode::OK)).await;
 
     assert_eq!(json_data, cbor_data);
 }
@@ -121,12 +117,8 @@ async fn response_json_cbor_with_nulls() {
     assert_eq!(Some(vec![0x2d]), json_data.type_blob);
 
     // CBOR
-    let response = client::get_resource(
-        "/alltypes/4",
-        HashMap::<String, String>::new(),
-        client::cbor_headers(),
-    )
-    .await;
+    let response =
+        client::get_with_headers("/alltypes/4", HeadersBuilder::new().accept_cbor()).await;
     let json_data: TypesRecord = client::extract_from_cbor(response, Some(StatusCode::OK)).await;
 
     assert_eq!(4, json_data.id);
@@ -135,12 +127,8 @@ async fn response_json_cbor_with_nulls() {
     assert_eq!(Some(4.4), json_data.type_real);
     assert_eq!(None, json_data.type_blob);
 
-    let response = client::get_resource(
-        "/alltypes/5",
-        HashMap::<String, String>::new(),
-        client::cbor_headers(),
-    )
-    .await;
+    let response =
+        client::get_with_headers("/alltypes/5", HeadersBuilder::new().accept_cbor()).await;
     let json_data: TypesRecord = client::extract_from_cbor(response, Some(StatusCode::OK)).await;
 
     assert_eq!(5, json_data.id);

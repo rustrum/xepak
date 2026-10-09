@@ -225,7 +225,7 @@ pub mod client {
     use url::form_urlencoded;
     use xepak::server::{CONTENT_TYPE_CBOR, CONTENT_TYPE_JSON};
 
-    fn api_url(uri: &str) -> String {
+    pub fn api_url(uri: &str) -> String {
         format!("http://localhost:{DEFAULT_TEST_PORT}{uri}")
     }
 
@@ -239,46 +239,23 @@ pub mod client {
         query.finish().to_string()
     }
 
-    pub async fn get_with_query<T: Display>(uri: &str, query_args: HashMap<String, T>) {
-        get_resource(uri, query_args, HashMap::<String, T>::new()).await;
-    }
-
     pub async fn get(uri: &str) -> Response {
-        get_resource(
-            uri,
-            HashMap::<String, String>::new(),
-            HashMap::<String, String>::new(),
-        )
-        .await
+        let uri = api_url(uri);
+        reqwest::Client::new()
+            .get(uri)
+            .send()
+            .await
+            .expect("Request must not fail")
     }
 
-    pub async fn get_resource<T: Display>(
-        uri: &str,
-        query_args: HashMap<String, T>,
-        headers: HashMap<String, T>,
-    ) -> Response {
-        let client = reqwest::Client::new();
-
-        let mut uri = api_url(uri);
-
-        if !query_args.is_empty() {
-            let qs = to_query_string(query_args);
-            uri = format!("{uri}?{qs}");
-        }
-
-        let hm: HeaderMap = headers
-            .into_iter()
-            .map(|(k, v)| {
-                (
-                    HeaderName::from_str(&k).expect("Valid header key required"),
-                    HeaderValue::from_str(&v.to_string()).expect("Valid header value required"),
-                )
-            })
-            .collect();
-
-        let builder = client.get(uri).headers(hm);
-
-        builder.send().await.expect("Request must not fail")
+    pub async fn get_with_headers(uri: &str, hb: HeadersBuilder) -> Response {
+        let uri = api_url(uri);
+        reqwest::Client::new()
+            .get(uri)
+            .headers(hb.build())
+            .send()
+            .await
+            .expect("Request must not fail")
     }
 
     pub async fn post<B: Into<Body>>(uri: &str, body: B) -> Response {
@@ -402,5 +379,83 @@ pub mod client {
                 cbor2::diagnostic_pretty(&bytes[..]).unwrap()
             )
         })
+    }
+
+    #[derive(Default, Debug)]
+    pub struct UriBuilder {
+        uri: String,
+        args: HashMap<String, String>,
+    }
+
+    impl UriBuilder {
+        pub fn new(uri: &str) -> Self {
+            Self {
+                uri: uri.to_string(),
+                args: Default::default(),
+            }
+        }
+        pub fn add_args<T: Display>(mut self, key: &str, value: T) -> Self {
+            self.args.insert(key.to_string(), value.to_string());
+            self
+        }
+        pub fn build(self) -> String {
+            if self.args.is_empty() {
+                self.uri
+            } else {
+                format!("{}?{}", self.uri, to_query_string(self.args))
+            }
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct HeadersBuilder {
+        headers: HeaderMap,
+    }
+
+    impl HeadersBuilder {
+        #[allow(clippy::new_without_default)]
+        pub fn new() -> Self {
+            Self {
+                headers: Default::default(),
+            }
+        }
+        pub fn api_key(self, key: &str) -> Self {
+            self.header("x-api-key", key)
+        }
+        pub fn accept_json(self) -> Self {
+            self.header("accept", CONTENT_TYPE_JSON)
+        }
+
+        pub fn accept_cbor(self) -> Self {
+            self.header("accept", CONTENT_TYPE_CBOR)
+        }
+
+        pub fn content_type_json(self) -> Self {
+            self.header("content-type", CONTENT_TYPE_JSON)
+        }
+
+        pub fn content_type_cbor(self) -> Self {
+            self.header("content-type", CONTENT_TYPE_CBOR)
+        }
+
+        pub fn accept_json_or_cbor(self, accept_cbor: bool) -> Self {
+            if accept_cbor {
+                self.accept_cbor()
+            } else {
+                self.accept_json()
+            }
+        }
+
+        pub fn header(mut self, key: &str, value: &str) -> Self {
+            self.headers.insert(
+                HeaderName::from_str(key).expect("Valid header key required"),
+                HeaderValue::from_str(value).expect("Valid header value required"),
+            );
+            self
+        }
+
+        pub fn build(self) -> HeaderMap {
+            self.headers
+        }
     }
 }

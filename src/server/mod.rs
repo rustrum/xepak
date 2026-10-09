@@ -21,7 +21,7 @@ use actix_web::{HttpServer, web::Data};
 use crate::XepakError;
 use crate::cfg::{ResourceRef, XepakConf, XepakSpecs};
 use crate::server::cache::AppCache;
-use crate::server::handlers::EndpointHandler;
+use crate::server::handlers::{EndpointHandler, RpcHandler};
 use crate::server::processor::PreProcessor;
 use crate::server::registry::AppRegistry;
 use crate::storage::{Storage, init_storage_connectors};
@@ -99,54 +99,39 @@ pub async fn init_server(
         cache: AppCache::new(10_000, Duration::from_mins(5)),
     };
 
-    cache_cleanup(app_data.cache.clone());
+    init_cache_cleanup(app_data.cache.clone());
 
-    // Defining Endpoints here required all nested data to be send+sync
+    // REST endpoints. Required all nested data to be send+sync.
+    let mut rest_handlers = Vec::new();
     let rref = ResourceRef::new("ep");
-    let mut endpoints = Vec::new();
     for (idx, espec) in specs.endpoint.iter().enumerate() {
-        endpoints.push(EndpointHandler::new(
+        rest_handlers.push(EndpointHandler::new(
             rref.nested(idx),
             espec.clone(),
             &app_data,
         )?);
     }
 
-    // let especs = specs.endpoint.clone();
-    // let factory = move || {
-    //     let mut endpoints = Vec::new();
-    //     for espec in especs {
-    //         // endpoints.push(EndpointHandler::new(espec, &app_data)?);
-    //         endpoints.push(EndpointHandler::new(espec, &app_data).unwrap());
-    //     }
-    //     // let ep_config = endpoints.clone();
-    //     App::new()
-    //         .app_data(Data::new(app_data.clone()))
-    //         // .service(web::scope("/") ...
-    //         .configure(|cfg: &mut ServiceConfig| {
-    //             // for eh in ep_config {
-    //             for eh in endpoints {
-    //                 cfg.service(eh);
-    //             }
-    //         })
-    //         .wrap(Logger::default())
-    // };
+    // JSON-RPC endpoints
+    let mut rpc_handlers = Vec::new();
+    for (idx, espec) in specs.rpc.iter().enumerate() {
+        rpc_handlers.push(RpcHandler::new(rref.nested(idx), espec.clone(), &app_data)?);
+    }
 
     // let factory = app_factory(&app_data, specs.endpoint)?;
     let server = HttpServer::new(move || {
-        let endpoints = endpoints.clone();
-        // let mut endpoints = Vec::new();
-        // for espec in especs.clone() {
-        //     // endpoints.push(EndpointHandler::new(espec, &app_data)?);
-        //     endpoints.push(EndpointHandler::new(espec, &app_data).unwrap());
-        // }
-        // let ep_config = endpoints.clone();
+        let rpcs = rpc_handlers.clone();
+        let rests = rest_handlers.clone();
+
         App::new()
             .app_data(Data::new(app_data.clone()))
             // .service(web::scope("/") ...
             .configure(|cfg: &mut ServiceConfig| {
                 // for eh in ep_config {
-                for eh in endpoints {
+                for eh in rests {
+                    cfg.service(eh);
+                }
+                for eh in rpcs {
                     cfg.service(eh);
                 }
             })
@@ -192,7 +177,7 @@ pub async fn init_server(
 //         .wrap(Logger::default())})
 // }
 
-fn cache_cleanup(cache: AppCache) {
+fn init_cache_cleanup(cache: AppCache) {
     tokio::spawn(async move {
         // Use an interval instead of sleep to prevent timing drift
         let mut interval = tokio::time::interval(Duration::from_secs(60));

@@ -4,14 +4,12 @@ use common::*;
 use maplit::hashset;
 use reqwest::StatusCode;
 use serde::Deserialize;
-use std::{
-    collections::{HashMap, HashSet},
-    path::PathBuf,
-    str::FromStr as _,
-};
+use std::{collections::HashSet, path::PathBuf, str::FromStr as _};
 use xepak::cfg::{load_conf_file, load_specs_from_dir};
 
 use serial_test::serial;
+
+use crate::common::client::HeadersBuilder;
 
 #[derive(Deserialize, Debug)]
 struct AuthScriptRecord {
@@ -22,13 +20,13 @@ struct AuthScriptRecord {
 }
 
 async fn check_script_auth(uri: &str, key: Option<&str>, expected: AuthScriptRecord) {
-    let headers = if let Some(k) = key {
-        HashMap::from([("x-api-key".to_string(), k.to_string())])
+    let hb = if let Some(k) = key {
+        HeadersBuilder::new().api_key(k)
     } else {
-        HashMap::new()
+        HeadersBuilder::new()
     };
 
-    let response = client::get_resource(uri, HashMap::<String, String>::new(), headers).await;
+    let response = client::get_with_headers(uri, hb).await;
 
     assert!(
         response.status().is_success(),
@@ -188,12 +186,7 @@ async fn auth_default_pre_processor() {
     // Valid API keys should still work
     let valid_keys = ["BossKEY", "ManagerKEY", "HackerKEY", "UserKEY"];
     for key in valid_keys {
-        let response = client::get_resource(
-            URI,
-            HashMap::<String, String>::new(),
-            HashMap::from([("x-api-key".to_string(), key.to_string())]),
-        )
-        .await;
+        let response = client::get_with_headers(URI, HeadersBuilder::new().api_key(key)).await;
         assert!(
             response.status().is_success(),
             "Valid key \"{key}\" must be accepted with default pre-processor, got {}",
@@ -226,12 +219,7 @@ async fn auth_require_key() {
     // Valid API keys from tests_cfg.toml
     let valid_keys = ["BossKEY", "ManagerKEY", "HackerKEY", "UserKEY"];
     for key in valid_keys {
-        let response = client::get_resource(
-            URI,
-            HashMap::<String, String>::new(),
-            HashMap::from([("x-api-key".to_string(), key.to_string())]),
-        )
-        .await;
+        let response = client::get_with_headers(URI, HeadersBuilder::new().api_key(key)).await;
         assert!(
             response.status().is_success(),
             "Valid key \"{key}\" must be accepted, got {}",
@@ -248,12 +236,7 @@ async fn auth_boss_endpoint() {
     const URI: &str = "/auth/posts/boss";
 
     // Only tokens with ADMIN role must be allowed
-    let response = client::get_resource(
-        URI,
-        HashMap::<String, String>::new(),
-        HashMap::from([("x-api-key".to_string(), "BossKEY".to_string())]),
-    )
-    .await;
+    let response = client::get_with_headers(URI, HeadersBuilder::new().api_key("BossKEY")).await;
     assert!(
         response.status().is_success(),
         "BossKEY (ADMIN) must be accepted, got {}",
@@ -278,12 +261,7 @@ async fn auth_manager_endpoint() {
 
     // Only tokens with MANAGER role must be allowed
     for key in ["BossKEY", "ManagerKEY"] {
-        let response = client::get_resource(
-            URI,
-            HashMap::<String, String>::new(),
-            HashMap::from([("x-api-key".to_string(), key.to_string())]),
-        )
-        .await;
+        let response = client::get_with_headers(URI, HeadersBuilder::new().api_key(key)).await;
         assert!(
             response.status().is_success(),
             "Key \"{key}\" (MANAGER role) must be accepted, got {}",
@@ -321,12 +299,7 @@ async fn auth_hacker_endpoint() {
 
 async fn check_keys_are_rejected(uri: &str, keys: &[&str], message: &str) {
     for key in keys {
-        let response = client::get_resource(
-            uri,
-            HashMap::<String, String>::new(),
-            HashMap::from([("x-api-key".to_string(), (*key).to_string())]),
-        )
-        .await;
+        let response = client::get_with_headers(uri, HeadersBuilder::new().api_key(key)).await;
         assert_eq!(
             StatusCode::FORBIDDEN,
             response.status(),

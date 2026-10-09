@@ -1,0 +1,81 @@
+[[rpc]]
+uri = "/rpc"
+
+[rpc.methods.all_posts]
+resource = {
+    type = "query",
+    query = "SELECT * FROM posts ORDER by id"
+}
+
+[rpc.methods.posts]
+schema.input = {
+    type = "dict",
+    items = {
+        limit = { type = "int", required = true },
+        offset = { type = "int", required = true },
+    }
+}
+resource = {
+    type = "query",
+    query = "SELECT * FROM posts ORDER by id LIMIT {{limit}} OFFSET {{offset}}"
+}
+
+
+[rpc.methods.get]
+schema.input = {
+    type = "tuple",
+    items = [
+        { type = "int", required = true },
+    ]
+}
+single_record_response = true
+resource = {
+    type = "query",
+    query = "SELECT * FROM posts WHERE id = {{0}}"
+}
+
+[rpc.methods.get_compact]
+schema.input = {
+    type = "tuple",
+    items = [
+        { type = "int", required = true },
+        { type = "tuple", required = true },
+    ]
+}
+single_record_response = true
+
+
+[rpc.methods.get_compact.resource]
+type = "query_script_lua"
+script = """
+local fields = {
+    id = true,
+    user_id = true,
+    title = true,
+    content = true,
+}
+
+local query = query_builder("SELECT ");
+local parts = {"id"};
+
+local fields_display = ctx:get_arg("1")
+for _, field in ipairs(fields_display) do
+    local flower = string.lower(field)
+    if fields[flower] then
+        table.insert(parts, flower)
+    end
+end
+
+query:add_joined_parts("", parts, ",", "");
+query:add("FROM posts WHERE id = {{0}}");
+
+return query:build();
+"""
+
+
+[rpc.methods.script]
+[rpc.methods.script.resource]
+type = "data_script"
+script = """
+return ctx:get_arg("input")
+"""
