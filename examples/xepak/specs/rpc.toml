@@ -1,0 +1,10 @@
+[[rpc]]
+uri = "/rpc"
+
+[rpc.methods.get_all_posts]
+
+resource = {
+    type = "query",
+    query = "SELECT * FROM posts"
+}
+

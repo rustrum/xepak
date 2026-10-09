@@ -11,7 +11,10 @@ use serde::Deserialize;
 
 use crate::{
     XepakError,
-    server::{cfg::EndpointSpecs, processor::PreProcessor},
+    server::{
+        cfg::{EndpointRpcSpecs, EndpointSpecs},
+        processor::PreProcessor,
+    },
     storage::StorageSettings,
 };
 
@@ -54,6 +57,9 @@ pub struct XepakSpecs {
     #[serde(default)]
     pub endpoint: Vec<EndpointSpecs>,
 
+    #[serde(default)]
+    pub rpc: Vec<EndpointRpcSpecs>,
+
     /// Shared registry for all pre-processors
     #[serde(default)]
     pub shared_pre_processors: HashMap<String, PreProcessor>,
@@ -72,6 +78,7 @@ impl XepakSpecs {
 
         self.script.extend(other.script);
         self.endpoint.extend(other.endpoint);
+        self.rpc.extend(other.rpc);
     }
 
     /// Returns false if specs has minor errors and Err on bit structural issues.
@@ -86,9 +93,15 @@ impl XepakSpecs {
             }
         }
 
-        let mut ids = HashSet::new();
+        let mut uris = HashSet::new();
         for ep in &self.endpoint {
-            if !ids.insert(ep.uri.clone()) {
+            if !uris.insert(ep.uri.clone()) {
+                tracing::warn!("Duplicate endpoint for URI: {}", ep.uri);
+                result = false;
+            }
+        }
+        for ep in &self.rpc {
+            if !uris.insert(ep.uri.clone()) {
                 tracing::warn!("Duplicate endpoint for URI: {}", ep.uri);
                 result = false;
             }

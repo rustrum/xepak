@@ -27,9 +27,7 @@ items = {
     title = {
         type = "text",
         required = true,
-        validate = [
-            { kind = "range", from = 5, to = 255 },
-        ]
+        validate = { kind = "range", from = 5, to = 255 },
     },
     content = { type = "text" }
 }

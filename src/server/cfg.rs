@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use actix_web::http::Method;
 use bon::Builder;
@@ -91,7 +91,7 @@ pub struct EndpointRpcSpecs {
     /// URI template for this RPC
     pub uri: String,
 
-    pub methods: Vec<EndpointRpcMethod>,
+    pub methods: HashMap<String, EndpointRpcMethod>,
 }
 
 #[derive(Builder, Clone, Debug, Deserialize)]

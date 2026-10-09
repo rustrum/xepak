@@ -55,6 +55,7 @@ pub enum Schema {
         validate: SchemaValidator,
     },
     Dict {
+        #[serde(default)]
         items: HashMap<String, Schema>,
         #[serde(default)]
         required: bool,

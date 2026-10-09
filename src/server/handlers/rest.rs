@@ -6,18 +6,17 @@ use actix_web::{
 };
 use std::{pin::Pin, sync::Arc};
 
-use super::{EndpointHandlerArgs, to_cbor_response, to_json_response};
+use super::{EndpointHandlerArgs, build_pre_processors, to_cbor_response, to_json_response};
 use crate::{
     XepakError,
     cfg::ResourceRef,
-    script_lua::{execute_lua_script, init_lua_env_fn},
     server::{
         CONTENT_TYPE_CBOR, RequestInput, XepakAppData,
-        cfg::{EndpointSpecs, ResourceSpecs},
-        processor::{PreProcessorHandler, build_pre_processor, init_required_pre_processors},
+        cfg::EndpointSpecs,
+        handlers::{handle_resource, validate_resource},
+        processor::PreProcessorHandler,
         to_error_object,
     },
-    storage::{ResourceRequest, SqlxRequestArgs, Storage},
     xepak_data::{XepakType, XepakValue},
 };
 
@@ -25,7 +24,7 @@ use crate::{
 pub struct EndpointHandler {
     _rref: ResourceRef,
     ep: Arc<EndpointSpecs>,
-    resource_fn_key: String,
+    script_cache_key: String,
     processors: Arc<Vec<Box<dyn PreProcessorHandler>>>,
 }
 
@@ -35,63 +34,22 @@ impl EndpointHandler {
         ep: EndpointSpecs,
         app: &XepakAppData,
     ) -> Result<Self, XepakError> {
-        // This is just a validation to fail early if LUA syntax incorrect
-        match &ep.resource {
-            ResourceSpecs::QueryScriptLua { script, .. }
-            | ResourceSpecs::DataScript { script, .. } => {
-                init_lua_env_fn(app, script)?;
-            }
-            _ => {}
-        }
+        validate_resource(app, &ep.resource)?;
 
-        let pre_processors = Self::build_pre_processors(rref.nested("pp"), &ep, app)?;
+        let pre_processors = build_pre_processors(
+            app,
+            rref.nested("pp"),
+            &ep.pre_processors,
+            ep.pre_processors_ignore_default,
+        )?;
         Ok(Self {
-            resource_fn_key: rref.nested("resource-fn").to_string(),
+            script_cache_key: rref.nested("resource-fn").to_string(),
             _rref: rref,
             ep: Arc::new(ep),
 
             // handler_lua: Arc::new(handler_lua),
             processors: Arc::new(pre_processors),
         })
-    }
-
-    fn build_pre_processors(
-        rref: ResourceRef,
-        ep: &EndpointSpecs,
-        app: &XepakAppData,
-    ) -> Result<Vec<Box<dyn PreProcessorHandler>>, XepakError> {
-        let mut processors: Vec<Box<dyn PreProcessorHandler>> = init_required_pre_processors();
-
-        let mut order = 0u16;
-        // Default pre processors
-        if !ep.pre_processors_ignore_default {
-            for specs in &app.default_pre_processors {
-                order += 1;
-                processors.push(build_pre_processor(
-                    app,
-                    &rref,
-                    order,
-                    specs,
-                    &app.shared_pre_processors,
-                )?);
-            }
-        }
-        // Pre processors for current handler
-        for specs in &ep.pre_processors {
-            order += 1;
-            processors.push(build_pre_processor(
-                app,
-                &rref,
-                order,
-                specs,
-                &app.shared_pre_processors,
-            )?);
-        }
-
-        // Here PP order could change (depends on the basic priority each handlers had)
-        processors.sort_by_key(|b| std::cmp::Reverse(b.priority()));
-
-        Ok(processors)
     }
 
     fn validate_method_allowed(&self, req: &HttpRequest) -> Result<(), XepakError> {
@@ -109,7 +67,7 @@ impl EndpointHandler {
         )))
     }
 
-    async fn handle(
+    async fn handle_request(
         &self,
         req: HttpRequest,
         state: Data<XepakAppData>,
@@ -127,8 +85,16 @@ impl EndpointHandler {
         // Maybe it should be in processors
         ri.parse_offset_limit(&self.ep.offset_arg, &self.ep.limit_arg, self.ep.fetch_limit);
 
-        // TODO rethink this with new storage api for query/query_one
-        let data = match self.handle_resource(&ri, &state).await {
+        let resource_exec = handle_resource(
+            &ri,
+            &state,
+            &self.script_cache_key,
+            &self.ep.resource,
+            self.ep.single_record_response,
+        )
+        .await;
+
+        let data = match resource_exec {
             Ok(d) => d,
             Err(err) => {
                 let (status_code, data) = to_error_object(err);
@@ -177,64 +143,6 @@ impl EndpointHandler {
         }
 
         Ok(input)
-    }
-
-    async fn handle_resource(
-        &self,
-        input: &RequestInput,
-        state: &Data<XepakAppData>,
-    ) -> Result<XepakValue, XepakError> {
-        match &self.ep.resource {
-            ResourceSpecs::Query { data_source, query } => {
-                let Some(ds) = state.get_data_source(data_source) else {
-                    return Err(XepakError::Cfg(format!(
-                        "Data source does not exists \"{data_source}\""
-                    )));
-                };
-
-                let rr = ResourceRequest::new(query, input);
-                self.run_query(ds, rr).await
-            }
-
-            ResourceSpecs::QueryScriptLua {
-                data_source,
-                script,
-            } => {
-                let Some(ds) = state.get_data_source(data_source) else {
-                    return Err(XepakError::Cfg(format!(
-                        "Data source does not exists \"{data_source}\""
-                    )));
-                };
-
-                let query = execute_lua_script::<String>(
-                    state,
-                    input.clone(),
-                    &self.resource_fn_key,
-                    script,
-                )
-                .await?;
-
-                let rr = ResourceRequest::new(&query, input);
-                self.run_query(ds, rr).await
-            }
-            ResourceSpecs::DataScript { script, .. } => {
-                execute_lua_script(state, input.clone(), &self.resource_fn_key, script).await
-            }
-        }
-    }
-
-    async fn run_query<RA: SqlxRequestArgs>(
-        &self,
-        ds: &Storage,
-        request: ResourceRequest<'_, RA>,
-    ) -> Result<XepakValue, XepakError> {
-        if self.ep.single_record_response {
-            ds.query_one(request)
-                .await
-                .map(|v| v.unwrap_or(XepakValue::Null))
-        } else {
-            ds.query(request).await.map(Into::into)
-        }
     }
 
     fn data_to_response(
@@ -298,9 +206,9 @@ impl Handler<EndpointHandlerArgs> for EndpointHandler {
     type Future = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn call(&self, (req, state, body): EndpointHandlerArgs) -> Self::Future {
-        tracing::debug!("Handler CALL called for {:?}", self.ep);
+        tracing::debug!("Calling REST endpoint CALL function with {:?}", self.ep);
         let this = self.clone();
-        Box::pin(async move { this.handle(req, state, body).await })
+        Box::pin(async move { this.handle_request(req, state, body).await })
     }
 }
 
@@ -311,20 +219,6 @@ impl HttpServiceFactory for EndpointHandler {
 
         web::resource(self.ep.uri.clone())
             .route(web::route().to(self))
-            // .route(web::route().to(move |req, state, body| {
-            //     let h = self.clone();
-            //     async move { h.handle(req, state, body).await }
-            // }))
-            // .route(web::route().to(self))
             .register(config);
-
-        // web::resource("/user/list")
-        //     // .route(web::route().to(self))
-        //     // .route(web::route().to(move |req, state, body| {
-        //     //     let h = self.clone();
-        //     //     async move { h.handle(req, state, body).await }
-        //     // }))
-        //     // .route(web::route().to(self))
-        //     .register(config);
     }
 }
