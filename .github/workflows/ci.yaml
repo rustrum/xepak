@@ -6,10 +6,12 @@ on:
     branches: [main]
     paths-ignore:
       - "**/*.md"
+      - "examples/**"
   pull_request:
     branches: [main, develop]
     paths-ignore:
       - "**/*.md"
+      - "examples/**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref }}

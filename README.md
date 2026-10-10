@@ -46,37 +46,53 @@ then go to [Xepak concise AI docs](./README-AI.md).
 🫵 Don't hesitate 🤨 Just add [README-AI.md](./README-AI.md) into your AI context to make 🫟🫠 better .
 
 
+## Features
 
-## Features 
+### Not only REST
 
-### JSON + CBOR
+With Xepak you can build:
 
-Support input and output in JSON and CBOR formats.
+- REST service
+- JSON-RPC service
+- MCP service (will be available soon)
 
-### SQL oriended
+### DSL based on TOML
 
-Each endpoint response is basically a data returned from an SQL query
-that could be defined as a string or could be generated dynamically via script.
+All configuration is just a set of TOML files.
+I'm doing my best to have the most simple DSL syntax if possible.
 
-### Auth
-
-Right now aut module is very simple but usable:
- - in DSL you can define identifier with roles and API key
- - for each non public endpoint you should add authentication processor
- - if you need fine grained access - add authorization processor with auth expression string
+Basic endpoint response is a data returned from an SQL query.
+Query could be defined as a sting or as script that builds query as an output.
 
 ### LUA scripting
 
-Scripting support is needed to build complex queries and perfom data integrity and access control.
+The main goal for using LUA is to forget about clunky Pl/SQL.
+I hope that LUA will be much easier to write and maintain.
 
-The main goal here is to have maintainable, universal logic that can be applied to any DB instead of relying on clunky SQL scripting. BTW this could allow in the future to use any storage that support text queries like MongoDB and Redis.
-
-With scripting you can:
+With LUA you can:
   - rate-limit DB updates using recorded timestamps
   - filter out results based on user configuration from DB
   - validate input data before executing INSERT
-  - etc.
+  - do fancy access control
+  - output arbitraty LUA table in JSON/CBOR format
+  - and many more
 
+Also I have something in my mind for the future where LUA could do very fancy things.
+
+### JSON + CBOR
+
+REST endpoints could accept input and return values in JSON and CBOR formats dynamically based on HTTP headers.
+You can even POST JSON and receive CBOR.
+
+### Built in auth module
+
+Simple but usable authentication and authorization functionality available:
+
+ - authenticate by API key in headers
+ - you can use authorization expressions based on role/id
+ - complex auth logic could be done by a LUA pre-processor
+ - API keys can be provided in TOML file or load from ENV variable
+ - API keys could be loaded from DB itself
 
 ## License
 
