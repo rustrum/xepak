@@ -13,7 +13,7 @@ use crate::{
     cfg::ResourceRef,
     server::{
         RequestInput, XepakAppData,
-        cfg::{EndpointRpcMethod, EndpointRpcSpecs},
+        cfg::{RpcEpMethodSpecs, RpcEpSpecs},
         handlers::{EndpointHandlerArgs, build_pre_processors, handle_resource, validate_resource},
         processor::PreProcessorHandler,
     },
@@ -44,16 +44,12 @@ struct RpcMethodHandler {
 #[derive(Clone)]
 pub struct RpcHandler {
     _rref: ResourceRef,
-    ep: Arc<EndpointRpcSpecs>,
+    ep: Arc<RpcEpSpecs>,
     methods: HashMap<String, RpcMethodHandler>,
 }
 
 impl RpcHandler {
-    pub fn new(
-        rref: ResourceRef,
-        ep: EndpointRpcSpecs,
-        app: &XepakAppData,
-    ) -> Result<Self, XepakError> {
+    pub fn new(rref: ResourceRef, ep: RpcEpSpecs, app: &XepakAppData) -> Result<Self, XepakError> {
         let methods = Self::init_methods(app, rref.clone(), &ep.methods)?;
         Ok(Self {
             _rref: rref,
@@ -65,7 +61,7 @@ impl RpcHandler {
     fn init_methods(
         app: &XepakAppData,
         rref: ResourceRef,
-        methods: &HashMap<String, EndpointRpcMethod>,
+        methods: &HashMap<String, RpcEpMethodSpecs>,
     ) -> Result<HashMap<String, RpcMethodHandler>, XepakError> {
         let mut result = HashMap::new();
         for (key, specs) in methods {
@@ -107,7 +103,7 @@ impl RpcHandler {
             return error_to_rpc_response(None, e);
         }
 
-        let rpc_request: JsonRpcRequest = match serde_json::from_slice(&body) {
+        let rpc_request: JsonRpcRequest<Option<XepakValue>> = match serde_json::from_slice(&body) {
             Ok(v) => v,
             Err(e) => {
                 return rpc_error_response(
@@ -138,7 +134,7 @@ impl RpcHandler {
         &self,
         req: HttpRequest,
         state: Data<XepakAppData>,
-        request: JsonRpcRequest,
+        request: JsonRpcRequest<Option<XepakValue>>,
     ) -> Result<XepakValue, XepakError> {
         let Some(specs) = self.ep.methods.get(&request.method) else {
             return Err(XepakError::Input(format!(
@@ -157,7 +153,9 @@ impl RpcHandler {
             .pre_process_request(&req, &state, specs, handler)
             .await?;
 
-        input.body_args = input.apply_schema_to(".params", request.params, true)?;
+        if let Some(params_value) = request.params {
+            input.body_args = input.apply_schema_to(".params", params_value, true)?;
+        }
 
         tracing::debug!("Calling RPC method: {}", request.method);
 
@@ -175,7 +173,7 @@ impl RpcHandler {
         &self,
         req: &HttpRequest,
         state: &Data<XepakAppData>,
-        specs: &EndpointRpcMethod,
+        specs: &RpcEpMethodSpecs,
         handler: &RpcMethodHandler,
     ) -> Result<RequestInput, XepakError> {
         let mut input = RequestInput::new(
@@ -217,7 +215,7 @@ impl HttpServiceFactory for RpcHandler {
     }
 }
 
-fn validate_rpc_request_method(req: &HttpRequest) -> Result<(), XepakError> {
+pub fn validate_rpc_request_method(req: &HttpRequest) -> Result<(), XepakError> {
     if req.method() == Method::POST {
         return Ok(());
     }
@@ -229,7 +227,7 @@ fn validate_rpc_request_method(req: &HttpRequest) -> Result<(), XepakError> {
 }
 
 /// Build a JSON-RPC error response (protocol-level failure).
-fn rpc_error_response(id: Option<RpcId>, code: isize, message: String) -> HttpResponse {
+pub fn rpc_error_response(id: Option<RpcId>, code: isize, message: String) -> HttpResponse {
     let payload = JsonRpcErrorPayload {
         code,
         message,
@@ -246,7 +244,7 @@ fn rpc_error_response(id: Option<RpcId>, code: isize, message: String) -> HttpRe
         .body(body)
 }
 
-fn error_to_rpc_response(id: Option<RpcId>, error: XepakError) -> HttpResponse {
+pub fn error_to_rpc_response(id: Option<RpcId>, error: XepakError) -> HttpResponse {
     match error {
         XepakError::NotFound(msg) => rpc_error_response(id, RPC_ERROR_METHOD_NOT_FOUND, msg),
         XepakError::Input(msg) => {
@@ -262,12 +260,15 @@ fn error_to_rpc_response(id: Option<RpcId>, error: XepakError) -> HttpResponse {
             rpc_error_response(id, RPC_ERROR_INTERNAL, msg)
         }
         XepakError::Forbidden(msg) => rpc_error_response(id, RPC_ERROR_FORBIDDEN, msg),
-        _ => rpc_error_response(id, RPC_ERROR_INTERNAL, "unknown_error".into()),
+        _ => {
+            tracing::error!("(O_o) error happend! {error:?}");
+            rpc_error_response(id, RPC_ERROR_INTERNAL, "unknown_error".into())
+        }
     }
 }
 
 /// Wrap a typed, serializable result in a JSON-RPC success response.
-fn rpc_success_response(id: Option<RpcId>, result: XepakValue) -> HttpResponse {
+pub fn rpc_success_response(id: Option<RpcId>, result: XepakValue) -> HttpResponse {
     tracing::trace!("RCP response: {result:?}");
     let envelope = JsonRpcResponse {
         jsonrpc: JSON_RPC_VERSION.to_string(),
@@ -295,31 +296,32 @@ pub enum RpcId {
 
 /// JSON-RPC 2.0 request envelope.
 #[derive(Deserialize)]
-struct JsonRpcRequest {
-    jsonrpc: String,
-    id: Option<RpcId>,
-    method: String,
-    #[serde(default = "default_xepak")]
-    params: XepakValue,
+pub struct JsonRpcRequest<T> {
+    pub jsonrpc: String,
+    pub id: Option<RpcId>,
+    pub method: String,
+    // #[serde(default = "default_xepak")]
+    #[serde(default)]
+    pub params: T,
 }
 
 #[derive(Serialize)]
-struct JsonRpcResponse {
-    jsonrpc: String,
-    id: Option<RpcId>,
-    result: XepakValue,
+pub struct JsonRpcResponse<T> {
+    pub jsonrpc: String,
+    pub id: Option<RpcId>,
+    pub result: T,
 }
 
 #[derive(Serialize)]
-struct JsonRpcError {
-    jsonrpc: String,
-    id: Option<RpcId>,
-    error: JsonRpcErrorPayload,
+pub struct JsonRpcError {
+    pub jsonrpc: String,
+    pub id: Option<RpcId>,
+    pub error: JsonRpcErrorPayload,
 }
 
 #[derive(Serialize)]
-struct JsonRpcErrorPayload {
-    code: isize,
-    message: String,
-    data: Option<String>,
+pub struct JsonRpcErrorPayload {
+    pub code: isize,
+    pub message: String,
+    pub data: Option<String>,
 }

@@ -1,0 +1,42 @@
+mcp_url := env_var_or_default("MCP_URL", "http://localhost:8080/mcp")
+
+# Call MCP initialize endpoint
+mcp-initialize:
+    @curl \
+        -X POST "{{mcp_url}}" \
+        --header 'Content-Type: application/json' \
+        --header 'Accept: application/json, text/event-stream' \
+        --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"just","version":"1.0"}}}' \
+        | jq
+    @echo ""
+
+# List available MCP tools (no session)
+mcp-tools:
+    @curl -sS -X POST "{{mcp_url}}" \
+        -H 'Content-Type: application/json' \
+        -H 'Accept: application/json, text/event-stream' \
+        -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
+        | jq
+
+
+mcp-list-posts LIMIT='100' OFFSET='0':
+    @curl -sS -X POST "{{mcp_url}}" \
+        -H 'Content-Type: application/json' \
+        -H 'Accept: application/json, text/event-stream' \
+        -d '{"jsonrpc":"2.0","id":1,"method":"tools/call", "params": { "name": "list_posts", "arguments": { "limit": {{LIMIT}}, "offset": {{OFFSET}} }}}' \
+        | jq
+
+
+mcp-get-post ID:
+    @curl -sS -X POST "{{mcp_url}}" \
+        -H 'Content-Type: application/json' \
+        -H 'Accept: application/json, text/event-stream' \
+        -d '{"jsonrpc":"2.0","id":1,"method":"tools/call", "params": { "name": "get_post", "arguments": { "post_id":{{ID}}  }}}' \
+        | jq
+
+mcp-create-post TITLE CONTENT:
+    @curl -sS -X POST "{{mcp_url}}" \
+        -H 'Content-Type: application/json' \
+        -H 'Accept: application/json, text/event-stream' \
+        -d '{"jsonrpc":"2.0","id":1,"method":"tools/call", "params": { "name": "create_post", "arguments": { "title":"{{TITLE}}", "content": "{{CONTENT}}"  }}}' \
+        | jq

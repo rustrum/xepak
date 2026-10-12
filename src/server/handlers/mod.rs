@@ -1,8 +1,8 @@
-// mod mcp;
+mod mcp;
 mod rest;
 mod rpc;
 
-// pub use mcp::*;
+pub use mcp::*;
 pub use rest::*;
 pub use rpc::*;
 

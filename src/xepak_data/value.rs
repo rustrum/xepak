@@ -46,6 +46,16 @@ impl XepakValue {
         }
     }
 
+    /// Return true for empty dict, tuple or null.
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Null => true,
+            Self::Tuple(items) => items.is_empty(),
+            Self::Dict(items) => items.is_empty(),
+            _ => false,
+        }
+    }
+
     pub fn is_null(&self) -> bool {
         matches!(self, Self::Null)
     }

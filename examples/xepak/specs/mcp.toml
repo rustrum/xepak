@@ -1,0 +1,72 @@
+[[mcp]]
+uri = "/mcp"
+name = "Posts MCP server"
+protocol_version = "1971-01-01"
+instructions = """
+Provides information about posts and access to posts by ID
+"""
+
+[mcp.tools.list_posts]
+title = "List posts"
+description = "List posts with pagination support"
+schema.input = {
+    type = "dict",
+    items = {
+        limit = { type = "int" },
+        offset = { type = "int" }
+    }
+}
+annotations.read_only = true
+
+resource = {
+    type = "query_script_lua",
+    script = """
+local query = query_builder("SELECT * FROM posts ORDER BY id");
+
+local parts = {};
+if ctx:has_arg("limit") then
+    table.insert(parts, "LIMIT {{limit}}")
+end
+if ctx:has_arg("offset") then
+    table.insert(parts, "OFFSET {{offset}}")
+end
+
+query:add_joined_parts("", parts, " ", "");
+
+return query:build();
+"""
+}
+
+[mcp.tools.get_post]
+title = "Retreive post"
+description = "Get a post by its ID"
+schema.input = {
+    type = "dict",
+    items = {
+        post_id = { type = "int", required = true }
+    }
+}
+annotations.read_only = true
+resource = {
+    type = "query",
+    query = "SELECT * FROM posts WHERE id = {{post_id}}"
+}
+
+[mcp.tools.create_post]
+title = "Create post"
+description = "Create a new post"
+schema.input = {
+    type = "dict",
+    items = {
+        title = { type = "text", required = true },
+        content = { type = "text", required = true }
+    }
+}
+annotations.destructive = true
+resource = {
+    type = "query",
+    query = """
+INSERT INTO posts (title, content) VALUES ({{title}}, {{content}})
+RETURNING *
+"""
+}

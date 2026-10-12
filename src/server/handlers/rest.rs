@@ -12,7 +12,7 @@ use crate::{
     cfg::ResourceRef,
     server::{
         CONTENT_TYPE_CBOR, RequestInput, XepakAppData,
-        cfg::EndpointSpecs,
+        cfg::RestEpSpecs,
         handlers::{handle_resource, validate_resource},
         processor::PreProcessorHandler,
         to_error_object,
@@ -23,7 +23,7 @@ use crate::{
 #[derive(Clone)]
 pub struct EndpointHandler {
     _rref: ResourceRef,
-    ep: Arc<EndpointSpecs>,
+    ep: Arc<RestEpSpecs>,
     script_cache_key: String,
     processors: Arc<Vec<Box<dyn PreProcessorHandler>>>,
 }
@@ -31,7 +31,7 @@ pub struct EndpointHandler {
 impl EndpointHandler {
     pub fn new(
         rref: ResourceRef,
-        ep: EndpointSpecs,
+        ep: RestEpSpecs,
         app: &XepakAppData,
     ) -> Result<Self, XepakError> {
         validate_resource(app, &ep.resource)?;

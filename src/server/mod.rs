@@ -21,7 +21,7 @@ use actix_web::{HttpServer, web::Data};
 use crate::XepakError;
 use crate::cfg::{ResourceRef, XepakConf, XepakSpecs};
 use crate::server::cache::AppCache;
-use crate::server::handlers::{EndpointHandler, RpcHandler};
+use crate::server::handlers::{EndpointHandler, McpHandler, RpcHandler};
 use crate::server::processor::PreProcessor;
 use crate::server::registry::AppRegistry;
 use crate::storage::{Storage, init_storage_connectors};
@@ -118,9 +118,20 @@ pub async fn init_server(
         rpc_handlers.push(RpcHandler::new(rref.nested(idx), espec.clone(), &app_data)?);
     }
 
+    // MCP endpoints
+    let mut mcp_handlers = Vec::new();
+    for (idx, mspecs) in specs.mcp.iter().enumerate() {
+        mcp_handlers.push(McpHandler::new(
+            rref.nested(idx),
+            mspecs.clone(),
+            &app_data,
+        )?);
+    }
+
     // let factory = app_factory(&app_data, specs.endpoint)?;
     let server = HttpServer::new(move || {
         let rpcs = rpc_handlers.clone();
+        let mcps     = mcp_handlers.clone();
         let rests = rest_handlers.clone();
 
         App::new()
@@ -132,6 +143,9 @@ pub async fn init_server(
                     cfg.service(eh);
                 }
                 for eh in rpcs {
+                    cfg.service(eh);
+                }
+                for eh in mcps {
                     cfg.service(eh);
                 }
             })
