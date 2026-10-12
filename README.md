@@ -27,8 +27,10 @@ Running it in WAL mode behind Xepak would allow you to have simple and cheap sel
 
 ## Current project status
 
-I'm aiming for a first MVP release in the next month.
-But there is a lot work to do and architecture desisions to consider.
+The first MVP is almost ready!
+
+The biggest issue now is lack of documentation and some tests.
+Right now the code is in a final polisiong state before release.
 
 **I encourage you to bookmark and visit this project later**.
 
@@ -54,7 +56,7 @@ With Xepak you can build:
 
 - REST service
 - JSON-RPC service
-- MCP service (will be available soon)
+- MCP service
 
 ### DSL based on TOML
 

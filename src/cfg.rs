@@ -12,7 +12,7 @@ use serde::Deserialize;
 use crate::{
     XepakError,
     server::{
-        cfg::{EndpointRpcSpecs, EndpointSpecs},
+        cfg::{McpEpSpecs, RestEpSpecs, RpcEpSpecs},
         processor::PreProcessor,
     },
     storage::StorageSettings,
@@ -55,10 +55,13 @@ pub struct XepakSpecs {
     pub script: Vec<Script>,
 
     #[serde(default)]
-    pub endpoint: Vec<EndpointSpecs>,
+    pub endpoint: Vec<RestEpSpecs>,
 
     #[serde(default)]
-    pub rpc: Vec<EndpointRpcSpecs>,
+    pub rpc: Vec<RpcEpSpecs>,
+
+    #[serde(default)]
+    pub mcp: Vec<McpEpSpecs>,
 
     /// Shared registry for all pre-processors
     #[serde(default)]
@@ -79,6 +82,7 @@ impl XepakSpecs {
         self.script.extend(other.script);
         self.endpoint.extend(other.endpoint);
         self.rpc.extend(other.rpc);
+        self.mcp.extend(other.mcp);
     }
 
     /// Returns false if specs has minor errors and Err on bit structural issues.
