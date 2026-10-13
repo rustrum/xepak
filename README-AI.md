@@ -1,17 +1,17 @@
 # Xepak — AI Agent Reference
- 
-**Version:** 0.0.3-beta1 | **Commit:** faade58
+  
+**Version:** 0.0.4-alpha | **Commit:** 3dc31a2
  
 ---
  
 ## Overview
 
-Xepak is a DSL-based REST API server for SQLite databases, configured entirely via TOML files. It provides CRUD endpoints without writing application code — only configuration and optional Lua scripts for complex logic.
+Xepak is a DSL-based API server for SQLite databases, configured entirely via TOML files. It exposes your data through REST, JSON-RPC, and MCP endpoints without writing application code — only configuration and optional Lua scripts for complex logic.
 
 **Key features:**
-- Declarative endpoint definitions in TOML (no Rust/Go/Haskell needed)
+- Declarative endpoint definitions in TOML for three protocols: REST (`[[endpoint]]`), JSON-RPC (`[[rpc]]`), and MCP (`[[mcp]]`) — no Rust/Go/Haskell needed
 - JSON + CBOR request/response formats (negotiated via `Accept` / `Content-Type` headers)
-- Per-endpoint HTTP method restriction (`allow_methods`) and flat body input for POST/PUT/PATCH
+- Per-endpoint HTTP method restriction (`allow_methods`) and body input as a flat map or a positional array (tuple) for POST/PUT/PATCH
 - SQLite with WAL mode support, migrations, and connection pooling
 - Simple authentication via API key registry or database-backed token auth
 - Authorization rules engine with role-based access control (`ADMIN AND MANAGER`, `#boss OR (ADMIN AND MANAGER)`)
@@ -57,7 +57,7 @@ my_config = 42
 
 ### Specs directory structure
 
-Each `.toml` file in `specs_dir/` is loaded and merged. Files define endpoints, shared pre-processors, and default pre-processors:
+Each `.toml` file in `specs_dir/` is loaded and merged. A file may define any combination of REST endpoints (`[[endpoint]]`), JSON-RPC services (`[[rpc]]`), MCP servers (`[[mcp]]`), shared pre-processors, and default pre-processors.
 
 ```toml
 # Shared pre-processor definitions (referenced by other specs)
@@ -71,7 +71,7 @@ default_pre_processors = [
 
 # Endpoint definitions
 [[endpoint]]
-uri = "/users/{user_id:\d+}"         # {name} path params are captured automatically; regex allowed after ':'
+uri = "/users/{user_id:\\d+}"        # {name} path params captured automatically; regex allowed after ':' (escape backslash in TOML)
 allow_methods = ["GET", "DELETE"]    # optional HTTP methods whitelist; if absent only GET accepted
 strict_schema = false                # reject unknown input argument names (default: ignore them)
 single_record_response = true        # return 404 if no record, not empty array
@@ -94,10 +94,11 @@ rules = "#boss OR (ADMIN AND MANAGER)"   # auth rules expression
 
 ### Built-in input processing (no configuration needed)
 
-- URI `{param}` values become text arguments (path args override query/body args with the same name).
-- Query string args are parsed for bodyless methods; for POST/PUT/PATCH they are **ignored**.
-- Request bodies exist only for POST/PUT/PATCH and must be a **flat** JSON object or CBOR map (no nested arrays/objects at root); format chosen by `Content-Type` (`application/cbor`, otherwise JSON).
-- Schema conversion + validation runs last, after all pre-processors.
+- URI `{param}` values become text arguments (path args).
+- Argument resolution priority (highest first): args set by scripts/pre-processors (`ctx:set_arg`) → URI path args → request body args → query-string args.
+- Query-string args are parsed for bodyless methods (e.g. GET); for POST/PUT/PATCH they are **ignored**.
+- Request bodies exist only for POST/PUT/PATCH. A body may be a **flat map** (JSON object / CBOR map) whose keys become named args, **or a positional array** (JSON array / CBOR tuple) whose elements are exposed as args `"0"`, `"1"`, `"2"`, ... Format chosen by `Content-Type` (`application/cbor`, otherwise JSON).
+- Input schema conversion + validation is applied as arguments are parsed; the **output** schema (if set) is applied last, after the resource runs.
 
 ### Resource types
 
@@ -105,7 +106,7 @@ rules = "#boss OR (ADMIN AND MANAGER)"   # auth rules expression
 |------|-------------|---------------------|
 | `query` | Static SQL query | N/A |
 | `query_script_lua` | Lua script generates the SQL query string | Must return a **string** (the final query) |
-| `data_script` | Lua script returns data directly (no DB query executed) | Returns any XepakValue (Map/Tuple) |
+| `data_script` | Lua script returns data directly (no DB query executed) | Returns any XepakValue (Dict/Tuple) |
 
 ### Pre-processor types
 
@@ -147,9 +148,7 @@ Schemas are split into `input` and `output` sub-tables. Both use the same `Schem
 [endpoint.schema.input]
 type = "dict"
 items = {
-    title = { type = "text", required = true, validate = [
-        { kind = "range", from = 5, to = 255 },
-    ]},
+    title = { type = "text", required = true, validate = { kind = "range", from = 5, to = 255 } },
     content = { type = "text" },
 }
 
@@ -170,15 +169,46 @@ items = {
 | `tuple` | Ordered array; use `items` (list of schemas) and optional `items_repeat` |
 | `dict` | Key-value map; use `items` (map of name→schema) |
 
-**Validators** (applied via `validate` field, array form auto-wraps in `and`):
+**Validators** — the `validate` field holds a **single** validator object. Use `and` / `or` with a `nested` array to combine several:
 
 | `kind` | Fields | Applies to |
 |--------|--------|------------|
 | `range` | `from`, `to` (int) | text length, int/float value, tuple length |
 | `range_float` | `from`, `to` (float) | same as range but with float bounds |
 | `not_null` | — | rejects null/undefined |
-| `and` | `nested` (list) | all must pass |
-| `or` | `nested` (list) | at least one must pass |
+| `and` | `nested` (list of validators) | all must pass |
+| `or` | `nested` (list of validators) | at least one must pass |
+
+`and` / `or` take a `nested` **array** of validators, which themselves may be `and` / `or` again — so you can build arbitrary trees.
+
+```toml
+# 1) Single validator — text length must be 5..255
+validate = { kind = "range", from = 5, to = 255 }
+
+# 2) AND — all nested validators must pass (not null AND length 5..255)
+validate = { kind = "and", nested = [
+    { kind = "not_null" },
+    { kind = "range", from = 5, to = 255 },
+] }
+
+# 3) OR — at least one nested validator must pass
+#    (an int either 0, or in the range 10..100)
+validate = { kind = "or", nested = [
+    { kind = "range", from = 0, to = 0 },
+    { kind = "range", from = 10, to = 100 },
+] }
+
+# 4) Nested trees — AND of (a sub-OR) and a not_null check
+validate = { kind = "and", nested = [
+    { kind = "not_null" },
+    { kind = "or", nested = [
+        { kind = "range", from = 1, to = 3 },     # short form: 1..3 chars
+        { kind = "range", from = 8, to = 12 },    # or medium form: 8..12 chars
+    ] },
+] }
+```
+
+Note: `range` / `range_float` bounds are interpreted per value type — string length, integer/float value, or tuple length. A validator that does not apply to a type is a validation error for that type (e.g. `range` on a `blob` fails).
 
 ### Query argument syntax
 
@@ -190,11 +220,63 @@ SQL queries use `{{arg_name}}` placeholders. Special keys for pagination:
 | `{{-limit-}}` | Pagination limit | Query param or default |
 | `{{-offset-}}` | Pagination offset | Query param or default |
 
+### JSON-RPC endpoints (`[[rpc]]`)
+
+Each `[[rpc]]` defines one JSON-RPC 2.0 service bound to a `uri`. Only HTTP **POST** is allowed and the body must be a JSON object (no CBOR). The `methods` table maps a method name to a method spec — a method spec works like a REST endpoint (same `resource`, `schema`, `pre_processors`, `fetch_limit`, `single_record_response`).
+
+```toml
+[[rpc]]
+uri = "/rpc"
+
+[rpc.methods.all_posts]
+resource = { type = "query", query = "SELECT * FROM posts ORDER BY id" }
+
+[rpc.methods.get]
+schema.input = { type = "tuple", items = [ { type = "int", required = true } ] }
+single_record_response = true
+resource = { type = "query", query = "SELECT * FROM posts WHERE id = {{0}}" }
+```
+
+- **Request** (JSON-RPC 2.0): `{ "jsonrpc": "2.0", "id": 1, "method": "get", "params": [1] }`. `params` is applied through the method's input schema and becomes the body args (a JSON array → positional args `0`, `1`, ...). `strict_schema` is always enforced for RPC.
+- **Success response:** `{ "jsonrpc": "2.0", "id": 1, "result": <value> }`. With `single_record_response = true`, a missing record yields an empty object `{}` (not an error).
+- **Error codes:** `-32700` parse, `-32600` invalid request, `-32601` method not found, `-32602` invalid params, `-32603` internal, `-32403` forbidden.
+
+### MCP servers (`[[mcp]]`)
+
+Each `[[mcp]]` defines one MCP server (JSON-RPC 2.0 over HTTP POST) bound to a `uri`. The `tools` table maps a tool name to a tool spec (same `resource`, `schema`, `pre_processors`, `fetch_limit` as above).
+
+```toml
+[[mcp]]
+uri = "/mcp"
+name = "Posts server"
+protocol_version = "2025-03-26"
+instructions = "Provides access to posts data"
+server_version = "1.0.0"
+
+[mcp.tools.list_posts]
+title = "List posts"
+description = "List posts with pagination"
+annotations.read_only = true
+schema.input = {
+    type = "dict",
+    items = {
+        limit  = { type = "int", required = true },
+        offset = { type = "int", required = true },
+    }
+}
+resource = { type = "query", query = "SELECT * FROM posts ORDER BY id LIMIT {{limit}} OFFSET {{offset}}" }
+```
+
+- `annotations` (all optional booleans): `read_only`, `destructive`, `idempotent`, `open_world`.
+- The input schema is exposed to clients as the tool's JSON-Schema `inputSchema`.
+- Supported JSON-RPC methods: `initialize`, `notifications/initialized`, `ping`, `tools/list`, `tools/call`.
+- `tools/call` takes `params = { name, arguments }`; `arguments` are applied through the tool's input schema. A tool result is `{ isError, content: [{ type: "text", text: <json> }] }`.
+
 ---
 
 ## LUA Scripting API
 
-Lua scripts run in an isolated VM per request. Each script receives a `ctx` global with the following methods:
+Lua scripts run in a thread-local VM with a per-request isolated environment (compiled functions are cached). Each script receives a `ctx` global plus a set of global helper functions:
 
 ### Context (`ctx`)
 
@@ -268,6 +350,8 @@ local user = storage_query_one("SELECT * FROM users WHERE id={{id}}", {id = 42})
 -- Query single value (first column of first row) → returns scalar or nil
 local count = storage_query_value("SELECT COUNT(*) FROM users", {})
 ```
+
+Note: `storage_query*` always run against the **default** data source (`""`); they cannot target a named storage from within Lua.
 
 ### Cache API
 
@@ -368,9 +452,7 @@ single_record_response = true
 [endpoint.schema.input]
 type = "dict"
 items = {
-    username = { type = "text", required = true, validate = [
-        { kind = "range", from = 3, to = 50 },
-    ]},
+    username = { type = "text", required = true, validate = { kind = "range", from = 3, to = 50 } },
     password = { type = "text", required = true },
 }
 
@@ -682,19 +764,21 @@ Xepak uses a unified dynamic value type that transcends all environments: JSON, 
 
 | XepakType | JSON representation | CBOR representation | SQLite type | Lua type |
 |-----------|---------------------|---------------------|-------------|----------|
-| `Null` | `null` | `nil` | NULL | `nil` |
+| `Null` | `null` | `null` | NULL | `nil` |
 | `Boolean` | `true/false` | `true/false` | INTEGER (0/1) | `boolean` |
-| `Integer` | number | integer | INTEGER | `number` (integer) |
+| `Int` | number | integer | INTEGER (i64) | `number` (integer) |
 | `Float` | number | float | REAL | `number` (float) |
-| `Text` | string | byte string | TEXT | `string` |
-| `Blob` | base64 string | byte string | BLOB | `string` (bytes) |
-| `Tuple` | array | array | — | table (1-indexed) |
-| `Map` | object | map | — | table (key-value) |
+| `Text` | string | text string | TEXT | `string` |
+| `Blob` | base64 string | byte string | BLOB | userdata (`blob_type`) |
+| `Tuple` | array | array | TEXT (JSON) | table (1-indexed) |
+| `Dict` | object | map | TEXT (JSON) | table (key-value) |
 
 **Key properties:**
-- Binary data (`Blob`) serializes as base64 in JSON, raw bytes in CBOR
-- Type conversions between environments are automatic and lossless
-- Planned future types: `date`, `decimal`
+- Binary data (`Blob`) serializes as base64 in JSON, raw bytes in CBOR.
+- `Int` is `i128` in memory but bound to SQLite as `i64` (values beyond 64-bit range are truncated on write).
+- `Tuple`/`Dict` are stored in SQLite as a JSON text string.
+- Type conversions between environments are automatic (not always lossless across JSON — e.g. `Blob` round-trips via base64).
+- Planned future types: `date`, `decimal`.
 
 ---
 
