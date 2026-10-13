@@ -1,0 +1,39 @@
+[[mcp]]
+uri = "/mcp"
+name = "Test MCP posts server"
+protocol_version = "2025-03-26"
+instructions = """
+Provides access to posts data for MCP functionality testing
+"""
+server_version = "1.0.0"
+
+[mcp.tools.list_posts]
+title = "List posts"
+description = "List posts with pagination support"
+schema.input = {
+    type = "dict",
+    items = {
+        limit = { type = "int", required = true },
+        offset = { type = "int", required = true },
+    }
+}
+annotations.read_only = true
+resource = {
+    type = "query",
+    query = "SELECT * FROM posts ORDER by id LIMIT {{limit}} OFFSET {{offset}}"
+}
+
+[mcp.tools.get_post]
+title = "Get post"
+description = "Get a single post by its ID"
+schema.input = {
+    type = "dict",
+    items = {
+        post_id = { type = "int", required = true }
+    }
+}
+annotations.read_only = true
+resource = {
+    type = "query",
+    query = "SELECT * FROM posts WHERE id = {{post_id}}"
+}

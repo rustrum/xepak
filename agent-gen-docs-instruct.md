@@ -1,37 +1,45 @@
 # AI friendly documentation generation
 
-Current project name is "Xepak".
-This is an alternative to PostgRest.
-It is a server that provides API for database backend based only on TOML DSL configuration.
-For complex logic insted of PlSQL it using LUA scripting.
+Project name is "Xepak".
+It is a server that generates REST API, JSON-RPC/MCP server for database backend based only on TOML DSL configuration.
+For complex logic insted of PlSQL it is using LUA scripting.
 
 
 # Action steps
 
-## Read project files
+## Must use memory file to track progress and store findings
 
-I must read project files only if they were not provided in initial prompt!
+Do not rely on your memory store all meaningful information in memory file.
 
-### Read project files in batch
+Docs genenration progress must be tracked in the memory file `agents_work/ai-docs-progress.md`.
 
-Must try run next cli command to pack all project in a single file:
-`code2prompt . --include="src/**/*,tests/**/*,examples/**/*.toml,examples/**/*.sql,Dockerfile" --include "./README.md,./README-DOCS.md" --exclude="agent-gen-docs-instruct.md" -O ./prompt-codebase.txt && echo "Total lines count: $(wc -l ./prompt-codebase.txt)"`
+Must create this file before code investigation.
+CRITICAL! If file already exists must ask user what to do: read exiting file and contiue appending data to it or replacing it with an empty one.
 
-IMPORTANT! Will read `./prompt-codebase.txt` in batches because of read file tool internal limits.
-Must validate that numer or readed lines matches value reported in CLI while executing `code2prompt`.
+During code investigation all findings must be appended to the file as a sections with appropriate headers.
 
-### Read current docs with some files
+Must update memory file after each discovery immediately.
+All discrepances between current docs and actual code state must be memorized.
+Preffered to make several small updated after each finding and combine them later if needed.
+Can have dynamic section at the endo of the files with a plans to do next.
+NOT good doing several steps without memory file updates in order to make big update later.
+Must update the memory file as often as possible.
 
-Will read `README-AI.md`.
+After processing all project files `agents_work/ai-docs-progress.md` must contains all data to update existing documentation.
 
-If `prompt-codebase.txt` was generated I will skip read other project files,
-cause they must be consumed in a batch read.
+Important! Must re-read `agents_work/ai-docs-progress.md` after each context compression step. Must add all memory file rules to context compression.
 
-If `code2promt` failed then I must read all project files:
-- human docs from `README.md` and `README-DOCS.md`.
+### Read existing docs and code
+
+Must read `README-AI.md` which contains existing documentation.
+
+I must read and analyze all project related files to get understanding how to update docs:
+- human docs available in `README.md` and `README-DOCS.md`.
 - directory `src` contains all project code
 - directory `tests` contains test with valid DSL 
-- directory `examples` has example projects configuration, BUT it could be outdated
+- directory `examples` has example projects configuration
+
+Must ignore all content from other directories including: `behind`, `.xepak-stubs`, `target`.
 
 ## Validate existing docs
 

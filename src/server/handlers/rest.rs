@@ -29,11 +29,7 @@ pub struct EndpointHandler {
 }
 
 impl EndpointHandler {
-    pub fn new(
-        rref: ResourceRef,
-        ep: RestEpSpecs,
-        app: &XepakAppData,
-    ) -> Result<Self, XepakError> {
+    pub fn new(rref: ResourceRef, ep: RestEpSpecs, app: &XepakAppData) -> Result<Self, XepakError> {
         validate_resource(app, &ep.resource)?;
 
         let pre_processors = build_pre_processors(

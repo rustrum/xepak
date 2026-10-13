@@ -361,7 +361,10 @@ fn mcp_tool_error(message: &str) -> Result<XepakValue, XepakError> {
 fn mcp_tool_success_content(value: XepakValue) -> Result<XepakValue, XepakError> {
     Ok(XepakValue::Dict(HashMap::from([
         ("isError".to_string(), XepakValue::from(false)),
-        ("content".to_string(), xepak_to_text_content(value)?),
+        (
+            "content".to_string(),
+            XepakValue::from(vec![xepak_to_text_content(value)?]),
+        ),
     ])))
 }
 

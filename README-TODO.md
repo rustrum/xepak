@@ -2,6 +2,9 @@
 
 - Should I rename endpoint resource?
 
+# MCP Authorization
+
+This stupid protocol  does not support x-api-key so I must add option to support Authorization: Bearer
 
 # Schema improvements
 

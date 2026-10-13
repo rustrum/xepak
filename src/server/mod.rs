@@ -131,7 +131,7 @@ pub async fn init_server(
     // let factory = app_factory(&app_data, specs.endpoint)?;
     let server = HttpServer::new(move || {
         let rpcs = rpc_handlers.clone();
-        let mcps     = mcp_handlers.clone();
+        let mcps = mcp_handlers.clone();
         let rests = rest_handlers.clone();
 
         App::new()
