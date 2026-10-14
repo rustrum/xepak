@@ -1,8 +1,9 @@
 pub mod rules;
-pub mod token;
+pub mod storage;
 
 use std::collections::HashSet;
 
+use actix_web::http::Method;
 use async_trait::async_trait;
 
 use crate::{
@@ -13,14 +14,60 @@ use crate::{
 
 pub const API_KEY_HEADER: &str = "x-api-key";
 
-/// Authenticates requests using [`SimpleAuthSpecs`].
-pub struct SimpleAuthenticationProcessor {
+pub const AUTH_BEARER_HEADER: &str = "Authorization";
+
+pub fn extract_api_key(req: &actix_web::HttpRequest) -> Result<Option<&str>, XepakError> {
+    let mut is_bearer = false;
+
+    // get API key value from headers
+    let mut api_key_value = req.headers().get(API_KEY_HEADER);
+    // POST only method is used for RPC/MCP servers
+    // Thus can check for a bearer here
+    if api_key_value.is_none() && req.method() == Method::POST {
+        tracing::warn!("No key searching bearer");
+        let bearer_header = req.headers().get(AUTH_BEARER_HEADER);
+        if bearer_header.is_some() {
+            api_key_value = bearer_header;
+            is_bearer = true;
+        }
+    }
+
+    let api_key_opt = api_key_value
+        .map(|v| {
+            v.to_str()
+                .map_err(|e| XepakError::Input(format!("Wrong {API_KEY_HEADER} value format: {e}")))
+        })
+        .transpose()?;
+
+    let Some(mut api_key) = api_key_opt else {
+        return Ok(Option::None);
+    };
+
+    if is_bearer {
+        let Some((prefix, key)) = api_key.split_once(char::is_whitespace) else {
+            tracing::debug!(
+                "Can't split Authorization header by space. No \"Bearer KEY\" part exists"
+            );
+            return Err(XepakError::Input("Invalid auth header".to_string()));
+        };
+        if prefix.to_uppercase() == "BEARER" {
+            api_key = key.trim();
+        } else {
+            tracing::debug!("Auhorization header first part is not \"Bearer\"");
+            return Err(XepakError::Input("Invalid auth header".to_string()));
+        }
+    }
+
+    Ok(Some(api_key))
+}
+/// Authenticate client based on API key in the HTTP headers.
+pub struct ConfigAuthenticationProcessor {
     priority: u16,
     /// Allow anonymous authentication
     anonymous_auth: bool,
 }
 
-impl SimpleAuthenticationProcessor {
+impl ConfigAuthenticationProcessor {
     const ANON_AUTH_ERROR: &str = "Authentication failed! API key is not provided.";
 
     const AUTH_ERROR: &str = "Authentication failed!";
@@ -59,7 +106,7 @@ impl SimpleAuthenticationProcessor {
 }
 
 #[async_trait(?Send)]
-impl PreProcessorHandler for SimpleAuthenticationProcessor {
+impl PreProcessorHandler for ConfigAuthenticationProcessor {
     fn priority(&self) -> u16 {
         self.priority
     }
@@ -76,16 +123,11 @@ impl PreProcessorHandler for SimpleAuthenticationProcessor {
             return Ok(());
         }
 
-        // get API key value from headers
-        let Some(api_key_value) = req.headers().get(API_KEY_HEADER) else {
+        let api_key = extract_api_key(req)?;
+
+        let Some(api_key) = api_key else {
             return self.try_anonymous_auth(state, input);
         };
-
-        let api_key = api_key_value
-            .to_str()
-            .map_err(|e| XepakError::Input(format!("Wrong {API_KEY_HEADER} value format: {e}")))?;
-
-        tracing::debug!("API key found: {api_key}");
 
         // check in registry if key exists or error
         let Some((auth_id, auth_roles)) = state.get_auth_data(api_key) else {
@@ -100,7 +142,6 @@ impl PreProcessorHandler for SimpleAuthenticationProcessor {
 }
 
 /// Provides authorization for already authenticated requests.
-///
 pub struct AuthorizeProcessor {
     priority: u16,
     rules: Option<AuthRules>,

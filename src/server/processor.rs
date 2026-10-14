@@ -11,7 +11,7 @@ use serde::Deserialize;
 use crate::{
     XepakError,
     auth::{
-        AuthorizeProcessor, SimpleAuthenticationProcessor, token::TokenAuthenticationProcessor,
+        AuthorizeProcessor, ConfigAuthenticationProcessor, storage::StrorageAuthenticationProcessor,
     },
     cfg::ResourceRef,
     script_lua::LuaPreProcessor,
@@ -43,13 +43,13 @@ pub enum PreProcessor {
         null_if_abscent: Vec<String>,
     },
 
-    SimpleAuthentication {
+    ConfigAuthentication {
         /// Allows anonymous authentication
         #[serde(default)]
         anonymous_auth: bool,
     },
 
-    TokenAuthentication {
+    StorageAuthentication {
         #[serde(default)]
         data_source: String,
 
@@ -100,17 +100,17 @@ pub fn build_pre_processor(
         PreProcessor::ParseBodyArgs { null_if_abscent } => {
             Ok(Box::new(BodyToArgsProcessor::new(null_if_abscent.clone())))
         }
-        PreProcessor::SimpleAuthentication { anonymous_auth } => Ok(Box::new(
-            SimpleAuthenticationProcessor::new(position, *anonymous_auth),
+        PreProcessor::ConfigAuthentication { anonymous_auth } => Ok(Box::new(
+            ConfigAuthenticationProcessor::new(position, *anonymous_auth),
         )),
         PreProcessor::Authorize { rules } => {
             Ok(Box::new(AuthorizeProcessor::new(position, rules.as_ref())?))
         }
-        PreProcessor::TokenAuthentication {
+        PreProcessor::StorageAuthentication {
             data_source,
             query,
             cache_ttl_sec,
-        } => Ok(Box::new(TokenAuthenticationProcessor::new(
+        } => Ok(Box::new(StrorageAuthenticationProcessor::new(
             position,
             query.clone(),
             data_source.clone(),

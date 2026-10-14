@@ -79,3 +79,15 @@ type = "data_script"
 script = """
 return ctx:get_arg("input")
 """
+
+
+[rpc.methods.auth]
+pre_processors = [
+    { type = "config_authentication" },
+]
+[rpc.methods.auth.resource]
+type = "data_script"
+script = """
+return "Authorized"
+"""
+

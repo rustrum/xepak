@@ -2,19 +2,17 @@ mod common;
 
 use std::collections::HashMap;
 
-use jsonrpsee::http_client::HttpClientBuilder;
+use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClientBuilder};
 use jsonrpsee::proc_macros::rpc;
 use serial_test::serial;
 use xepak::xepak_data::XepakValue;
 
-use crate::common::client;
-use crate::common::domain::PostsRecord;
-use crate::common::{INIT_DELAY_DEFAULT, init_default_test_server, init_logger};
+use crate::common::*;
 
 #[rpc(client)]
 pub trait TestRpc {
     #[method(name = "get")]
-    async fn get(&self, id: usize) -> Result<Option<PostsRecord>, ErrorObjectOwned>;
+    async fn get(&self, id: usize) -> Result<Option<domain::PostsRecord>, ErrorObjectOwned>;
 
     #[method(name = "get_compact")]
     async fn get_compact(
@@ -24,27 +22,30 @@ pub trait TestRpc {
     ) -> Result<HashMap<String, XepakValue>, ErrorObjectOwned>;
 
     #[method(name = "all_posts")]
-    async fn all_posts(&self) -> Result<Vec<PostsRecord>, ErrorObjectOwned>;
+    async fn all_posts(&self) -> Result<Vec<domain::PostsRecord>, ErrorObjectOwned>;
 
     #[method(name = "posts", param_kind = map)]
     async fn posts(
         &self,
         limit: usize,
         offset: usize,
-    ) -> Result<Vec<PostsRecord>, ErrorObjectOwned>;
+    ) -> Result<Vec<domain::PostsRecord>, ErrorObjectOwned>;
 
     #[method(name = "script", param_kind = map)]
     async fn script(&self, input: XepakValue) -> Result<XepakValue, ErrorObjectOwned>;
+
+    #[method(name = "auth")]
+    async fn auth(&self) -> Result<String, ErrorObjectOwned>;
 }
 
 #[tokio::test]
 #[serial]
 async fn rpc_resourcess() {
-    init_logger();
+    // init_logger();
     let _server = init_default_test_server(INIT_DELAY_DEFAULT).await;
     let uri = client::api_url("/rpc");
     let client = HttpClientBuilder::default()
-        .build(uri)
+        .build(uri.clone())
         .expect("RPSee client");
 
     // Query get all
@@ -105,4 +106,20 @@ async fn rpc_resourcess() {
     ]);
     let resp = client.script(input.clone()).await;
     assert!(matches!(&resp, Ok(r) if r == &input), "{resp:?}");
+
+    // Auth check
+    let mut headers = HeaderMap::new();
+    let auth_value = HeaderValue::from_str("Bearer BossKEY").expect("Value expected");
+    headers.insert("Authorization", auth_value);
+
+    let client_auth = HttpClientBuilder::default()
+        .set_headers(headers)
+        .build(uri)
+        .expect("RPSee client");
+
+    let result = client_auth.auth().await;
+    assert!(matches!(&result, Ok(v) if v == "Authorized"), "{result:?}");
+
+    let result = client.auth().await;
+    assert!(result.is_err(), "{result:?}");
 }

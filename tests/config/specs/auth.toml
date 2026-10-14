@@ -30,7 +30,7 @@ return {
 uri = "/auth/script/info"
 
 pre_processors = [
-    { type = "simple_authentication" },
+    { type = "config_authentication" },
 ]
 
 [endpoint.resource]
@@ -50,7 +50,7 @@ uri = "/auth/script/anon"
 
 pre_processors = [
     {
-        type = "simple_authentication",
+        type = "config_authentication",
         anonymous_auth = true,
     },
 ]
@@ -71,7 +71,7 @@ return {
 uri = "/auth/posts/boss"
 
 pre_processors = [
-    { type = "simple_authentication" },
+    { type = "config_authentication" },
     {
         type = "authorize",
         rules = "ADMIN",
@@ -88,7 +88,7 @@ resource = {
 uri = "/auth/posts/manager"
 
 pre_processors = [
-    { type = "simple_authentication" },
+    { type = "config_authentication" },
     {
         type = "authorize",
         rules = "MANAGER",
@@ -105,7 +105,7 @@ resource = {
 uri = "/auth/script/hacker"
 
 pre_processors = [
-    { type = "simple_authentication" },
+    { type = "config_authentication" },
     {
         type = "authorize",
         rules = "#hacker",
@@ -129,7 +129,7 @@ uri = "/auth/token/info"
 
 pre_processors = [
     { 
-        type = "token_authentication",
+        type = "storage_authentication",
         query = "SELECT user_id AS id, roles FROM tokens WHERE api_key = {{api-key}}"
     },
 ]
