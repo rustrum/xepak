@@ -4,7 +4,7 @@ use async_trait::async_trait;
 
 use crate::{
     XepakError,
-    auth::API_KEY_HEADER,
+    auth::extract_api_key,
     server::{
         RequestInput,
         processor::{PRIORITY_NORMAL, PreProcessorHandler, adjust_priority},
@@ -14,7 +14,7 @@ use crate::{
 };
 
 /// Authorize based on a plain token saved in the storage.
-pub struct TokenAuthenticationProcessor {
+pub struct StrorageAuthenticationProcessor {
     priority: u16,
 
     /// Datasource to run query against
@@ -30,7 +30,7 @@ pub struct TokenAuthenticationProcessor {
     cache_time_sec: usize,
 }
 
-impl TokenAuthenticationProcessor {
+impl StrorageAuthenticationProcessor {
     pub fn new(position: u16, query: String, ds: String, cache_sec: u16) -> Self {
         Self {
             priority: adjust_priority(PRIORITY_NORMAL, position),
@@ -110,7 +110,7 @@ impl TokenAuthenticationProcessor {
 }
 
 #[async_trait(?Send)]
-impl PreProcessorHandler for TokenAuthenticationProcessor {
+impl PreProcessorHandler for StrorageAuthenticationProcessor {
     fn priority(&self) -> u16 {
         self.priority
     }
@@ -122,11 +122,9 @@ impl PreProcessorHandler for TokenAuthenticationProcessor {
         _body: &actix_web::web::Bytes,
         input: &mut crate::server::RequestInput,
     ) -> Result<(), XepakError> {
-        let api_key = match req.headers().get(API_KEY_HEADER) {
-            Some(val) => val
-                .to_str()
-                .map_err(|_| XepakError::Input("Invalid API key provided".to_string()))?,
-            None => return Err(XepakError::Forbidden("No API key".to_string())),
+        let api_key = extract_api_key(req)?;
+        let Some(api_key) = api_key else {
+            return Err(XepakError::Forbidden("No API key".to_string()));
         };
 
         let cache_key = Self::build_auth_cache_key(api_key);

@@ -42,7 +42,7 @@ auth = [
     { id = "boss", key = "BossKEY", from_env = false, roles = ["ADMIN", "MANAGER"] },  # from_env=true: `key` holds an ENV variable name
     { id = "manager", key = "ManagerKEY", from_env = false, roles = ["MANAGER"] },
     { id = "user", key = "UserKEY", from_env = false },
-    { id = "", key = "" },            # optional anonymous user entry; its `roles` apply to anonymous requests (see simple_authentication)
+    { id = "", key = "" },            # optional anonymous user entry; its `roles` apply to anonymous requests (see config_authentication)
 ]
 
 # Optional: secrets registry (values loaded from ENV or raw text)
@@ -62,11 +62,11 @@ Each `.toml` file in `specs_dir/` is loaded and merged. A file may define any co
 ```toml
 # Shared pre-processor definitions (referenced by other specs)
 [shared_pre_processors.my_auth]
-type = "simple_authentication"
+type = "config_authentication"
 
 # Default pre-processors applied to all endpoints unless ignored
 default_pre_processors = [
-    { type = "simple_authentication", anonymous_auth = false },
+    { type = "config_authentication", anonymous_auth = false },
 ]
 
 # Endpoint definitions
@@ -85,7 +85,7 @@ data_source = ""                     # optional, references storage id; default 
 query = "SELECT * FROM users WHERE id={{user_id}}"
 
 [[endpoint.pre_processors]]          # endpoint-specific pre-processors
-type = "simple_authentication"
+type = "config_authentication"
 
 [[endpoint.pre_processors]]
 type = "authorize"
@@ -114,12 +114,12 @@ rules = "#boss OR (ADMIN AND MANAGER)"   # auth rules expression
 |------|-------------|------------|
 | `ref` | Reference to a shared pre-processor | `id: string` |
 | `parse_body_args` | Merges POST/PUT/PATCH body (flat map) into request arguments; no-op for other methods | `null_if_abscent: [keys]` — set listed missing keys to null |
-| `simple_authentication` | API key lookup in registry | `anonymous_auth: bool` |
-| `token_authentication` | Database-backed token auth | `data_source`, `query`, `cache_ttl_sec` |
+| `config_authentication` | API key lookup in registry | `anonymous_auth: bool` |
+| `storage_authentication` | Database-backed token auth | `data_source`, `query`, `cache_ttl_sec` |
 | `authorize` | Role-based authorization rules | `rules: string` |
 | `lua_script` | Lua script as pre-processor (validation, etc.) | `script: string` |
 
-The `token_authentication` query runs with an `{{api-key}}` argument and must return a single row with columns `id` (text) and `roles` (comma-separated text); roles are uppercased. With non-zero `cache_ttl_sec`, successful auth is cached per API key for that many seconds.
+The `storage_authentication` query runs with an `{{api-key}}` argument and must return a single row with columns `id` (text) and `roles` (comma-separated text); roles are uppercased. With non-zero `cache_ttl_sec`, successful auth is cached per API key for that many seconds.
 
 ### Auth rules expression syntax
 
@@ -512,7 +512,7 @@ auth = [
 uri = "/admin/posts/boss"
 
 [[endpoint.pre_processors]]
-type = "simple_authentication"
+type = "config_authentication"
 
 [[endpoint.pre_processors]]
 type = "authorize"
@@ -528,7 +528,7 @@ uri = "/admin/revalidate/{payment_id:\\d+}"
 single_record_response = true
 
 [[endpoint.pre_processors]]
-type = "simple_authentication"
+type = "config_authentication"
 
 [[endpoint.pre_processors]]
 type = "authorize"
@@ -559,7 +559,7 @@ return "UPDATE payments SET reprocess_trigger = current_timestamp WHERE id = {{p
 uri = "/auth/token/info"
 
 [[endpoint.pre_processors]]
-type = "token_authentication"
+type = "storage_authentication"
 data_source = "default"
 query = "SELECT user_id AS id, roles FROM tokens WHERE api_key = {{api-key}}"
 cache_ttl_sec = 300
@@ -720,7 +720,7 @@ return {
 uri = "/auth/script/anon"
 
 [[endpoint.pre_processors]]
-type = "simple_authentication"
+type = "config_authentication"
 anonymous_auth = true
 
 [endpoint.resource]
@@ -738,7 +738,7 @@ return {
 **config.toml:**
 ```toml
 default_pre_processors = [
-    { type = "simple_authentication", anonymous_auth = false },
+    { type = "config_authentication", anonymous_auth = false },
 ]
 ```
 

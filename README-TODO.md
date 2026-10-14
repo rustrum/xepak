@@ -1,16 +1,6 @@
-# Overall
+# In general
 
-- Should I rename endpoint resource?
-
-# MCP Authorization
-
-This stupid protocol  does not support x-api-key so I must add option to support Authorization: Bearer
-
-# Schema improvements
-
-To support JSON-RPC I should have better schema improvements.
-Need to allow nested structures at least.
-Ideally should check nested structures too.
+Should I rename endpoint "resource"?
 
 
 # Blob type updates
@@ -31,15 +21,12 @@ Must think from the perspective of file uploads.
     - it is passed to post-processor that reads data 
     - !!! or maybe it is a special post processor (without LUA) that accepts k-v map from resources and it could output file as stream from URL
 
-Cool idea for the future. Wrap input reader (to do not read all) instead of using blob. 
+Idea! Wrap input reader (to do not read all) instead of using blob. 
 
 
 # Input validators
 
 Should enable and add some tests to it.
-
-Should later add ability to have a nested N layer data in request body.
-Now it is just forced to fail if it is more than just a K/V dict.
 
 
 # Sqlite Vector support (do later)
@@ -52,11 +39,10 @@ It is more reasonable to support PostgreSQL first.
 
 ## Do it with RequestInput or not?
 
-Execution inside script require additional clone/+Arch reference.
-Thus I can not mutate RequestInput via set_arg from script.
+I can not mutate RequestInput via set_arg from script because of cloning.
 
-Initially It was possible to use Arc<HashMap> and return underlying values by reference.
-Now it is Arch<Mutex<Map>>.
+Thus custom arguments now inside Arch<Mutex<Map>>.
+
 Access to RequestInput shold be sequential, read only for most cases.
 
 So it is not clear should I optimize somthing here or not.

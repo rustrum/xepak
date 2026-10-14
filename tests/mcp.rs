@@ -2,16 +2,14 @@ mod common;
 
 use std::collections::HashMap;
 
-use jsonrpsee::http_client::HttpClientBuilder;
+use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClientBuilder};
 use jsonrpsee::proc_macros::rpc;
 use serde::Deserialize;
 use serde_json::Value;
 use serial_test::serial;
 use xepak::xepak_data::XepakValue;
 
-use crate::common::client;
-use crate::common::domain::PostsRecord;
-use crate::common::{INIT_DELAY_DEFAULT, init_default_test_server, init_logger};
+use crate::common::*;
 
 /// MCP `tools/call` result envelope.
 #[derive(Debug, Deserialize)]
@@ -40,7 +38,7 @@ pub trait TestMcp {
     #[method(name = "tools/call", param_kind = map)]
     async fn tools_call(
         &self,
-        name: String,
+        name: &str,
         arguments: XepakValue,
     ) -> Result<McpToolCallResult, ErrorObjectOwned>;
 }
@@ -57,11 +55,11 @@ fn args(pairs: &[(&str, XepakValue)]) -> XepakValue {
 #[tokio::test]
 #[serial]
 async fn mcp_initialize_tools_and_call() {
-    init_logger();
+    // init_logger();
     let _server = init_default_test_server(INIT_DELAY_DEFAULT).await;
     let uri = client::api_url("/mcp");
     let client = HttpClientBuilder::default()
-        .build(uri)
+        .build(uri.clone())
         .expect("jsonrpsee MCP client must build");
 
     // 1) initialize must return server info and capabilities
@@ -101,14 +99,15 @@ async fn mcp_initialize_tools_and_call() {
         .iter()
         .filter_map(|t| t.get("name").and_then(Value::as_str))
         .collect();
-    assert_eq!(names.len(), 2, "{names:?}");
+    assert_eq!(names.len(), 3, "{names:?}");
     assert!(names.contains(&"list_posts"), "{names:?}");
     assert!(names.contains(&"get_post"), "{names:?}");
+    assert!(names.contains(&"auth"), "{names:?}");
 
     // 3) tools/call list_posts must return all posts
     let call = client
         .tools_call(
-            "list_posts".to_string(),
+            "list_posts",
             args(&[
                 ("limit", XepakValue::from(10i128)),
                 ("offset", XepakValue::from(0i128)),
@@ -120,22 +119,38 @@ async fn mcp_initialize_tools_and_call() {
     assert!(!call.is_error, "{call:?}");
     assert_eq!(call.content.len(), 1, "{call:?}");
     assert_eq!(call.content[0].content_type, "text", "{call:?}");
-    let posts: Vec<PostsRecord> =
+    let posts: Vec<domain::PostsRecord> =
         serde_json::from_str(&call.content[0].text).expect("list_posts content must be JSON");
     assert_eq!(posts.len(), 4, "{posts:?}");
 
     // 4) tools/call get_post must return the requested post
     let call = client
-        .tools_call(
-            "get_post".to_string(),
-            args(&[("post_id", XepakValue::from(1i128))]),
-        )
+        .tools_call("get_post", args(&[("post_id", XepakValue::from(1i128))]))
         .await;
     assert!(call.is_ok(), "{call:?}");
     let call = call.unwrap();
     assert!(!call.is_error, "{call:?}");
-    let posts: Vec<PostsRecord> =
+    let posts: Vec<domain::PostsRecord> =
         serde_json::from_str(&call.content[0].text).expect("get_post content must be JSON");
     assert_eq!(posts.len(), 1, "{posts:?}");
     assert_eq!(posts[0].id, 1, "{posts:?}");
+
+    // Auth check
+    let mut headers = HeaderMap::new();
+    let auth_value = HeaderValue::from_str("Bearer BossKEY").expect("Value expected");
+    headers.insert("Authorization", auth_value);
+
+    let client_auth = HttpClientBuilder::default()
+        .set_headers(headers)
+        .build(uri)
+        .expect("RPSee client");
+
+    let result = client_auth.tools_call("auth", XepakValue::Null).await;
+    assert!(
+        matches!(&result, Ok(r) if r.content[0].text  == "Authorized"),
+        "{result:?}"
+    );
+
+    let result = client.tools_call("auth", XepakValue::Null).await;
+    assert!(result.is_err(), "{result:?}");
 }

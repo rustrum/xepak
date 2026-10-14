@@ -169,7 +169,7 @@ async fn auth_default_pre_processor() {
     use xepak::server::processor::PreProcessor;
     specs
         .default_pre_processors
-        .push(PreProcessor::SimpleAuthentication {
+        .push(PreProcessor::ConfigAuthentication {
             anonymous_auth: false,
         });
 

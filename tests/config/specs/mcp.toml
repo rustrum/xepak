@@ -37,3 +37,15 @@ resource = {
     type = "query",
     query = "SELECT * FROM posts WHERE id = {{post_id}}"
 }
+
+[mcp.tools.auth]
+title = "Get post"
+description = "Get a single post by its ID"
+annotations.read_only = true
+pre_processors = [
+    { type = "config_authentication" },
+]
+resource = {
+    type = "data_script",
+    script = """ return "Authorized" """
+}
