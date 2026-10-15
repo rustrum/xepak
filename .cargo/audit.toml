@@ -4,6 +4,8 @@ ignore = [
     "RUSTSEC-2025-0009",
     "RUSTSEC-2025-0010",
     "RUSTSEC-2026-0258",
+    # TLS minor bug
+    "RUSTSEC-2026-0349",
     # Reqwest mostly
     "RUSTSEC-2024-0336",
     #Apate transitive dependency

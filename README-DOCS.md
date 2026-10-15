@@ -100,24 +100,23 @@ Examples:
 
 ## Internal type system
 
-In order to manage differenty data types and their conversion I created dynamic value wrapper `XepakValue`
+Project is using dynamic type value wrapper `XepakValue`
 which can be Map, Tuple, Integer, Float, Blob, etc.
 
-The core idea here is that `XepakValue` transcends all environments and data formats.
-It is used to serialize/deserialize data to JSON/CBOR, represents DB output, toml configuration records, cached values and scripting environment variables.
+`XepakValue` transcends all environments and data formats.
+It is used to serialize/deserialize data to JSON/CBOR, represents DB output, toml configuration records, cached values and variables inside LUA VM.
 
 Current type system allows you to:
 
  - use complex toml structures in registry and read them natively in Lua
  - store and read any arbitrary data to cache from Lua
  - reads DB output natively in lua and enrich it
- - output of Lua scripts will be converted to JSON/CBOR
+ - convert LUA tables to JSON/CBOR
 
-Lua type system has it limits.
-It is barely possible to create variable of type that Lua is not supporting.
-But passing such types from DB to output is not the issue.
+LUA type system is limited but it allows to pass through any wrapped data.
+Thus output from DB goes through LUA VM unchanged.
 
-If compared to JSON `XepakValue`:
+Compared to JSON `XepakValue`:
 
  - align with SQLite type system
  - support binary data (represented as base64 in JSON)
@@ -125,8 +124,118 @@ If compared to JSON `XepakValue`:
  - do not loose type in complex data flows: CBOR -> JSON -> SQL -> LUA -> CBOR
  - can convert JSON string representation to proper data format
  - ...
- - planned to add new types later: (date, decimal, etc.)
+ - could have new types later: (date, decimal, etc.)
 
+## Schema
+
+Schema allows you to convert input data to proper internal representation
+and do the same with output.
+
+By default it is allowed to apply schema only to one input element and accept others "as is" (non strict schema).
+Strict schema means that only fields/elements that are defined in schema allowed.
+
+Supported schema types are: `text`, `boolean`, `int`, `float`, `blob`, `tuple`, `dict`.
+Each element can be marked as a `required`.
+At leas one validator can be added to each schema element.
+Elements of type `dict` and `tuple` support nested elements in `items` propery.
+
+Schema definition is hierarchical and can be applied to any type of input.
+
+Root level schema expected to be of type `dict` or `tuple`.
+
+**Dict schema** handles input as key-value pairs, applies to URI, querystring and POST data where root element is an k-v object.  
+**Tuple schema** is a special case for POST/PUT requests and JSON-RPC/MCP arguments where input could be a tuple/array of elements.
+
+DSL for REST endpoins is very similar to RPC and MCP.
+```toml
+# ...
+request_type = "POST"
+
+# by default it is false
+# if true will allow only "title" and "content" in the input.
+strict_schema = true
+
+[endpoint.schema.input]
+type = "dict"
+items = {
+    title = {
+        type = "text",
+        required = true,
+        validate = { kind = "range", from = 5, to = 255 },
+    },
+    # you can skip `content` from payload it is not marked as a required
+    content = { type = "text" }
+}
+
+# Output schema is required only if DB for some reason returns differnt type like number as a string.
+[endpoint.schema.output]
+type = "dict"
+items = {
+    id = { type = "int" }
+}
+
+```
+
+RPC method `get_post` accept arguments as a tuple
+where first element is `int` (probably id) and second element is `tuple` where elements are strings.
+```toml
+[rpc.methods.get_post]
+schema.input = {
+    type = "tuple",
+    items = [
+        { type = "int", required = true },
+        # it is not required to define nested items
+        # in this case it will only validate that element is a tuple/array
+        {
+            type = "tuple",
+            required = true,
+            items = [ { type = "text" }, ],
+            # if repeat=true will apply schema from `items` tuple elements
+            items_repeat = true,
+        },
+    ]
+}
+```
+
+MCP schema where method arguments are key-value dictionary.
+```toml
+[mcp.tools.get_post]
+title = "Get post"
+description = "Get a single post by its ID"
+schema.input = {
+    type = "dict",
+    items = {
+        post_id = { type = "int", required = true }
+    }
+}
+```
+
+### Validators
+
+Schema element has `validate` field that holds a **single** validator object.
+
+Validator entries specs.
+
+| `kind` | Fields | applies to |
+|--------|--------|------------|
+| `range` | `from`, `to` (int) | text length, int/float value, tuple length |
+| `range_float` | `from`, `to` (float) | same as range but with float bounds |
+| `not_null` | — | rejects null/undefined |
+| `and` | `nested` (list of validators) | all must pass |
+| `or` | `nested` (list of validators) | at least one must pass |
+
+Kind `and` / `or` take a `nested` **array** of validators, which themselves may be `and` / `or` again — so you can build arbitrary trees.
+
+```toml
+# 1) Single validator — text length must be 5..255
+validate = { kind = "range", from = 5, to = 255 }
+
+# 2) AND — all nested validators must pass (not null AND length 5..255)
+validate = { kind = "and", nested = [
+    { kind = "not_null" },
+    { kind = "range", from = 5, to = 255 },
+] }
+```
 
 ## Endpoint input/output
 

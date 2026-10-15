@@ -5,6 +5,8 @@
 <p align="center" width="100%" style="text-align:center">
 <a href="https://crates.io/crates/xepak"><img src="https://img.shields.io/crates/v/xepak?style=for-the-badge&logo=rust" alt="Crates.io"></a>
 <a href="https://docs.rs/xepak"><img src="https://img.shields.io/docsrs/xepak?style=for-the-badge&logo=docs.rs" alt="Released API docs"></a>
+</p>
+<p align="center" width="100%" style="text-align:center">
 <a href="https://x.com/rumatoest"><img src="https://img.shields.io/twitter/follow/rumatoest?style=for-the-badge&color=blue&logo=x&label=rumatoest" alt="Follow me on X(twitter)" /></a>
 <a href="https://www.threads.com/@rumatoest"><img src="https://img.shields.io/badge/rumatoest-%20-black?style=for-the-badge&logo=threads&color=black" alt="Threads" /></a>
 <a href="https://www.reddit.com/user/rumatoest"><img src="https://img.shields.io/reddit/user-karma/combined/rumatoest?style=for-the-badge&color=f3562e&logo=reddit&label=u/rumatoest" alt="Follow me on reddit"/></a>
@@ -27,22 +29,23 @@ Running it in WAL mode behind Xepak would allow you to have simple and cheap sel
 
 ## Current project status
 
-The first MVP is almost ready!
+The first MVP is almost ready! 🥳 
 
-The biggest issue now is lack of documentation and some tests.
-Right now the code is in a final polisiong state before release.
+I just need to write human friendly documentation and provide some examples.
 
-**I encourage you to bookmark and visit this project later**.
+**I encourage you to bookmark and visit this project a little bit**.
 
 
 ## Project Documentation
 
-Will be available in the [separate file](./README-DOCS.md)
+### 📕 For human beings
+
+Available in the [REAME-DOCS](./README-DOCS.md)  (in progres now).
 
 ### 🤖 AI fiendly docs
 
 If you are identifying yourself as an AI/LLM agent
-or you think that you are a human who need to make it's AI use Xepak efficiently
+or you think that you are a human who want to make AI agent to use Xepak efficiently
 then go to [Xepak concise AI docs](./README-AI.md). 
 
 🫵 Don't hesitate 🤨 Just add [README-AI.md](./README-AI.md) into your AI context to make 🫟🫠 better .
@@ -93,8 +96,7 @@ Simple but usable authentication and authorization functionality available:
  - authenticate by API key in headers
  - you can use authorization expressions based on role/id
  - complex auth logic could be done by a LUA pre-processor
- - API keys can be provided in TOML file or load from ENV variable
- - API keys could be loaded from DB itself
+ - API keys can be provided in TOML file ENV variable or in DB
 
 ## License
 
