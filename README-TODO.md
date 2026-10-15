@@ -23,6 +23,10 @@ Must think from the perspective of file uploads.
 
 Idea! Wrap input reader (to do not read all) instead of using blob. 
 
+# DB named arg improvements
+
+Should add support for nested fields and array indexes like `{{[0].name}}` if top level input is array.
+
 
 # Input validators
 
