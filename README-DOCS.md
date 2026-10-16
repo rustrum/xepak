@@ -1,23 +1,309 @@
 # Xepak Documentation
 
-Not ready yet but you can look into curret configuration DSL in [examples](./examples/xepak/).
-I hope that DSL format is self describing.
+To get quick overview of how things are working you should look into [examples](./examples) directory.
+
+Do not forget there is an [AI focused docs](./README-AI.md) built by AI for AI that also could be usefult for humans.
 
 ## Configuration
 
-### Cache
+All DSL is just a valid TOML file syntax.
+This format was selected because TOML does not depend on space identations,
+supports nestes structures and allows to split nested structures into several top-level elements.
 
-### Data sources
+Xepak configuration could be splitted amound diferent files and folders
+but in order to run application you need provide path to a single root TOML file.
 
-### Registry
+### Main TOML file
 
-### Pre processors
+Main TOML file with its folder is a configuration entrypoint.
+All relative file paths in configuration are based on directory where root TOML is located.
 
-### Auth functionality
+Root config quick overview.
+```toml
+# Application port
+port = 4321 # 8080 if not defined
+
+# Directory with specs files
+specs_dir = "./specs" # default value is ./specs - relative to root config folder
+
+storage = [] # this one is require at least one entry
+
+registry = {} # some k-v registry
+```
+
+#### Storage
+
+One day storage section would have multiple DB connections.
+But now you should have only one for SQLite.
+
+```toml
+[[storage]]
+id = ""                          # datasource identifier (do not define it use default one)
+type = "sqlite"
+file = "/path/to/db.sqlite3"     # empty string = shared in-memory DB; relative paths resolve against config file dir
+migrations_dir = "migrations"    # path to folder with migrations *.sql files
+create_db = true                 # create DB if missing
+wal = true                       # enable WAL mode
+```
+
+#### Registry
+
+Registry is a key-value dictionary of arbitrary data that you can access from Lua scripts.
+Any value defined here will be loaded by key as a full object with all nested data.
+
+```toml
+[registry]
+int_val = 1
+float_val = 2.2
+string_val = "registry_val"
+map_val = {
+    host = "localhost",
+    "weird.key" = "some_value",
+}
+```
+
+☝️But there are some system registry keys that behaves differently.
+
+**auth** key is an authentication registry and must follow exact structure:
+
+```toml
+[registry]
+# It must be an array
+auth = [
+    # you must define id, key and optional list of roles
+    { id = "boss", key = "BossKEY", roles = [ "ADMIN", "MANAGER" ] },
+    { id = "manager", key = "ManagerKEY", roles = [ "MANAGER", ] },
+    { id = "user", key = "UserKEY" },
+    # empty id is used for anonymous auth if it is enabled
+    { id = "", key = "", roles = [ "anonymous" ] },
+    # no need to store actual API keys in TOML - you can load them from ENV variables
+    { id = "hacker", key = "ENV_VARIABLE_WITH_THE_KEY", from_env = true },
+]
+```
+
+**secrets** is a map of secret values that could be accessed from Lua.
+The main point here is that secret value can be loaded from ENV variable.
+```toml
+secrets = {
+    # there core feature - secret value loaded from ENV var
+    secret1 = { type = "env", name = "SECRET_ENV_1" },
+    # Just a simple text in TOML
+    secret2 = { type = "text", value = "raw_value" },
+}
+
+```
+### Specifications directory
+
+Defined by a `specs_dir` and could hold one or many TOML files for REST,JSON-RPC,MCP specifications.
+
+Xepak utilize TOML file syntax capabilities to combine multiple files together into one single specification.
+Imagine that all your TOML files will be read as a single one.
+```toml
+# this is array definition that can't be splitted between files
+enpoint = [
+    {uri = "users/get"},
+    {uri = "users/list"},
+]
+
+# but you can represent it in separate blocks in different files
+[[endpoint]]
+uri = "users/get"
+
+[[endpoint]]
+uri = "users/list"
+
+# same approach works for maps
+methods = {
+    get = {query="select * from ..."},
+    list = {query="select * from ..."}
+}
+
+# map splitted
+[methods.get]
+query="select * from ..."
+
+[methods.list]
+query="select * from ..."
+```
+
+### REST endpoints
+
+Should be defined in `[[endpoint]]` block.
+Each endpoint handle some `uri` which could be many different URLs if you are using URI path params.
+
+Basic endpoint definition. 
+```toml
+[[endpoint]]
+uri = "/users/{user_id:\\d+}"        # {name} path params captured automatically; regex allowed after ':' (escape backslash in TOML)
+allow_methods = ["GET", "DELETE"]    # optional HTTP methods whitelist; if absent only GET accepted
+single_record_response = true        # if true return 404 if DB returns no records
+fetch_limit = 20                     # max rows for paginated queries (also the default limit)
+
+# optional; custom names for limit/offset arguments
+# if you need to have `/users/list?count=1` instead of `/users/list?limit=1`
+limit_arg = "limit"
+offset_arg = "offset"
+
+# if true does not allow requests with arguments not defined in the schema
+strict_schema = false
+```
+
+**Limit & offset** arguments are handling differently.
+If your input has `limit` or `offset` argument (or if you defined `fetch_limit`) than response will have `X-Limit` and `X-Offset` headers.
+Response header will return exact values that were used to fetch recrods from DB.
+These arguments will be represented in SQL like this `{{-limit-}}`, `{{-offset-}}`.
+
+In order to use limit/offset feature you have to define `fetch_limit` upper bound
+and then you can use query arguments regardless of having limit/offset in the input form client.
 
 
+### Resources
 
-#### Authentication
+Resource is the core concept to fetch data from DB.
+It works the same for REST,JSON-RPC and MCP.
+Resource will produce data output based on computed input whith user input.
+
+
+The based resource type is `query`.
+It just an SQL string with named arguments in it.
+Aruments names are matching the one from URI path, query string, or keys from object sent in POST/PUT payload.
+
+```toml
+[[endpoint]]
+# ...
+[endpoint.resource]
+type = "query"
+# optional param - skip it
+data_source = "" # you can interact with differnt datasources, but plese don't
+
+# user_id could be taken from URI `/user/123` or from query string ``/user?user_id=123``
+# such resource should be combined with `single_record_response = true`
+query = "SELECT * FROM users WHERE id={{user_id}}"
+
+# ANOTHER EXAMPLE
+# /users/find?country=UK&offset=100
+# this one require `fetch_limit = YOUR_LIMIT`
+query = "SELECT * FROM users WHERE country="{{country}}" LIMIT {{-limit-}} OFFSET {{-offset-}}"
+
+```
+
+Dynamic queries can be constructed with `query_script_lua` resource type.
+Lua script is using to build and return SQL query.
+But you can do many fancy things before that in Lua.
+
+```toml
+[[endpoint]]
+# ...
+[endpoint.resource]
+type = "query_script_lua"
+# triple quotes is a TOML string syntax
+# work well if there are not triple quotes in Lua code
+script = """
+local query = query_builder("SELECT * FROM users")
+
+-- can conditionnaly add some SQL parts depending on the input
+local parts = {};
+if ctx:has_arg("name") then
+    local v = ctx:get_arg("name")
+    if #v < 3 then
+        -- will fail immediately wit proper response error
+        error_input("Input argument 'name' length must be greater than 2")
+    end
+    -- adding SQL condition to parts array
+    table.insert(parts, "username = {{name}}")
+end
+
+if ctx:has_arg("pass") then
+    table.insert(parts, "password = {{pass}}")
+end
+
+-- cool funciton that joins parts with prefix WEHRE and delimiter OR 
+query:add_joined_parts("WHERE", parts, "OR", "");
+
+-- just append new SQL portion to builde
+query:add("LIMIT {{-limit-}} OFFSET {{-offset-}}")
+return query:build()
+"""
+```
+
+Another type of resource is a `data_script` which pass any response from Lua to client as is.
+You can make API respond with any arbigrary data of any shape.
+
+```toml
+[[endpoint]]
+# ...
+[endpoint.resource]
+type = "data_script"
+script = """
+-- will return object with info about user authentication
+return {
+    id = ctx:get_auth_id(),
+    roles = ctx:get_auth_roles(),
+    is_admin = ctx:has_auth_role("admin"),
+    is_manager = ctx:has_auth_role("manager"),
+}
+"""
+```
+
+### Pre-processors
+
+This is a shared concept of a pre-defined or a custom logic that interacts with input data, request context and runs before resource. 
+
+Things to remember:
+
+ - execution (definition) order matters
+ - pre-processord can be reused
+ - default pre-processors could be configured for all resources
+ - you can drop defalt pre-processors for particular resource
+ - Lua scripting supported
+
+Pre-processor types:
+
+ - `ref` - Reference to a shared pre-processor
+ - `parse_body_args` - Merges POST/PUT/PATCH body (flat map) into request arguments; no-op for other methods
+ - `config_authentication` - API key lookup in registry
+ - `storage_authentication` - Database-backed token auth
+ - `authorize`  - Role-based authorization rules
+ - `lua_script` - Lua script for custom validation, auth etc
+
+
+**Shared pre-processors** defined in the separate DSL block and can be reused later by reference.
+In TOML `shared_pre_processors` is a root dictionary element where key is pre-processor ID.
+
+```toml
+[shared_pre_processors.my_pp_id]
+type = "lua_script"
+script = """
+-- custom Lua script
+"""
+
+# somewhere in endpint specs
+[[endpoint.pre_processors]]
+type = "ref"
+id = "my_pp_id"
+
+```
+
+**Default pre-processors** are the type of pre processors that apply to all endpoints by default.
+Authentication is the most obvious use-case here.
+
+```toml
+# applied to all endpoints unless explicitly ignored
+# this is a root level DSL array element
+# pre-processors order does matter
+default_pre_processors = [
+    { type = "config_authentication", anonymous_auth = false },
+]
+```
+
+### JSON-RPC
+
+### MCP
+
+
+## Authentication & Authorization
+
+### Authentication
 
 Xepak utilize "x-api-key" HTTP header as a main method to authenticate client.
 Fallback to "Authorize: Bearer ..." is available only for JSON-RPC and MCP endpoints.
@@ -56,7 +342,7 @@ anonymous_auth = false
 **Authentication via storage** is performed by `storage_authentication` pre-processor.
 You must store auth data in DB in such way to be able to retreive it like this: `SELECT id,roles FROM ... WHERE ... key = {{api-key}}`. Where roles represented as a string `manager,billing,office`.
 
-Pre-processor will qury DB, extract auth data and cache it for some time.
+Pre-processor will query DB, extract auth data and cache it for some time.
 
 ```toml
 [[endpoint.pre_processors]]
@@ -66,18 +352,17 @@ query = "SELECT user_id AS id, roles FROM api_tokens WHERE api_key = {{api-key}}
 cache_ttl_sec = 10 
 ```
 
-#### Authorization
+### Authorization
 
-By default authorization performed by an "authorize" pre-processor.
-It should be executed after authentication processor.
-Expects user id/roles tob be already in the context.
+Authorization is performed by an "authorize" pre-processor.
+It should be executed after authentication processor to be able to read use id & roles from the context.
 Authorize pre-processor is implementation-agnostic, it does not depend on authentication mechanism.
 
 Access control is based on auth expression rules. 
 
 ```toml
 [[endpoint.pre_processors]]
-type = "authorize",
+type = "authorize"
 rules = "#boss OR (ADMIN AND MANAGER)"
 ```
 
@@ -87,7 +372,7 @@ Rules expressions are very simple and straightforward:
 - can match by role name (ignoring cases)
 - user ID is prepended with "#" char
 - OR, AND - reserved keywords (uppercase only)
-- parentheses groups similar conditions
+- parentheses are combining similar conditions
 - only one type of condition allowed inside parentheses (can't mix AND + OR at the same level)
 
 Examples:
@@ -96,7 +381,6 @@ Examples:
 - `manager AND billing OR boss` - will fail - mixing operators on the same level
 - `admin OR (manager AND (billing OR #45687))` - allowed for `admin` role or a `manager` but only if it has `billing` role or `id=45687`.
 
-### Entrypoints
 
 ## Internal type system
 
@@ -109,12 +393,12 @@ It is used to serialize/deserialize data to JSON/CBOR, represents DB output, tom
 Current type system allows you to:
 
  - use complex toml structures in registry and read them natively in Lua
- - store and read any arbitrary data to cache from Lua
- - reads DB output natively in lua and enrich it
- - convert LUA tables to JSON/CBOR
+ - store arbitrary data to cache and accessing it from Lua
+ - reads DB output natively in Lua and enrich it
+ - convert Lua tables to JSON/CBOR
 
-LUA type system is limited but it allows to pass through any wrapped data.
-Thus output from DB goes through LUA VM unchanged.
+Lua type system is limited but it allows to pass through any wrapped data.
+Thus output from DB travels via Lua VM unchanged.
 
 Compared to JSON `XepakValue`:
 
@@ -131,12 +415,11 @@ Compared to JSON `XepakValue`:
 Schema allows you to convert input data to proper internal representation
 and do the same with output.
 
-By default it is allowed to apply schema only to one input element and accept others "as is" (non strict schema).
-Strict schema means that only fields/elements that are defined in schema allowed.
+You can apply schema only to one input element and accept others "as is" (non strict schema).
+Strict schema means that only fields/elements that are defined in schema are allowed in the input.
 
 Supported schema types are: `text`, `boolean`, `int`, `float`, `blob`, `tuple`, `dict`.
-Each element can be marked as a `required`.
-At leas one validator can be added to each schema element.
+Each element can be marked as a `required` and have one ore more validators.
 Elements of type `dict` and `tuple` support nested elements in `items` propery.
 
 Schema definition is hierarchical and can be applied to any type of input.
@@ -190,7 +473,8 @@ schema.input = {
             type = "tuple",
             required = true,
             items = [ { type = "text" }, ],
-            # if repeat=true will apply schema from `items` tuple elements
+            # if repeat=true it will apply schema definitions
+            # from items to all tuple elements in sequence
             items_repeat = true,
         },
     ]

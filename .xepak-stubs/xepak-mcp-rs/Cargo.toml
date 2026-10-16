@@ -1,0 +1,9 @@
+[package]
+name = "xepak-mcp-rs"
+version = "0.0.1"
+edition = "2024"
+homepage = "https://github.com/rustrum/xepak"
+repository = "https://github.com/rustrum/xepak.git"
+license-file = "COPYRIGHT"
+description = "Stub package for the Xepak project to mitigate supply-chain attacks"
+keywords = []
