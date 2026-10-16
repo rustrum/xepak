@@ -68,7 +68,7 @@ impl XepakValue {
         matches!(self, Self::Tuple(_))
     }
 
-    /// If value is a tuple return it's size or None
+    /// If value is a tuple return its size or None
     pub fn tuple_len(&self) -> Option<usize> {
         if let Self::Tuple(value) = self {
             Some(value.len())

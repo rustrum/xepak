@@ -4310,7 +4310,7 @@ checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 
 [[package]]
 name = "xepak"
-version = "0.0.4-alpha"
+version = "0.0.5-pre-release"
 dependencies = [
  "actix-router",
  "actix-web",
@@ -4367,7 +4367,7 @@ version = "0.0.2"
 
 [[package]]
 name = "xepak-rs"
-version = "0.0.1"
+version = "0.0.2"
 
 [[package]]
 name = "yoke"

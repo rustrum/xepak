@@ -28,7 +28,7 @@ async fn validate_posts_response(uri: &str, expected_user_id: u64) {
     }
 }
 
-/// Checking hos query_one() works and ctx:set_value()
+/// Checking how query_one() works and ctx:set_value()
 #[tokio::test]
 #[serial]
 async fn check_query_one_set_value() {

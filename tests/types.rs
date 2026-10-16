@@ -150,7 +150,7 @@ async fn script_response_types() {
     assert!(value.is_map());
     let value = value.as_map().unwrap();
 
-    // Nill values are considered abscent in mlua
+    // Nil values are considered absent in mlua
     assert!(!value.contains_key("null_val"));
     assert!(matches!(value["bool_val"], XepakValue::Boolean(false)));
     assert!(matches!(value["int_val"], XepakValue::Integer(1)));
@@ -164,7 +164,7 @@ async fn script_response_types() {
     assert!(value.is_tuple());
     let value = value.as_tuple().unwrap();
 
-    // Nill values in sequences are bad but xepak could handle this
+    // Nil values in sequences are bad but xepak could handle this
     assert_eq!(
         value,
         vec![

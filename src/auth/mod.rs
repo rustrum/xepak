@@ -22,7 +22,7 @@ pub fn extract_api_key(req: &actix_web::HttpRequest) -> Result<Option<&str>, Xep
     // get API key value from headers
     let mut api_key_value = req.headers().get(API_KEY_HEADER);
     // POST only method is used for RPC/MCP servers
-    // Thus can check for a bearer here
+    // Thus we can check for a bearer here
     if api_key_value.is_none() && req.method() == Method::POST {
         tracing::warn!("No key searching bearer");
         let bearer_header = req.headers().get(AUTH_BEARER_HEADER);
@@ -53,7 +53,7 @@ pub fn extract_api_key(req: &actix_web::HttpRequest) -> Result<Option<&str>, Xep
         if prefix.to_uppercase() == "BEARER" {
             api_key = key.trim();
         } else {
-            tracing::debug!("Auhorization header first part is not \"Bearer\"");
+            tracing::debug!("Authorization header first part is not \"Bearer\"");
             return Err(XepakError::Input("Invalid auth header".to_string()));
         }
     }

@@ -48,7 +48,7 @@ async fn script_access_secrets_registry() {
     }
 
     let mut config = load_conf_file(CONFIG_FILE).expect("Should have valid config");
-    let specs_dir = PathBuf::from_str(SPECS_DIR).expect("Specs dir must exists");
+    let specs_dir = PathBuf::from_str(SPECS_DIR).expect("Specs dir must exist");
     let specs = load_specs_from_dir(specs_dir).expect("Should have valid specs");
 
     // Tweaking secrets configuration

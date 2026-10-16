@@ -1,7 +1,7 @@
 ## Project overview
 
 This is a rust/cargo project.
-The core functionality is to provide REST/RPC/MCP functionality for DB backens based on DSL specifications.
+The core functionality is to provide REST/RPC/MCP functionality for DB backends based on DSL specifications.
 DSL is defined in TOML files. DSL supports LUA scripts.
 
 
@@ -9,7 +9,7 @@ DSL is defined in TOML files. DSL supports LUA scripts.
 
 ### DSL configuration
 
-All structs which names has suffix `Specs` are parts of a *.toml DSL specification.
+All structs which names have suffix `Specs` are parts of a *.toml DSL specification.
 
 ### XepakValue type
 
@@ -19,13 +19,13 @@ We deserialize input to XepakValue and provide XepakValue output from endpoint h
 ### Schema type
 
 Hierarchical type that defines schema for XepakValue.
-Could be applied to input and outpus as well.
+Could be applied to input and output as well.
 
 
 ## Agent guidelines
 
 - Must not edit code with bash commands like `cat` or `sed`!
-- To edit files must uses existing tooling.
+- To edit files must use existing tooling.
 - Must edit code only in small semantical chunks about 100 lines of code.
 - Never write whole file in one step or half or the file.
 

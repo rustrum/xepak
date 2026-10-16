@@ -31,10 +31,10 @@ pub enum XepakType {
 
 #[derive(Error, Debug, Clone)]
 pub enum XepakDataError {
-    #[error("Can't covert xepak type from {0} to {1}: {2}")]
+    #[error("Can't convert xepak type from {0} to {1}: {2}")]
     ConvertValue(XepakType, XepakType, String),
 
-    #[error("Can't covert xepak value: {0}")]
+    #[error("Can't convert xepak value: {0}")]
     Convert(String),
 
     #[error("Xepak value decode error: {0}")]

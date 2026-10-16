@@ -38,7 +38,7 @@ return query:build();
 }
 
 [mcp.tools.get_post]
-title = "Retreive post"
+title = "Retrieve post"
 description = "Get a post by its ID"
 schema.input = {
     type = "dict",

@@ -14,23 +14,23 @@ use crate::{
 };
 
 /// Authorize based on a plain token saved in the storage.
-pub struct StrorageAuthenticationProcessor {
+pub struct StorageAuthenticationProcessor {
     priority: u16,
 
     /// Datasource to run query against
     data_source: String,
 
-    /// Querystring that must return data in appropriate format.
+    /// Query string that must return data in appropriate format.
     /// Query must return single row and follow next format
     /// `SELECT id,roles FROM ... WHERE ... key = {{api-key}}`
     /// where `roles` is a string with comma delimited role names.
     query: String,
 
-    /// If non zero - cache authentication for N seconds
+    /// If non-zero - cache authentication for N seconds
     cache_time_sec: usize,
 }
 
-impl StrorageAuthenticationProcessor {
+impl StorageAuthenticationProcessor {
     pub fn new(position: u16, query: String, ds: String, cache_sec: u16) -> Self {
         Self {
             priority: adjust_priority(PRIORITY_NORMAL, position),
@@ -110,7 +110,7 @@ impl StrorageAuthenticationProcessor {
 }
 
 #[async_trait(?Send)]
-impl PreProcessorHandler for StrorageAuthenticationProcessor {
+impl PreProcessorHandler for StorageAuthenticationProcessor {
     fn priority(&self) -> u16 {
         self.priority
     }

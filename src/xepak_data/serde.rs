@@ -10,13 +10,13 @@ use super::XepakValue;
 impl XepakValue {
     pub fn to_json(&self) -> Result<String, XepakDataError> {
         serde_json::to_string(self).map_err(|err| {
-            XepakDataError::Decode(format!("Fail to encode XepakValue into CBOR vec {err}"))
+            XepakDataError::Decode(format!("Failed to encode XepakValue into JSON string {err}"))
         })
     }
 
     pub fn to_cbor_vec(&self) -> Result<Vec<u8>, XepakDataError> {
         cbor2::to_vec(self).map_err(|err| {
-            XepakDataError::Decode(format!("Fail to encode XepakValue into CBOR vec {err}"))
+            XepakDataError::Decode(format!("Failed to encode XepakValue into CBOR vec {err}"))
         })
     }
 }
@@ -34,7 +34,7 @@ impl serde::Serialize for XepakValue {
             XepakValue::Text(v) => ser.serialize_str(v.as_str()),
             XepakValue::Blob(v) => {
                 if ser.is_human_readable() {
-                    // In JSON serialise it as b64 string
+                    // In JSON serialize it as b64 string
                     let str_value = base64::engine::general_purpose::STANDARD.encode(v);
                     ser.serialize_str(str_value.as_str())
                 } else {
@@ -82,10 +82,10 @@ impl TryFrom<&serde_json::Value> for XepakValue {
             }
             serde_json::Value::String(v) => Ok(XepakValue::Text(v.clone())),
             serde_json::Value::Array(_values) => Err(XepakDataError::Decode(
-                "Cant decode from JSON array".to_string(),
+                "Can't decode from JSON array".to_string(),
             )),
             serde_json::Value::Object(_map) => Err(XepakDataError::Decode(
-                "Cant decode from JSON object".to_string(),
+                "Can't decode from JSON object".to_string(),
             )),
         }
     }
@@ -277,7 +277,7 @@ mod tests {
         }
         assert_eq!(decoded, expected);
 
-        // Just check same for root tuple lement
+        // Just check same for root tuple element
         let tuple = XepakValue::Tuple(vec![
             XepakValue::Null,
             XepakValue::Integer(1),
@@ -298,7 +298,7 @@ mod tests {
         let decoded: XepakValue = cbor2::from_slice(&bytes).unwrap();
         assert_eq!(decoded, value);
 
-        // Just check same for root tuple lement
+        // Just check same for root tuple element
         let tuple = XepakValue::Tuple(vec![
             XepakValue::Null,
             XepakValue::Integer(1),

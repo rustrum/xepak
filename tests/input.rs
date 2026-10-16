@@ -149,7 +149,7 @@ async fn test_body_args_simple_echo() {
     payload_inout_tests(true, false, "/input/body/args/simple", true).await;
 
     // Checking input as a tuple instead of map
-    // Also validate access to tuple lements by string key IDs: "1","0", etc.
+    // Also validate access to tuple elements by string key IDs: "1","0", etc.
     let input = XepakValue::from(vec![
         XepakValue::from(true),
         XepakValue::from(1),

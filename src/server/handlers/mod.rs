@@ -31,7 +31,7 @@ use crate::{
 
 pub type EndpointHandlerArgs = (HttpRequest, Data<XepakAppData>, Bytes);
 
-/// This is just a validation to fail early if LUA syntax incorrect
+/// This is just a validation to fail early if LUA syntax is incorrect
 pub fn validate_resource(app: &XepakAppData, resource: &ResourceSpecs) -> Result<(), XepakError> {
     match resource {
         ResourceSpecs::QueryScriptLua { script, .. } | ResourceSpecs::DataScript { script, .. } => {
@@ -76,7 +76,7 @@ pub fn build_pre_processors(
         )?);
     }
 
-    // Here PP order could change (depends on the basic priority each handlers had)
+    // Here PP order could change (depends on the basic priority each handler had)
     processors.sort_by_key(|b| std::cmp::Reverse(b.priority()));
 
     Ok(processors)
@@ -93,7 +93,7 @@ async fn handle_resource(
         ResourceSpecs::Query { data_source, query } => {
             let Some(ds) = state.get_data_source(data_source) else {
                 return Err(XepakError::Cfg(format!(
-                    "Data source does not exists \"{data_source}\""
+                    "Data source does not exist \"{data_source}\""
                 )));
             };
 
@@ -107,7 +107,7 @@ async fn handle_resource(
         } => {
             let Some(ds) = state.get_data_source(data_source) else {
                 return Err(XepakError::Cfg(format!(
-                    "Data source does not exists \"{data_source}\""
+                    "Data source does not exist \"{data_source}\""
                 )));
             };
 

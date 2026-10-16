@@ -71,7 +71,7 @@ uri = "/input/body/args/types-record"
 allow_methods = ['POST', 'PUT']
 single_record_response = true
 pre_processors = [
-    {type = "parse_body_args", null_if_abscent = ["type_text", "type_int", "type_real", "type_blob"]}
+    {type = "parse_body_args", null_if_absent = ["type_text", "type_int", "type_real", "type_blob"]}
 ]
 
 [endpoint.schema.input]

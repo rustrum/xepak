@@ -72,7 +72,7 @@ impl XepakError {
         Self::Other(Arc::new(Box::new(err)))
     }
 
-    /// Expectable errors should be convertible to HTTPS response with verbose message.
+    /// Expectable errors should be convertible to HTTP response with verbose message.
     /// This is type of errors that are expected during execution and should not be logged as errors.
     pub fn is_expectable(&self) -> bool {
         match self {

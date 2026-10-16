@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-PROJECTS="xepak-api xepak-api-rs xepak-behind-rs xepak-rest xepak-rest-rs xepak-rs"
+PROJECTS="xepak-api xepak-api-rs xepak-mcp xepak-mcp-rs xepak-rest xepak-rest-rs xepak-rs"
 
 SELF_DIR=$(realpath `dirname $0`)
 cd "$SELF_DIR"

@@ -40,7 +40,7 @@ I just need to write human friendly documentation and provide some examples.
 
 ### 📕 For human beings
 
-Available in the [REAME-DOCS](./README-DOCS.md)  (in progres now).
+Available in the [README-DOCS](./README-DOCS.md).
 
 ### 🤖 AI fiendly docs
 
@@ -79,7 +79,7 @@ With LUA you can:
   - filter out results based on user configuration from DB
   - validate input data before executing INSERT
   - do fancy access control
-  - output arbitraty LUA table in JSON/CBOR format
+  - output arbitrary LUA table in JSON/CBOR format
   - and many more
 
 Also I have something in my mind for the future where LUA could do very fancy things.
@@ -100,7 +100,7 @@ Simple but usable authentication and authorization functionality available:
 
 ## License
 
-This product distributed under MIT license BUT only under certain conditions that listed in the LICENSE-TERMS file.
+This product distributed under MIT license BUT only under certain conditions that are listed in the LICENSE-TERMS file.
 
-I know it's kina silly but I'm not in the mood right now to write my own license. Will do it later.
+I know it's kind of silly but I'm not in the mood right now to write my own license. Will do it later.
 

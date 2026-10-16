@@ -40,7 +40,7 @@ pub trait TestRpc {
 
 #[tokio::test]
 #[serial]
-async fn rpc_resourcess() {
+async fn rpc_resources() {
     // init_logger();
     let _server = init_default_test_server(INIT_DELAY_DEFAULT).await;
     let uri = client::api_url("/rpc");

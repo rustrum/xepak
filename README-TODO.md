@@ -12,11 +12,11 @@ Must think from the perspective of file uploads.
 
 - read data as blob.
 - create lua function that writes bytes to file
-- it must be be in post-processor
+- it must be in post-processor
     - resource will create record in DB and return it
     - LUA post processor will accept this value and will read/write file on disk
     - if LUA failed it could call DB and remove record
-- retreiving data would require post processor to
+- retrieving data would require post processor to
     - reading record from DB or constructing local file path in LUA
     - it is passed to post-processor that reads data 
     - !!! or maybe it is a special post processor (without LUA) that accepts k-v map from resources and it could output file as stream from URL
@@ -47,9 +47,9 @@ I can not mutate RequestInput via set_arg from script because of cloning.
 
 Thus custom arguments now inside Arch<Mutex<Map>>.
 
-Access to RequestInput shold be sequential, read only for most cases.
+Access to RequestInput should be sequential, read only for most cases.
 
-So it is not clear should I optimize somthing here or not.
+So it is not clear should I optimize something here or not.
 
 I was thinking about using ArcSwap instead but it could be overkill.
 MutexGuard also does not look as a reasonable solution.

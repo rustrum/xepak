@@ -156,7 +156,7 @@ impl EndpointHandler {
             false
         };
 
-        // TODO should normalize headers output instead providing limit/offset
+        // TODO should normalize headers output instead of providing limit/offset
         let (limit, offset) = match input {
             Some(inp) => (inp.get_limit(), inp.get_offset()),
             None => (0, 0),
@@ -188,7 +188,7 @@ impl EndpointHandler {
             }
             _ => {
                 let (status_code, err_data) = to_error_object(XepakError::NotConsistent(format!(
-                    "Return data types could be only Array|Map|Null not {}",
+                    "Return data types can be only Array|Map|Null not {}",
                     data.get_type()
                 )));
                 self.data_to_response(req, Some(input), status_code, &err_data)

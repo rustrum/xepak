@@ -41,7 +41,7 @@ pub fn lua_load_engine(app_state: &XepakAppData) -> Result<Lua, XepakError> {
     })
 }
 
-/// Build Lua function or returns it from it's internal cache
+/// Build Lua function or returns it from its internal cache
 pub fn lua_load_function(lua: &Lua, cache_key: &str, script: &str) -> Result<Function, XepakError> {
     let cached = LUA_FNS_CACHE.with(|cell| cell.borrow().get(cache_key).cloned());
 
@@ -59,7 +59,7 @@ pub fn lua_load_function(lua: &Lua, cache_key: &str, script: &str) -> Result<Fun
     Ok(lua_fn)
 }
 
-/// Build&cache Lua environment and try to build `script` against it.
+/// Build & cache Lua environment and try to build `script` against it.
 /// This is needed just to validate if all compiles correctly.
 pub fn init_lua_env_fn(app: &XepakAppData, script: &str) -> Result<(), XepakError> {
     let lua = lua_load_engine(app)?;
@@ -338,8 +338,8 @@ impl FromLua for XepakValue {
                 let len = t.len()?;
                 let mut tuple = Vec::new();
                 for i in 1..=len {
-                    // This is how to workaround nill values in sequences
-                    // iterating over sequence could stop on nill
+                    // This is how to workaround nil values in sequences
+                    // iterating over sequence could stop on nil
                     let item: XepakValue = t.raw_get(i)?;
                     tuple.push(item);
                 }
@@ -387,7 +387,7 @@ pub fn build_lua_engine(app_state: &XepakAppData) -> Result<Lua, XepakError> {
     };
     let lua = Lua::new();
 
-    // This state can be accesses from any rust function
+    // This state can be accessed from any rust function
     lua.set_app_data(app_data.clone());
 
     lua.globals().set("app", app_data)?;
@@ -477,7 +477,7 @@ async fn storage_query(lua: Lua, (query, args): (String, Value)) -> mlua::Result
     rows_to_lua_table(&lua, rows)
 }
 
-/// Returns single row from DB or a LUA nill value.
+/// Returns single row from DB or a LUA nil value.
 async fn storage_query_one(lua: Lua, (query, args): (String, Value)) -> mlua::Result<Value> {
     let input = prepare_args(&lua, args)?;
     let state = {
@@ -644,7 +644,7 @@ impl LuaHttpResponse {
         if let Some(r) = &this.response {
             Ok(r)
         } else {
-            Err(XepakError::LuaScript("Response object was cosumed".to_string()).into_lua_err())
+            Err(XepakError::LuaScript("Response object was consumed".to_string()).into_lua_err())
         }
     }
 
@@ -652,7 +652,7 @@ impl LuaHttpResponse {
         if let Some(r) = this.response.take() {
             Ok(r)
         } else {
-            Err(XepakError::LuaScript("Response object was cosumed".to_string()).into_lua_err())
+            Err(XepakError::LuaScript("Response object was consumed".to_string()).into_lua_err())
         }
     }
 
@@ -671,7 +671,7 @@ impl LuaHttpResponse {
     ) -> mlua::Result<String> {
         let response = Self::inner_consume_or_error(&mut this)?;
         let result = response.text().await.map_err(|e| {
-            XepakError::LuaScript(format!("Can't read http response {e}")).into_lua_err()
+            XepakError::LuaScript(format!("Can't read HTTP response {e}")).into_lua_err()
         })?;
         Ok(result)
     }
@@ -683,7 +683,7 @@ impl LuaHttpResponse {
     ) -> mlua::Result<Value> {
         let response = Self::inner_consume_or_error(&mut this)?;
         let result: XepakValue = response.json().await.map_err(|e| {
-            XepakError::LuaScript(format!("Can't read http response {e}")).into_lua_err()
+            XepakError::LuaScript(format!("Can't read HTTP response {e}")).into_lua_err()
         })?;
         result.into_lua(&lua)
     }

@@ -18,7 +18,7 @@ impl XepakValue {
         }
     }
 
-    /// Not shure that it will provide some optimisations but anyway.
+    /// Not sure that it will provide some optimizations but anyway.
     pub fn bind_sql_move<'a>(
         self,
         query: sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments>,
@@ -53,7 +53,7 @@ impl<'r> TryFrom<SqlxValue<'r>> for XepakValue {
         // Use the Database's TypeInfo to check column type names
         let type_info = value.type_info();
 
-        //Maybe use type_info.type_compatible(other)
+        // Maybe use type_info.type_compatible(other)
         let res = match type_info.name() {
             "NULL" => Self::Null,
             "INTEGER" | "INT" | "BIGINT" => {

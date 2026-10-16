@@ -118,7 +118,7 @@ impl RpcHandler {
             return rpc_error_response(
                 rpc_request.id,
                 RPC_ERROR_INVALID_REQUEST,
-                "Supported only JSON RPC version = {JSON_RPC_VERSION}".to_string(),
+                "Only supported JSON RPC version = {JSON_RPC_VERSION}".to_string(),
             );
         }
 
@@ -261,7 +261,7 @@ pub fn error_to_rpc_response(id: Option<RpcId>, error: XepakError) -> HttpRespon
         }
         XepakError::Forbidden(msg) => rpc_error_response(id, RPC_ERROR_FORBIDDEN, msg),
         _ => {
-            tracing::error!("(O_o) error happend! {error:?}");
+            tracing::error!("(O_o) error happened! {error:?}");
             rpc_error_response(id, RPC_ERROR_INTERNAL, "unknown_error".into())
         }
     }
@@ -269,7 +269,7 @@ pub fn error_to_rpc_response(id: Option<RpcId>, error: XepakError) -> HttpRespon
 
 /// Wrap a typed, serializable result in a JSON-RPC success response.
 pub fn rpc_success_response(id: Option<RpcId>, result: XepakValue) -> HttpResponse {
-    tracing::trace!("RCP response: {result:?}");
+    tracing::trace!("RPC response: {result:?}");
     let envelope = JsonRpcResponse {
         jsonrpc: JSON_RPC_VERSION.to_string(),
         id,

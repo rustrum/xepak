@@ -6,7 +6,7 @@ use serde::{Deserialize, Deserializer};
 
 use crate::{schema::Schema, server::processor::PreProcessor};
 
-/// Schemas that applies to input/output data.
+/// Schemas that apply to input/output data.
 #[derive(Default, Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EndpointSchemas {
@@ -76,7 +76,7 @@ pub struct RestEpSpecs {
     #[serde(default)]
     pub pre_processors_ignore_default: bool,
 
-    /// This logic handle requests to extract/validate data
+    /// This logic handles requests to extract/validate data
     #[serde(default)]
     pub pre_processors: Vec<PreProcessor>,
 
@@ -106,10 +106,6 @@ pub struct RpcEpMethodSpecs {
 
     pub resource: ResourceSpecs,
 
-    /// Max limit value for paginated queries
-    #[serde(default)]
-    pub fetch_limit: usize,
-
     /// Response will be a single record instead of a list.
     /// Will return empty dict if no record available
     #[serde(default)]
@@ -120,16 +116,16 @@ pub struct RpcEpMethodSpecs {
     #[serde(default)]
     pub pre_processors_ignore_default: bool,
 
-    /// This logic handle requests to extract/validate data
+    /// This logic handles requests to extract/validate data
     #[serde(default)]
     pub pre_processors: Vec<PreProcessor>,
 }
 
 /// MCP server specification.
 ///
-/// I have to say that MCP is the most dump protocol implementation I've ever seen.
-/// It is stupid, unresonable, illogical.
-/// This is why Xepak will implement only part of this garbadge that is compatible with JSON-RPC.
+/// I have to say that MCP is the most dumb protocol implementation I've ever seen.
+/// It is stupid, unreasonable, illogical.
+/// This is why Xepak will implement only part of this garbage that is compatible with JSON-RPC.
 #[derive(Builder, Clone, Debug, Deserialize)]
 pub struct McpEpSpecs {
     /// URI template for this RPC
@@ -151,29 +147,6 @@ pub struct McpEpSpecs {
     pub tools: HashMap<String, McpEpToolSpecs>,
 }
 
-/*
-interface McpTool {
-  name: string;
-  title?: string;
-  description?: string;
-
-  inputSchema: {
-    type: "object";
-    properties?: Record<string, unknown>;
-    required?: string[];
-    additionalProperties?: boolean;
-  };
-
-  outputSchema?: Record<string, unknown>;
-
-  annotations?: {
-    readOnlyHint?: boolean;
-    destructiveHint?: boolean;
-    idempotentHint?: boolean;
-    openWorldHint?: boolean;
-  };
-}
-*/
 /// MCP tool
 #[derive(Builder, Clone, Debug, Deserialize)]
 pub struct McpEpToolSpecs {
@@ -189,21 +162,12 @@ pub struct McpEpToolSpecs {
 
     pub resource: ResourceSpecs,
 
-    /// Max limit value for paginated queries
-    #[serde(default)]
-    pub fetch_limit: usize,
-
-    /// Response will be a single record instead of a list.
-    /// Will return empty dict if no record available
-    #[serde(default)]
-    pub single_record_response: bool,
-
     /// Do not use default pre processors
     /// for the current endpoint.
     #[serde(default)]
     pub pre_processors_ignore_default: bool,
 
-    /// This logic handle requests to extract/validate data
+    /// This logic handles requests to extract/validate data
     #[serde(default)]
     pub pre_processors: Vec<PreProcessor>,
 }

@@ -44,9 +44,9 @@ pub enum Schema {
     Tuple {
         #[serde(default)]
         items: Vec<Schema>,
-        /// If true then we assume that tuple have items that repeats endlessly.
-        /// So bascially we will apply items in a loop to all elements of the schema.
-        /// It also makes all nested Items required untill last element.
+        /// If true then we assume that tuple has items that repeat endlessly.
+        /// So basically we will apply items in a loop to all elements of the schema.
+        /// It also makes all nested items required until last element.
         #[serde(default)]
         items_repeat: bool,
         #[serde(default)]
@@ -125,7 +125,7 @@ impl Schema {
         }
     }
 
-    /// Kinda workaround to return argument based schema (top level dict).
+    /// Kind of workaround to return argument-based schema (top level dict).
     /// TODO: maybe deprecate it later but it will require RequestInput refactoring.
     pub fn get_arg_schema(&self, key: &str) -> Option<&Self> {
         if let Self::Dict { items, .. } = self {
@@ -188,7 +188,7 @@ impl From<Vec<SchemaValidator>> for SchemaValidator {
 }
 
 /// Convert [`XepakValue`] to another [`XepakValue`] according to the [`Schema`].
-/// Note that null is always converts ot itself.
+/// Note that null is always converted to itself.
 ///
 /// - `schema` - schema to apply
 /// - `value` - value to apply schema
@@ -203,8 +203,8 @@ pub fn apply_schema(
     validate: bool,
 ) -> Result<XepakValue, XepakDataError> {
     // Note required must be checked at a top level
-    // Not good but if we already passing XepakValue then it must exists
-    // so cheking if required is no longer makes sense
+        // Not good but if we are already passing XepakValue then it must exist
+    // so checking if required is no longer makes sense
     let linked_type = schema.linked_type();
     tracing::warn!("Linked type: {linked_type:?}");
     let value = value.to_type(linked_type, true)?;
@@ -213,7 +213,7 @@ pub fn apply_schema(
         apply_validator(schema.get_validator(), key, &value)?;
     }
 
-    // Consider that value was converted so no need to check for it's type anymore
+    // Consider that value was converted so no need to check for its type anymore
     let result_value: XepakValue = match schema {
         Schema::Dict { items, .. } => {
             let mut value_dict = value.as_map()?;
@@ -221,7 +221,7 @@ pub fn apply_schema(
                 for k in value_dict.keys() {
                     if !items.contains_key(k) {
                         return Err(XepakDataError::Validate(format!(
-                            "unknown key {}.{} in the input.",
+                            "Unknown key {}.{} in the input.",
                             key, k
                         )));
                     }
@@ -238,7 +238,7 @@ pub fn apply_schema(
                 } else {
                     if v.required() {
                         return Err(XepakDataError::Validate(format!(
-                            "key {key_ref} does not exists"
+                            "key {key_ref} does not exist"
                         )));
                     }
                 }
@@ -259,7 +259,7 @@ pub fn apply_schema(
                     // End of input vec reached. Must exit
                     if value_tuple.len() <= idx {
                         if *items_repeat && iteration > 0 {
-                            // for 2nd path just exit parent loop
+                            // for 2nd pass just exit parent loop
                             // on the initial pass we must iterate over all schema items
                             break 'schema_repeat;
                         }
@@ -270,7 +270,7 @@ pub fn apply_schema(
                         }
                         // Can't move and apply schema
                         // so basically we must not iterate here
-                        // but it could be usefule for such cases where tuple shape is (required, not_required, required)
+                        // but it could be useful for such cases where tuple shape is (required, not_required, required)
                         // Which is not OK but we need to react on this somehow
                         idx += 1;
                         continue;
@@ -281,13 +281,13 @@ pub fn apply_schema(
                     idx += 1;
                 }
                 if !*items_repeat && items.len() > idx && strict {
-                    // something still left but we have strict contstraint
+                    // something still left but we have strict constraint
                     return Err(XepakDataError::Validate(format!(
                         "tuple element is not allowed at {key}[{idx}]"
                     )));
                 }
                 if !*items_repeat && items.len() <= idx {
-                    // No items left - no need to run them agains schema
+                    // No items left - no need to run them against schema
                     break;
                 }
                 iteration += 1;
@@ -301,7 +301,7 @@ pub fn apply_schema(
 }
 
 /// Convert [`XepakValue`] to another [`XepakValue`] according to the [`Schema`].
-/// Note that null is always converts ot itself.
+/// Note that null is always converted to itself.
 /// If argument name is not in the schema, it will not be converted (if `strict` is false).
 /// With `strict` flag true an error will be returned for all unknown argument names.
 pub fn convert_with_schema(

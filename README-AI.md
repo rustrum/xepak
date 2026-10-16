@@ -1,12 +1,12 @@
 # Xepak — AI Agent Reference
-  
-**Version:** 0.0.4-alpha | **Commit:** 3dc31a2
+   
+**Version:** 0.0.5-pre-release | **Commit:** ac8a0c4
  
 ---
  
 ## Overview
 
-Xepak is a DSL-based API server for SQLite databases, configured entirely via TOML files. It exposes your data through REST, JSON-RPC, and MCP endpoints without writing application code — only configuration and optional Lua scripts for complex logic.
+Xepak is a DSL-based API server for databases, configured entirely via TOML files. It exposes your data through REST, JSON-RPC, and MCP endpoints without writing application code — only configuration and optional Lua scripts for complex logic. Currently SQLite is the primary supported database.
 
 **Key features:**
 - Declarative endpoint definitions in TOML for three protocols: REST (`[[endpoint]]`), JSON-RPC (`[[rpc]]`), and MCP (`[[mcp]]`) — no Rust/Go/Haskell needed
@@ -113,7 +113,7 @@ rules = "#boss OR (ADMIN AND MANAGER)"   # auth rules expression
 | Type | Description | Key fields |
 |------|-------------|------------|
 | `ref` | Reference to a shared pre-processor | `id: string` |
-| `parse_body_args` | Merges POST/PUT/PATCH body (flat map) into request arguments; no-op for other methods | `null_if_abscent: [keys]` — set listed missing keys to null |
+| `parse_body_args` | Merges POST/PUT/PATCH body (flat map) into request arguments; no-op for other methods | `null_if_absent: [keys]` — set listed missing keys to null |
 | `config_authentication` | API key lookup in registry | `anonymous_auth: bool` |
 | `storage_authentication` | Database-backed token auth | `data_source`, `query`, `cache_ttl_sec` |
 | `authorize` | Role-based authorization rules | `rules: string` |

@@ -49,7 +49,7 @@ pub async fn init_storage_connectors(
                         .expect("Must work for in memory")
                 } else {
                     let db_file = normalize_config_path(conf_dir, file);
-                    tracing::info!("Init sqlite storage \"{id}\" using path \"{db_file:?}\"");
+                    tracing::info!("Init SQLite storage \"{id}\" using path \"{db_file:?}\"");
 
                     let options = SqliteConnectOptions::new()
                         .filename(db_file)
@@ -70,7 +70,7 @@ pub async fn init_storage_connectors(
                 if !migrations_dir.is_empty() {
                     tracing::info!("Applying migrations from: {migrations_dir}");
                     let migrations_path = normalize_config_path(conf_dir, migrations_dir);
-                    migrate_stroage(&pool, &migrations_path).await?;
+                    migrate_storage(&pool, &migrations_path).await?;
                 }
                 let res = links.insert(id.clone(), Storage { pool });
 
@@ -93,7 +93,7 @@ pub fn normalize_config_path(work_dir: &Path, path: &str) -> PathBuf {
     }
 }
 
-pub async fn migrate_stroage(pool: &Pool<Any>, dir: &Path) -> Result<(), XepakError> {
+pub async fn migrate_storage(pool: &Pool<Any>, dir: &Path) -> Result<(), XepakError> {
     let migrator = Migrator::new(dir)
         .await
         .map_err(|e| XepakError::Other(Arc::new(e.into())))?;
@@ -185,7 +185,7 @@ impl Storage {
     ) -> Result<XepakValue, XepakError> {
         let Some(row) = self.query_one(request).await? else {
             return Err(XepakError::NotConsistent(
-                "Expect to have non empty response from DB".to_string(),
+                "Expected to have non empty response from DB".to_string(),
             ));
         };
         let row = row.as_map()?;
@@ -194,7 +194,7 @@ impl Storage {
 
         if row.len() > 1 {
             return Err(XepakError::NotConsistent(format!(
-                "Expect to have only single column in response not {}",
+                "Expected to have only single column in response not {}",
                 row.len()
             )));
         }

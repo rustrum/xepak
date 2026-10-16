@@ -60,7 +60,7 @@ impl TryFrom<HashMap<String, toml::Value>> for AppRegistry {
         let mut data = HashMap::new();
         for (k, v) in value {
             let xv = XepakValue::deserialize(v)
-                .map_err(|e| XepakError::Cfg(format!("Can't deserilize registry {}", e)))?;
+                .map_err(|e| XepakError::Cfg(format!("Can't deserialize registry {}", e)))?;
             data.insert(k, xv);
         }
 
@@ -72,7 +72,7 @@ impl TryFrom<HashMap<String, toml::Value>> for AppRegistry {
     }
 }
 
-/// Structure for the configurartion registry "auth" section.
+/// Structure for the configuration registry "auth" section.
 #[derive(Clone, Debug, Deserialize)]
 pub struct AuthRegistrySpecs {
     id: String,

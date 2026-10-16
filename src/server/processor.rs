@@ -11,7 +11,7 @@ use serde::Deserialize;
 use crate::{
     XepakError,
     auth::{
-        AuthorizeProcessor, ConfigAuthenticationProcessor, storage::StrorageAuthenticationProcessor,
+        AuthorizeProcessor, ConfigAuthenticationProcessor, storage::StorageAuthenticationProcessor,
     },
     cfg::ResourceRef,
     script_lua::LuaPreProcessor,
@@ -25,22 +25,22 @@ pub const PRIORITY_NORMAL: u16 = 20_000;
 
 pub const PRIORITY_LAST: u16 = 1000;
 
-const PRIOTIRY_QUERY_ARGS: u16 = PRIORITY_FIRST + 10000;
+const PRIORITY_QUERY_ARGS: u16 = PRIORITY_FIRST + 10000;
 
 /// Define request processors variants.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum PreProcessor {
-    /// Referenece to shared pre-processor
+    /// Reference to shared pre-processor
     Ref {
         id: String,
     },
 
-    /// Extracts body argurments to request object.
+    /// Extracts body arguments to request object.
     ParseBodyArgs {
         /// If those top level keys were not in request - set them as nulls
         #[serde(default)]
-        null_if_abscent: Vec<String>,
+        null_if_absent: Vec<String>,
     },
 
     ConfigAuthentication {
@@ -97,8 +97,8 @@ pub fn build_pre_processor(
                 )))
             }
         }
-        PreProcessor::ParseBodyArgs { null_if_abscent } => {
-            Ok(Box::new(BodyToArgsProcessor::new(null_if_abscent.clone())))
+        PreProcessor::ParseBodyArgs { null_if_absent } => {
+            Ok(Box::new(BodyToArgsProcessor::new(null_if_absent.clone())))
         }
         PreProcessor::ConfigAuthentication { anonymous_auth } => Ok(Box::new(
             ConfigAuthenticationProcessor::new(position, *anonymous_auth),
@@ -110,7 +110,7 @@ pub fn build_pre_processor(
             data_source,
             query,
             cache_ttl_sec,
-        } => Ok(Box::new(StrorageAuthenticationProcessor::new(
+        } => Ok(Box::new(StorageAuthenticationProcessor::new(
             position,
             query.clone(),
             data_source.clone(),
@@ -140,7 +140,7 @@ pub trait PreProcessorHandler: Send + Sync {
     ) -> Result<(), XepakError>;
 }
 
-/// Adjust processor priority related to it's position in the ordered list.
+/// Adjust processor priority related to its position in the ordered list.
 /// The bigger order - the lower priority is.
 #[inline]
 pub fn adjust_priority(priority: u16, position: u16) -> u16 {
@@ -151,13 +151,13 @@ pub fn adjust_priority(priority: u16, position: u16) -> u16 {
 }
 
 /// Handle arguments from query string.
-/// Skip query string args for POST/PUT requests (basically anything that have request body)
+/// Skip query string args for POST/PUT requests (basically anything that has request body)
 pub struct QueryArgsProcessor {}
 
 #[async_trait(?Send)]
 impl PreProcessorHandler for QueryArgsProcessor {
     fn priority(&self) -> u16 {
-        PRIOTIRY_QUERY_ARGS
+        PRIORITY_QUERY_ARGS
     }
 
     async fn handle(
@@ -190,12 +190,12 @@ impl PreProcessorHandler for QueryArgsProcessor {
 /// Deserialize request body to K/V arguments.
 #[derive(Clone)]
 pub struct BodyToArgsProcessor {
-    null_if_abscent: Vec<String>,
+    null_if_absent: Vec<String>,
 }
 
 impl BodyToArgsProcessor {
-    pub fn new(null_if_abscent: Vec<String>) -> Self {
-        Self { null_if_abscent }
+    pub fn new(null_if_absent: Vec<String>) -> Self {
+        Self { null_if_absent }
     }
 
     pub fn handle_cbor_body(
@@ -250,7 +250,7 @@ impl PreProcessorHandler for BodyToArgsProcessor {
             return Ok(());
         }
 
-        // Everything that is not excplicitly defined as CBOR is handled as JSON
+        // Everything that is not explicitly defined as CBOR is handled as JSON
         let cbor_body = if let Some(accept) = req.headers().get(CONTENT_TYPE)
             && accept.eq(CONTENT_TYPE_CBOR)
         {
@@ -264,7 +264,7 @@ impl PreProcessorHandler for BodyToArgsProcessor {
             self.handle_json_body(body, input)?;
         }
 
-        for key in &self.null_if_abscent {
+        for key in &self.null_if_absent {
             if !input.has_any_arg(key) {
                 input
                     .args

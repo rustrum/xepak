@@ -81,9 +81,6 @@ pub async fn init_server(
     config: XepakConf,
     specs: XepakSpecs,
 ) -> Result<Server, XepakError> {
-    // if config.specs.deceit.is_empty() {
-    //     log::warn!("Starting server without deceits in specs");
-    // }
     let port = config.port;
 
     // Required to use with sqlx::Any connector
@@ -101,7 +98,7 @@ pub async fn init_server(
 
     init_cache_cleanup(app_data.cache.clone());
 
-    // REST endpoints. Required all nested data to be send+sync.
+    // REST endpoints. Requires all nested data to be Send+Sync.
     let mut rest_handlers = Vec::new();
     let rref = ResourceRef::new("ep");
     for (idx, espec) in specs.endpoint.iter().enumerate() {
@@ -159,6 +156,7 @@ pub async fn init_server(
     Ok(server)
 }
 
+// attempt to avoid Send+Sync usage but not a successfull one
 // fn app_factory<F, I, S, B>(app_data: &XepakAppData, especs: Vec<EndpointSpecs>) -> Result<F, XepakError>
 // where
 //     F: Fn() -> I + Send + Clone + 'static,

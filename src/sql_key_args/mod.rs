@@ -53,7 +53,7 @@ impl<'a> ParametrizedQuery<'a> {
     }
 }
 
-/// Build query where key args replaced with a pos args
+/// Build query where key args are replaced with pos args
 fn build_pos_query(query: &str, ranges: &[RangeInclusive<usize>], pos_arg: &str) -> String {
     let mut result = String::with_capacity(query.len());
     let mut last_index = 0;

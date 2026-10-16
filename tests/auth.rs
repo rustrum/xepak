@@ -163,7 +163,7 @@ async fn auth_default_pre_processor() {
 
     // Now adding default auth pre-processor to configuration
     let config = load_conf_file(CONFIG_FILE).expect("Should have valid config");
-    let specs_dir = PathBuf::from_str(SPECS_DIR).expect("Specs dir must exists");
+    let specs_dir = PathBuf::from_str(SPECS_DIR).expect("Specs dir must exist");
     let mut specs = load_specs_from_dir(specs_dir).expect("Should have valid specs");
 
     use xepak::server::processor::PreProcessor;

@@ -19,7 +19,7 @@ pub const CONFIG_FILE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/config
 /// Default test specs directory
 pub const SPECS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/config/specs");
 
-/// Cal this at the beggining of the test to enable logging
+/// Call this at the beginning of the test to enable logging
 pub fn init_logger() {
     let filter = tracing_subscriber::EnvFilter::builder()
         .with_default_directive(tracing::level_filters::LevelFilter::DEBUG.into())
@@ -69,7 +69,7 @@ pub fn clean_directory_files(dir_path: &PathBuf) -> std::io::Result<()> {
 
 pub fn init_test_config() -> (XepakConf, XepakSpecs) {
     let config = load_conf_file(CONFIG_FILE).expect("Should have valid config");
-    let specs_dir = PathBuf::from_str(SPECS_DIR).expect("Specs dir must exists");
+    let specs_dir = PathBuf::from_str(SPECS_DIR).expect("Specs dir must exist");
     let specs = load_specs_from_dir(specs_dir).expect("Should have valid specs");
     (config, specs)
 }
@@ -110,7 +110,7 @@ impl XepakTestServer {
     /// Arguments:
     /// * `config`: The configuration for the server.
     /// * `specs`: Rest specification.
-    /// * `delay_ms`: Delay after server start to let slow envs to inintialize.
+    /// * `delay_ms`: Delay after server start to let slow envs to initialize.
     pub async fn start(config: XepakConf, specs: XepakSpecs, delay_ms: usize) -> XepakTestServer {
         let conf_dir = PathBuf::from_str(CONFIG_DIR).expect("(O_O) Path ?!");
 

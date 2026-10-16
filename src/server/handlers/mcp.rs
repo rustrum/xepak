@@ -112,7 +112,7 @@ impl McpHandler {
             return rpc_error_response(
                 rpc_request.id,
                 RPC_ERROR_INVALID_REQUEST,
-                "Supported only JSON RPC version = {JSON_RPC_VERSION}".to_string(),
+                "Only supported JSON RPC version = {JSON_RPC_VERSION}".to_string(),
             );
         }
 
@@ -232,7 +232,7 @@ impl McpHandler {
         state: Data<XepakAppData>,
         request: JsonRpcRequest<Option<Value>>,
     ) -> Result<XepakValue, XepakError> {
-        // TODO: maybe should start to return mcp tool response with isError = true
+        // TODO: maybe should start to return MCP tool response with isError = true
         let tool_params =
             bind_mcp_params::<McpToolParams<XepakValue>>(request.params, "tools/call")?;
         let tool_name = &tool_params.name;
@@ -272,8 +272,8 @@ impl McpHandler {
             Ok(r) => r,
             Err(e) => {
                 // I do not want to create new function for MCP only
-                let (_, error_ojb) = to_error_object(e);
-                let msg = error_ojb
+                let (_, error_obj) = to_error_object(e);
+                let msg = error_obj
                     .dict_get("message")
                     .cloned()
                     .unwrap_or(XepakValue::from("Unexpected"));
@@ -326,7 +326,7 @@ impl Handler<EndpointHandlerArgs> for McpHandler {
 
 impl HttpServiceFactory for McpHandler {
     fn register(self, config: &mut actix_web::dev::AppService) {
-        let name = format!("RPC Entrypoint: {}", self.ep.uri);
+        let name = format!("MCP Entrypoint: {}", self.ep.uri);
         tracing::debug!("Registering [{:?}]: {name}", std::thread::current().id());
 
         web::resource(self.ep.uri.clone())

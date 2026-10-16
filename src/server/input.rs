@@ -11,7 +11,7 @@ use crate::{
     xepak_data::{XepakDataError, XepakValue},
 };
 
-/// Contains aggregated/formatted input from request that will be used to querying resource.
+/// Contains aggregated/formatted input from request that will be used to query resource.
 /// Input is updated/extended during processors execution.
 /// Also it could be updated from resource script before executing output query.
 #[derive(Debug, Clone)]
@@ -26,11 +26,11 @@ pub struct RequestInput {
     pub(crate) method: String,
 
     /// Arguments parsed from URI template
-    /// Always stored as s [`XepakValue::Dict`] if values exists.
+    /// Always stored as [`XepakValue::Dict`] if values exist.
     pub(crate) path_args: XepakValue,
 
-    /// Arguments from querystring.
-    /// Always stored as s [`XepakValue::Dict`] if values exists.
+    /// Arguments from query string.
+    /// Always stored as [`XepakValue::Dict`] if values exist.
     pub(crate) get_args: XepakValue,
 
     /// Arguments parsed from POST/PUT request body
@@ -40,7 +40,7 @@ pub struct RequestInput {
     pub(crate) args: Arc<Mutex<HashMap<String, XepakValue>>>,
 
     /// Authentication data for current request.
-    /// Shold be provided by an appropriate pre-processor.
+    /// Should be provided by an appropriate pre-processor.
     pub(crate) auth: Arc<Option<(XepakValue, HashSet<String>)>>,
 
     limit: usize,
@@ -163,7 +163,7 @@ impl RequestInput {
     }
 
     fn key_to_usize(&self, key: &str) -> Option<usize> {
-        // lets keep it simple for now
+            // let's keep it simple for now
         key.parse().ok()
     }
 
@@ -277,7 +277,7 @@ impl SqlxRequestArgs for RequestInput {
     ) -> Result<sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments>, XepakError> {
         let Some(value) = self.get_arg_value(arg_name) else {
             return Err(XepakError::Input(format!(
-                "Can't bind argument '{arg_name}' - does not exists in request."
+                "Can't bind argument '{arg_name}' - does not exist in request."
             )));
         };
         Ok(match value {

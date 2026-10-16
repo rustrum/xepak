@@ -18,7 +18,7 @@ use crate::{
     storage::StorageSettings,
 };
 
-/// Main configuration file that properties could be overwritten via ENV or not ? (TODO).
+/// Main configuration file that properties could be overwritten via ENV or not? (TODO).
 #[derive(Builder, Clone, Debug, Default, Deserialize)]
 pub struct XepakConf {
     /// Port to listen on.
@@ -85,7 +85,7 @@ impl XepakSpecs {
         self.mcp.extend(other.mcp);
     }
 
-    /// Returns false if specs has minor errors and Err on bit structural issues.
+    /// Returns false if specs has minor errors and Err on big structural issues.
     pub fn validate(&self) -> Result<bool, XepakError> {
         let mut result = true;
 
@@ -133,7 +133,7 @@ impl XepakSpecs {
     }
 }
 
-/// LUA script that can be shared across application by it's ID
+/// LUA script that can be shared across application by its ID
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct Script {
     pub id: String,
@@ -194,8 +194,8 @@ fn default_specs_dir() -> PathBuf {
     PathBuf::from("./specs")
 }
 
-/// Represents kinda unique id/path related to configuration.
-/// Can be used for debug purpose or to generate cache keys.
+/// Represents a kind of unique id/path related to configuration.
+/// Can be used for debug purposes or to generate cache keys.
 #[derive(Clone)]
 pub struct ResourceRef {
     ids: Vec<String>,
