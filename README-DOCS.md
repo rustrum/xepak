@@ -183,8 +183,7 @@ query = "SELECT * FROM users WHERE id={{user_id}}"
 # ANOTHER EXAMPLE
 # /users/find?country=UK&offset=100
 # this one require `fetch_limit = YOUR_LIMIT`
-query = "SELECT * FROM users WHERE country="{{country}}" LIMIT {{-limit-}} OFFSET {{-offset-}}"
-
+query = "SELECT * FROM users WHERE country={{country}} LIMIT {{-limit-}} OFFSET {{-offset-}}"
 ```
 
 Dynamic queries can be constructed with `query_script_lua` resource type.
@@ -257,17 +256,20 @@ Things to remember:
  - you can drop defalt pre-processors for particular resource
  - Lua scripting supported
 
-Pre-processor types:
+#### Pre-processor types
 
- - `ref` - Reference to a shared pre-processor
- - `parse_body_args` - Merges POST/PUT/PATCH body (flat map) into request arguments; no-op for other methods
- - `config_authentication` - API key lookup in registry
- - `storage_authentication` - Database-backed token auth
- - `authorize`  - Role-based authorization rules
- - `lua_script` - Lua script for custom validation, auth etc
+| Type | Description | Key fields |
+|------|-------------|------------|
+| `ref` | Reference to a shared pre-processor | `id: string` |
+| `parse_body_args` | Merges POST/PUT/PATCH body into request context | `null_if_abscent: [keys]` - set listed keys to null if they are missing in request |
+| `config_authentication` | API key lookup in registry | `anonymous_auth: bool` |
+| `storage_authentication` | Database-backed token auth | `data_source`, `query`, `cache_ttl_sec` |
+| `authorize` | Role-based authorization rules | `rules: string` |
+| `lua_script` | Lua script with custom logic | `script: string` |
 
+#### Shared pre-processors
 
-**Shared pre-processors** defined in the separate DSL block and can be reused later by reference.
+Are defined in the separate DSL block and can be reused later by reference.
 In TOML `shared_pre_processors` is a root dictionary element where key is pre-processor ID.
 
 ```toml
@@ -284,11 +286,12 @@ id = "my_pp_id"
 
 ```
 
-**Default pre-processors** are the type of pre processors that apply to all endpoints by default.
+#### Default pre-processors
+
+Are applied to all endpoints by default unless explicitly ignored.
 Authentication is the most obvious use-case here.
 
 ```toml
-# applied to all endpoints unless explicitly ignored
 # this is a root level DSL array element
 # pre-processors order does matter
 default_pre_processors = [
@@ -296,90 +299,93 @@ default_pre_processors = [
 ]
 ```
 
-### JSON-RPC
+### Handling request body payload
 
-### MCP
+By default Xepak is not parsing request body content.
+There is an assumption that payload type and parsing rules could vary in future.
+
+In order to add data from HTTP request body you have to manually add `parse_body_args` pre-processor.
+It works only for POST/PUT/PATCH request types and parse data from JSON or CBOR request types.
+
+Allowed additional property `null_if_abscent` with a list of argument names that will be explicitly set to null if not present in the request body.
+Could be useful with insert like queries when you are Ok with a null fields.
+
+The main expectation for `parse_body_args` is that request body will be a key-based object.
+It can be an array of objects too but dealing with such inputs is not easy now.
 
 
-## Authentication & Authorization
+### JSON-RPC services
 
-### Authentication
+You can bind URI to a single JSON-RPC server, different URI - different JSON-RPC server.
+The main DSL disadvantage here is that JSON-RPC specs for one URI can not be splitted between files.
+The positive thing is that with URI path arguments mulitple urls will be handled by a single DSL file like `rpc/orders/uk`, `rpc/orders/by` etc.
 
-Xepak utilize "x-api-key" HTTP header as a main method to authenticate client.
-Fallback to "Authorize: Bearer ..." is available only for JSON-RPC and MCP endpoints.
+Only POST HTTP requests are allowed for RCP endpoins.
+CBOR is not supported just to follow specs not because I can't do it.
 
-Authentication is handled by pre-processors.
+JSON-RPC is defined inside `[[rcp]]` block and most configuration reside inside 'rpc.methods' dictionary.
+The `methods` maps a method name to a method specs that similar to a REST endpoint.
+It has such properties as `resource`, `schema`, `pre_processors`.
 
-**Authentication via configuration** is performed by `config_authentication` pre-processor.
-It is rely only on TOML file where API keys, IDs and roles must be defined.
-
-```toml
-# ... other config directives
-
-[registry]
-# registry holds arbitrary data
-# but some keys must follow exact structure
-# auth data allowed only with the next format
-auth = [
-    { id = "boss", key = "BossKEY", from_env = false, roles = [ "ADMIN", "MANAGER" ] },
-    { id = "manager", key = "ManagerKEY", from_env = false, roles = [ "MANAGER", ] },
-    { id = "user", key = "UserKEY", from_env = false },
-    # see how keys can be loaded from ENV variables
-    { id = "hacker", key = "ENV_VARIABLE_TO_LOAD_KEY_FROM", from_env = true },
-    # record with empty id will be used for anonymous auth
-    { id = "", key = "", roles = [ "unknown"] },
-]
-```
-
-After providing auth data in config you need to configure pre-processor.
 
 ```toml
-[[endpoint.pre_processors]]
-type = "config_authentication"
-# this field is optional if true - authorize without api key.
-anonymous_auth = false
-```
-**Authentication via storage** is performed by `storage_authentication` pre-processor.
-You must store auth data in DB in such way to be able to retreive it like this: `SELECT id,roles FROM ... WHERE ... key = {{api-key}}`. Where roles represented as a string `manager,billing,office`.
+[[rpc]]
+uri = "/rpc"
 
-Pre-processor will query DB, extract auth data and cache it for some time.
+[rpc.methods.all_posts]
+resource = { type = "query", query = "SELECT * FROM posts ORDER BY id" }
+
+[rpc.methods.get]
+schema.input = { type = "tuple", items = [ { type = "int", required = true } ] }
+single_record_response = true
+# NOTICE that schema is defined as a tuple (not key-value map).
+# So arguments are accessed by indexes
+resource = { type = "query", query = "SELECT * FROM posts WHERE id = {{0}}" }
+```
+
+### MCP services
+
+In Xepak MCP service is just a narrow downed varian of JSON-RPC.
+So the configuration is almost the same only with MCP specific properties.
+
+Root configuration element is `[[mcp]]`, it is bound to `uri`.
+The `tools` table maps a tool name to the spec (includes properties like `resource`, `schema`, `pre_processors`).
+
+Core MCP functionality is generated automatically: `initialize`, `notifications/initialized`, `ping`, `tools/list`, `tools/call`.
+
+Notice! 🫵 You must define input schema for your tools! MCP specs require it.
 
 ```toml
-[[endpoint.pre_processors]]
-type = "storage_authentication"
-query = "SELECT user_id AS id, roles FROM api_tokens WHERE api_key = {{api-key}}"
-# caching auth data for N seconds to reduce queries count
-cache_ttl_sec = 10 
+[[mcp]]
+uri = "/mcp"
+server_version = "1.0.0"
+protocol_version = "2025-03-26"
+name = "Posts server"
+instructions = "Provides access to posts data"
+
+[mcp.tools.list_posts]
+title = "List posts"
+description = "List posts with pagination by limit/offset"
+annotations.read_only = true
+schema.input = {
+    type = "dict",
+    items = {
+        limit  = { type = "int", required = true },
+        offset = { type = "int", required = true },
+    }
+}
+resource = { type = "query", query = "SELECT * FROM posts ORDER BY id LIMIT {{limit}} OFFSET {{offset}}" }
 ```
+Additional information:
 
-### Authorization
+- `annotations` propery could have next (optional) keys: `read_only`, `destructive`, `idempotent`, `open_world`
+- `tools/call` schema must be only in a form of a `dict`
+- tool response for now is only in a form of a single content element of type `text` (should not care about it much)
 
-Authorization is performed by an "authorize" pre-processor.
-It should be executed after authentication processor to be able to read use id & roles from the context.
-Authorize pre-processor is implementation-agnostic, it does not depend on authentication mechanism.
 
-Access control is based on auth expression rules. 
+## Request context
 
-```toml
-[[endpoint.pre_processors]]
-type = "authorize"
-rules = "#boss OR (ADMIN AND MANAGER)"
-```
-
-Rules expressions are very simple and straightforward:
-
-- user roles and ids must not contains any spaces
-- can match by role name (ignoring cases)
-- user ID is prepended with "#" char
-- OR, AND - reserved keywords (uppercase only)
-- parentheses are combining similar conditions
-- only one type of condition allowed inside parentheses (can't mix AND + OR at the same level)
-
-Examples:
-
-- `(manager AND billing) OR boss` - allowed for `boss` role or user that has two roles `manager` and `billing`
-- `manager AND billing OR boss` - will fail - mixing operators on the same level
-- `admin OR (manager AND (billing OR #45687))` - allowed for `admin` role or a `manager` but only if it has `billing` role or `id=45687`.
+## Lua scripting
 
 
 ## Internal type system
@@ -415,7 +421,7 @@ Compared to JSON `XepakValue`:
 Schema allows you to convert input data to proper internal representation
 and do the same with output.
 
-You can apply schema only to one input element and accept others "as is" (non strict schema).
+You can apply schema some input elements and accept others "as is" (non strict schema).
 Strict schema means that only fields/elements that are defined in schema are allowed in the input.
 
 Supported schema types are: `text`, `boolean`, `int`, `float`, `blob`, `tuple`, `dict`.
@@ -521,7 +527,83 @@ validate = { kind = "and", nested = [
 ] }
 ```
 
-## Endpoint input/output
+## Authentication & Authorization
 
+### Authentication
 
-## Scripting
+Xepak utilize "x-api-key" HTTP header as a main method to authenticate client.
+Fallback to "Authorize: Bearer ..." is available only for JSON-RPC and MCP endpoints.
+
+Authentication is handled by pre-processors.
+
+**Authentication via configuration** is performed by `config_authentication` pre-processor.
+It is rely only on TOML file where API keys, IDs and roles must be defined.
+
+```toml
+# ... other config directives
+
+[registry]
+# registry holds arbitrary data
+# but some keys must follow exact structure
+# auth data allowed only with the next format
+auth = [
+    { id = "boss", key = "BossKEY", from_env = false, roles = [ "ADMIN", "MANAGER" ] },
+    { id = "manager", key = "ManagerKEY", from_env = false, roles = [ "MANAGER", ] },
+    { id = "user", key = "UserKEY", from_env = false },
+    # see how keys can be loaded from ENV variables
+    { id = "hacker", key = "ENV_VARIABLE_TO_LOAD_KEY_FROM", from_env = true },
+    # record with empty id will be used for anonymous auth
+    { id = "", key = "", roles = [ "unknown"] },
+]
+```
+
+After providing auth data in config you need to configure pre-processor.
+
+```toml
+[[endpoint.pre_processors]]
+type = "config_authentication"
+# this field is optional if true - authorize without api key.
+anonymous_auth = false
+```
+**Authentication via storage** is performed by `storage_authentication` pre-processor.
+You must store auth data in DB in such way to be able to retreive it like this: `SELECT id,roles FROM ... WHERE ... key = {{api-key}}`. Where roles represented as a string `manager,billing,office`.
+
+Pre-processor will query DB, extract auth data and cache it for some time.
+
+```toml
+[[endpoint.pre_processors]]
+type = "storage_authentication"
+query = "SELECT user_id AS id, roles FROM api_tokens WHERE api_key = {{api-key}}"
+# caching auth data for N seconds to reduce queries count
+cache_ttl_sec = 10 
+```
+
+### Authorization
+
+Authorization is performed by an "authorize" pre-processor.
+It should be executed after authentication processor to be able to read use id & roles from the context.
+Authorize pre-processor is implementation-agnostic, it does not depend on authentication mechanism.
+
+Access control is based on auth expression rules. 
+
+```toml
+[[endpoint.pre_processors]]
+type = "authorize"
+rules = "#boss OR (ADMIN AND MANAGER)"
+```
+
+Rules expressions are very simple and straightforward:
+
+- user roles and ids must not contains any spaces
+- can match by role name (ignoring cases)
+- user ID is prepended with "#" char
+- OR, AND - reserved keywords (uppercase only)
+- parentheses are combining similar conditions
+- only one type of condition allowed inside parentheses (can't mix AND + OR at the same level)
+
+Examples:
+
+- `(manager AND billing) OR boss` - allowed for `boss` role or user that has two roles `manager` and `billing`
+- `manager AND billing OR boss` - will fail - mixing operators on the same level
+- `admin OR (manager AND (billing OR #45687))` - allowed for `admin` role or a `manager` but only if it has `billing` role or `id=45687`.
+
