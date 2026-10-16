@@ -1,13 +1,14 @@
 [workspace]
 resolver = "3"
 members = [
-"behind",
+# These are just stubs to mitigate supply-chain attacks
+".xepak-stubs/xepak-rs",
 ".xepak-stubs/xepak-api",
 ".xepak-stubs/xepak-api-rs",
-".xepak-stubs/xepak-behind-rs",
+".xepak-stubs/xepak-mcp",
+".xepak-stubs/xepak-mcp-rs",
 ".xepak-stubs/xepak-rest",
-".xepak-stubs/xepak-rest-rs",
-".xepak-stubs/xepak-rs"
+".xepak-stubs/xepak-rest-rs"
 ]
 
 [workspace.package]

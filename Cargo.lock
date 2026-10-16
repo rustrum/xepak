@@ -4343,27 +4343,27 @@ dependencies = [
 
 [[package]]
 name = "xepak-api"
-version = "0.0.1"
+version = "0.0.2"
 
 [[package]]
 name = "xepak-api-rs"
+version = "0.0.2"
+
+[[package]]
+name = "xepak-mcp"
 version = "0.0.1"
 
 [[package]]
-name = "xepak-behind"
-version = "0.0.1"
-
-[[package]]
-name = "xepak-behind-rs"
+name = "xepak-mcp-rs"
 version = "0.0.1"
 
 [[package]]
 name = "xepak-rest"
-version = "0.0.1-a1"
+version = "0.0.2"
 
 [[package]]
 name = "xepak-rest-rs"
-version = "0.0.1"
+version = "0.0.2"
 
 [[package]]
 name = "xepak-rs"
