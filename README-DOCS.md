@@ -4,6 +4,20 @@ To get a quick overview of how things are working you should look into the [exam
 
 Do not forget there is an [AI focused docs](./README-AI.md) built by AI for AI that could also be useful for humans.
 
+## CLI Usage
+
+```bash
+xepak [-p PORT] [-l LOG_LEVEL] <config_file>
+
+Options:
+  -p PORT        Port to listen on (env: XEPAK_PORT)
+  -l LOG_LEVEL   Tracing filter directive (e.g. "debug", "info,sqlx=debug", "error,xepak=debug", etc.)
+
+Env vars:
+  XEPAK_PORT     Port (used if -p not provided)
+  XEPAK_CONFIG   Path to config file (used if no positional arg)
+```
+
 ## Configuration
 
 All DSL is just a valid TOML file syntax.
@@ -146,6 +160,9 @@ offset_arg = "offset"
 
 # if true does not allow requests with arguments not defined in the schema
 strict_schema = false
+
+# if true skip all default_pre_processors for this endpoint
+pre_processors_ignore_default = false
 ```
 
 **Limit & offset** arguments are handled differently.
@@ -297,6 +314,11 @@ Authentication is the most obvious use-case here.
 default_pre_processors = [
     { type = "config_authentication", anonymous_auth = false },
 ]
+
+# to skip default pre-processors for a specific endpoint:
+[[endpoint]]
+uri = "/public/info"
+pre_processors_ignore_default = true
 ```
 
 ### Handling request body payload
@@ -313,6 +335,11 @@ Could be useful with insert like queries when you are Ok with a null fields.
 The main expectation for `parse_body_args` is that request body will be a key-based object.
 It can be an array of objects too but dealing with such inputs is not easy now.
 
+The request body may also be a positional array (JSON array / CBOR tuple).
+Its elements are exposed as arguments `"0"`, `"1"`, `"2"`, ...
+This is a corner use case: it works well for positional RPC arguments and Lua scripting,
+but would barely work for direct SQL query building.
+
 
 ### JSON-RPC services
 
@@ -326,6 +353,9 @@ CBOR is not supported just to follow specs not because I can't do it.
 JSON-RPC is defined inside `[[rpc]]` block and most configuration resides inside 'rpc.methods' dictionary.
 The `methods` maps a method name to a method specs that similar to a REST endpoint.
 Has properties: `resource`, `schema`, `pre_processors`, `pre_processors_ignore_default`, `single_record_response`.
+
+`strict_schema` is always enforced for RPC methods (cannot be disabled).
+`single_record_response = true` returns an empty object `{}` instead of an error when no record is found.
 
 
 ```toml
@@ -353,6 +383,7 @@ The `tools` table defines MCP tool similar to REST methods.
 Contains properties:`resource`, `schema`, `pre_processors`, `pre_processors_ignore_default`.
 
 Core MCP functionality is generated automatically: `initialize`, `notifications/initialized`, `ping`, `tools/list`, `tools/call`.
+The `tools/list` response (including each tool's input schema) is generated automatically from your tool definitions.
 
 Notice! 🫵 You must define input schema for your tools! MCP specs require it.
 
@@ -383,6 +414,38 @@ Additional information:
 - `tools/call` schema must be only in a form of a `dict`
 - tool response for now is only in a form of a single content element of type `text` (should not care about it much)
 
+## JSON/CBOR request and response
+
+JSON is the default request and response format.
+
+CBOR is supported for REST services only. Format is negotiated via HTTP headers:
+- Request body is parsed as CBOR when `Content-Type: application/cbor`
+- Response body is returned as CBOR when `Accept: application/cbor`
+
+CBOR follows the same key-value structure as JSON.
+The only difference is that CBOR supports more data types aligned with the internal type system.
+For example, blob is raw bytes in CBOR instead of a base64-encoded string in JSON.
+
+### Error responses
+
+REST error responses always have this structure:
+
+```json
+{
+    "code": "bad_request",
+    "message": "Input argument 'name' length must be greater than 2"
+}
+```
+
+| Code | HTTP Status | Triggered by |
+|------|-------------|--------------|
+| `not_found` | 404 | Record not found, or Lua `error_not_found()` |
+| `bad_request` | 400 | Input validation failure, schema errors, Lua `error_input()` |
+| `forbidden` | 403 | Auth/authorization failures, Lua `error_forbidden()` |
+| `internal_error` | 500 | Server errors, Lua `error_server()` |
+| `unknown_error` | 520 | Unhandled exceptions |
+
+JSON-RPC and MCP error responses follow their respective protocol standards.
 
 ## Input context
 
@@ -401,6 +464,8 @@ Memorize that the request context holds:
 - any arbitrary key-value data
 - auth data: client_id, roles
 - limit/offset for paginated queries
+
+Note: query-string arguments are parsed only for bodyless requests (e.g. GET). For POST/PUT/PATCH they are ignored.
 
 Context is SQL builder focused so it access all k/v data from the same API.
 Values are returned from context based on priority:
@@ -423,6 +488,7 @@ I assume that Lua scripts would fit in one text block without requiring external
 
 ### Context (`ctx`)
 
+Lua scripts run in an isolated per-request environment.
 Each Lua script receives context object linked with the current request.
 
 ```lua
@@ -577,6 +643,19 @@ which can be Map, Tuple, Integer, Float, Blob, etc.
 `XepakValue` transcends all environments and data formats.
 It is used to serialize/deserialize data to JSON/CBOR, represents DB output, TOML configuration records, cached values and variables inside LUA VM.
 
+| XepakType | JSON | CBOR | SQLite | Lua |
+|-----------|------|------|--------|-----|
+| `Null` | `null` | `null` | NULL | `nil` |
+| `Boolean` | `true/false` | `true/false` | INTEGER (0/1) | `boolean` |
+| `Int` | number | integer | INTEGER (i64) | `number` (integer) |
+| `Float` | number | float | REAL | `number` (float) |
+| `Text` | string | text string | TEXT | `string` |
+| `Blob` | base64 string | byte string | BLOB | userdata (`blob_type`) |
+| `Tuple` | array | array | TEXT (JSON) | table (1-indexed) |
+| `Dict` | object | map | TEXT (JSON) | table (key-value) |
+
+`Tuple`/`Dict` values addressed from a SQL placeholder are automatically serialized to a JSON text string, e.g. `data = {{tuple_dict_value}}`.
+
 Current type system allows you to:
 
  - use complex toml structures in registry and read them natively in Lua
@@ -604,6 +683,9 @@ and do the same with output.
 
 You can apply schema some input elements and accept others "as is" (non strict schema).
 Strict schema means that only fields/elements that are defined in schema are allowed in the input.
+
+The input schema (conversion + validation) is applied as arguments are parsed, before the resource runs.
+The output schema, if set, is applied last — after the resource has produced its data.
 
 Supported schema types are: `text`, `boolean`, `int`, `float`, `blob`, `tuple`, `dict`.
 Each element can be marked as a `required` and have one or more validators.
@@ -772,6 +854,9 @@ Access control is based on auth expression rules.
 type = "authorize"
 rules = "#boss OR (ADMIN AND MANAGER)"
 ```
+
+An empty `rules` string means "authenticated only" - the request must pass authentication but no role/id checks are applied.
+Basically the same as having an authentication pre-processor only.
 
 Rules expressions are very simple and straightforward:
 

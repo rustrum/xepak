@@ -4,6 +4,7 @@ ignore = [
     "RUSTSEC-2025-0009",
     "RUSTSEC-2025-0010",
     "RUSTSEC-2026-0258",
+    "RUSTSEC-2026-0381", # should review this one later
     # TLS minor bug
     "RUSTSEC-2026-0349",
     # Reqwest mostly

@@ -1,5 +1,5 @@
 <p align="center" width="100%" style="text-align:center">
-<img src="./xepak-rest.png" alt="REST service for your DB" />
+<img src="./xepak.svg" alt="Xepak REST,RPC,MCP bulder for your DB" width="60%"/>
 </p>
 
 <p align="center" width="100%" style="text-align:center">
@@ -18,22 +18,29 @@
 Imagine PostgREST but instead of Haskell with PL/SQL it is based on Rust with LUA and focused on Sqlite (and other DBs).
 
 
-## What is this?
+## Summary
 
-I'm building DSL based REST (maybe not only) service for your SQLite database.
-Will add other DBs support, only after polishing SQLite functionality.
+Xepak is a DSL configurable REST,JSON-RPC,MCP service that runs against SQL DB. Support SQLite for now with other DBs planned in the future.
 
 **Why focus on SQLite?** Because it is amazing and extremely fast DB.
 Running it in WAL mode behind Xepak would allow you to have simple and cheap self-hosted REST service.
 
+## How can I use it now?
+
+Given its current SQLite support, Xepak is ideal for:
+
+- 👨🏻‍💻**rapid prototyping:** quickly exposing a stateful API without writing backend boilerplate
+- 🌐**self-hosted services:** running on your own hardware or VMs with zero cloud dependency, ensuring you retain full ownership of your data
+- 📟**edge computing and IoT:** deploying a lightweight, high-performance API on a Raspberry Pi or other embedded devices
+- 💻**local-first applications:** serving as a sync layer or API for desktop applications that store data locally
+- 🤖**local RAG for AI/LLM sandboxes:** keeping AI agent knowledge local to prioritize data privacy and ownership
+
 
 ## Current project status
 
-The first MVP is almost ready! 🥳 
+The first MVP is almost here! 🥳 No breaking changes expecting.
 
-Need to polish the documentation and provide examples of real-world use cases.
-
-**I encourage you to bookmark and visit this project a little bit**.
+Need to polish the documentation and add more usage examples.
 
 
 ## Project Documentation

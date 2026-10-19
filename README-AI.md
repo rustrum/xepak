@@ -1,148 +1,147 @@
 # Xepak — AI Agent Reference
-   
+
 **Version:** 0.0.5-pre-release | **Commit:** ac8a0c4
- 
+
 ---
- 
+
 ## Overview
 
-Xepak is a DSL-based API server for databases, configured entirely via TOML files. It exposes your data through REST, JSON-RPC, and MCP endpoints without writing application code — only configuration and optional Lua scripts for complex logic. Currently SQLite is the primary supported database.
+Xepak is a DSL-based API server for databases, configured entirely via TOML. It exposes data through REST, JSON-RPC, and MCP endpoints from configuration plus optional Lua scripts — no application code. SQLite is the supported database.
 
-**Key features:**
-- Declarative endpoint definitions in TOML for three protocols: REST (`[[endpoint]]`), JSON-RPC (`[[rpc]]`), and MCP (`[[mcp]]`) — no Rust/Go/Haskell needed
-- JSON + CBOR request/response formats (negotiated via `Accept` / `Content-Type` headers)
-- Per-endpoint HTTP method restriction (`allow_methods`) and body input as a flat map or a positional array (tuple) for POST/PUT/PATCH
-- SQLite with WAL mode support, migrations, and connection pooling
-- Simple authentication via API key registry or database-backed token auth
-- Authorization rules engine with role-based access control (`ADMIN AND MANAGER`, `#boss OR (ADMIN AND MANAGER)`)
-- Lua scripting for dynamic query generation, data validation, and business logic
-- Built-in caching layer (moka) with configurable TTL per entry
-- Schema-based input validation with range checks and type coercion
+Request flow: a request arrives → Xepak resolves input into query args → runs pre-processors → runs the resource (SQL or Lua) → applies the output schema → returns a response.
+
+**Features:**
+- Declarative endpoints in TOML: REST (`[[endpoint]]`), JSON-RPC (`[[rpc]]`), MCP (`[[mcp]]`)
+- JSON + CBOR request/response (negotiated via `Accept` / `Content-Type`)
+- SQLite with WAL mode + migrations
+- API-key or DB-backed token auth, plus role-based authorization rules
+- Lua scripting for dynamic queries, validation, business logic
+- Per-entry caching; schema-based input validation with type coercion
 
 ---
 
-## TOML DSL Specification
-
-### Configuration file (`config.toml`)
+## 1. Root config (`config.toml`)
 
 ```toml
-port = 8080                          # optional, default: 8080
-specs_dir = "./specs"                # optional, default: "./specs"; relative paths resolve against config file dir
+port = 8080                          # optional, default 8080
+specs_dir = "./specs"                # optional, default ./specs (relative to config dir)
 
 [[storage]]
 type = "sqlite"
-id = ""                              # datasource identifier (default: ""); must match `data_source` in resources/processors
-file = "/path/to/db.sqlite3"         # empty string = shared in-memory DB; relative paths resolve against config file dir
-create_db = true                     # create if missing
-wal = true                           # enable WAL mode
-migrations_dir = "sqlite/migrations" # path relative to config dir
+id = ""                              # datasource id; must match `data_source` where referenced
+file = "/path/to/db.sqlite3"         # "" = shared in-memory DB; relative paths resolve against config dir
+create_db = true
+wal = true
+migrations_dir = "sqlite/migrations" # relative to config dir
 
 [registry]
 auth = [
-    { id = "boss", key = "BossKEY", from_env = false, roles = ["ADMIN", "MANAGER"] },  # from_env=true: `key` holds an ENV variable name
+    { id = "boss", key = "BossKEY", from_env = false, roles = ["ADMIN", "MANAGER"] },  # from_env=true: `key` is an ENV var name
     { id = "manager", key = "ManagerKEY", from_env = false, roles = ["MANAGER"] },
     { id = "user", key = "UserKEY", from_env = false },
-    { id = "", key = "" },            # optional anonymous user entry; its `roles` apply to anonymous requests (see config_authentication)
+    { id = "", key = "" },            # optional anonymous entry; its roles apply to anonymous requests
 ]
 
-# Optional: secrets registry (values loaded from ENV or raw text)
+# Optional: secrets (loaded from ENV or raw text)
 secrets = {
     secret1 = { type = "env", name = "SECRET_ENV_1" },
     secret2 = { type = "text", value = "raw_value" },
 }
 
-# Optional: custom data values accessible in Lua scripts via app:get_registry_value()
+# Optional: any other keys are custom registry values, readable in Lua via app:get_registry_value()
 my_config = 42
 ```
 
-### Specs directory structure
+- `[registry]` holds arbitrary data readable from Lua; only `auth` and `secrets` have special meaning.
+- A request authenticates via the `x-api-key` HTTP header (JSON-RPC/MCP also accept `Authorization: Bearer`).
 
-Each `.toml` file in `specs_dir/` is loaded and merged. A file may define any combination of REST endpoints (`[[endpoint]]`), JSON-RPC services (`[[rpc]]`), MCP servers (`[[mcp]]`), shared pre-processors, and default pre-processors.
+## 2. Specs (one or more `.toml` files in `specs_dir`)
+
+Each file is merged with the others (imagine all files read as one). A file may define any combination of `[[endpoint]]`, `[[rpc]]`, `[[mcp]]`, shared pre-processors, and default pre-processors.
 
 ```toml
-# Shared pre-processor definitions (referenced by other specs)
+# Shared pre-processor definitions (referenced elsewhere by id)
 [shared_pre_processors.my_auth]
 type = "config_authentication"
 
-# Default pre-processors applied to all endpoints unless ignored
+# Applied to every endpoint unless an endpoint sets pre_processors_ignore_default = true
 default_pre_processors = [
     { type = "config_authentication", anonymous_auth = false },
 ]
 
-# Endpoint definitions
 [[endpoint]]
-uri = "/users/{user_id:\\d+}"        # {name} path params captured automatically; regex allowed after ':' (escape backslash in TOML)
-allow_methods = ["GET", "DELETE"]    # optional HTTP methods whitelist; if absent only GET accepted
-strict_schema = false                # reject unknown input argument names (default: ignore them)
-single_record_response = true        # return 404 if no record, not empty array
+uri = "/users/{user_id:\\d+}"        # {name} path params captured automatically; regex after ':' (escape backslash in TOML)
+allow_methods = ["GET", "DELETE"]    # optional whitelist; if absent only GET is accepted
+strict_schema = false                # reject unknown input arg names (default: ignore them)
+single_record_response = true        # return 404 when no record, instead of an empty array
 fetch_limit = 20                     # max rows for paginated queries (also the default limit)
-limit_arg = "limit"                  # optional query param name (default: "limit")
-offset_arg = "offset"                # optional query param name (default: "offset")
+limit_arg = "limit"                  # optional query param name (default "limit")
+offset_arg = "offset"                # optional query param name (default "offset")
+pre_processors_ignore_default = false # skip default_pre_processors for this endpoint
 
 [endpoint.resource]
-type = "query"                       # resource type (see below)
-data_source = ""                     # optional, references storage id; default "" must match storage id
+type = "query"
+data_source = ""                     # optional; references storage id; default "" must match storage id
 query = "SELECT * FROM users WHERE id={{user_id}}"
 
-[[endpoint.pre_processors]]          # endpoint-specific pre-processors
+[[endpoint.pre_processors]]
 type = "config_authentication"
 
 [[endpoint.pre_processors]]
 type = "authorize"
-rules = "#boss OR (ADMIN AND MANAGER)"   # auth rules expression
+rules = "#boss OR (ADMIN AND MANAGER)"
 ```
 
-### Built-in input processing (no configuration needed)
+### How request input becomes query args
 
-- URI `{param}` values become text arguments (path args).
-- Argument resolution priority (highest first): args set by scripts/pre-processors (`ctx:set_arg`) → URI path args → request body args → query-string args.
-- Query-string args are parsed for bodyless methods (e.g. GET); for POST/PUT/PATCH they are **ignored**.
-- Request bodies exist only for POST/PUT/PATCH. A body may be a **flat map** (JSON object / CBOR map) whose keys become named args, **or a positional array** (JSON array / CBOR tuple) whose elements are exposed as args `"0"`, `"1"`, `"2"`, ... Format chosen by `Content-Type` (`application/cbor`, otherwise JSON).
-- Input schema conversion + validation is applied as arguments are parsed; the **output** schema (if set) is applied last, after the resource runs.
+- URI `{param}` values become text args (path args).
+- Resolution priority (highest first): args set by Lua/pre-processors (`ctx:set_arg`) → URI path args → request body args → query-string args.
+- Query-string args are used only for bodyless methods (e.g. GET); they are **ignored** for POST/PUT/PATCH.
+- Body exists only for POST/PUT/PATCH. A **flat map** (object) body requires the `parse_body_args` pre-processor to become named args; a **positional array** body is exposed automatically as args `"0"`, `"1"`, ... Format from `Content-Type` (`application/cbor`, otherwise JSON).
+- The input schema (conversion + validation) is applied as args are parsed; the output schema is applied last, after the resource runs.
 
 ### Resource types
 
-| Type | Description | Script return value |
-|------|-------------|---------------------|
-| `query` | Static SQL query | N/A |
-| `query_script_lua` | Lua script generates the SQL query string | Must return a **string** (the final query) |
-| `data_script` | Lua script returns data directly (no DB query executed) | Returns any XepakValue (Dict/Tuple) |
+| Type | Description | Script must return |
+|------|-------------|--------------------|
+| `query` | Static SQL | n/a |
+| `query_script_lua` | Lua builds the SQL query string | a **string** (the final query) |
+| `data_script` | Lua returns data directly (no DB query) | any value (dict/tuple) |
 
 ### Pre-processor types
 
 | Type | Description | Key fields |
 |------|-------------|------------|
-| `ref` | Reference to a shared pre-processor | `id: string` |
-| `parse_body_args` | Merges POST/PUT/PATCH body (flat map) into request arguments; no-op for other methods | `null_if_absent: [keys]` — set listed missing keys to null |
-| `config_authentication` | API key lookup in registry | `anonymous_auth: bool` |
-| `storage_authentication` | Database-backed token auth | `data_source`, `query`, `cache_ttl_sec` |
+| `ref` | Reference to a shared pre-processor | `id` |
+| `parse_body_args` | Merge POST/PUT/PATCH flat-map body into args | `null_if_absent: [keys]` |
+| `config_authentication` | API-key lookup in registry | `anonymous_auth: bool` |
+| `storage_authentication` | DB-backed token auth | `data_source`, `query`, `cache_ttl_sec` |
 | `authorize` | Role-based authorization rules | `rules: string` |
-| `lua_script` | Lua script as pre-processor (validation, etc.) | `script: string` |
+| `lua_script` | Lua as a pre-processor (validation, etc.) | `script: string` |
 
-The `storage_authentication` query runs with an `{{api-key}}` argument and must return a single row with columns `id` (text) and `roles` (comma-separated text); roles are uppercased. With non-zero `cache_ttl_sec`, successful auth is cached per API key for that many seconds.
+- `parse_body_args` parses only a flat-map body. A positional-array body is already exposed as args `"0"`, `"1"`, ...
+- `storage_authentication`: the query runs with an `{{api-key}}` arg and must return one row with columns `id` (text) and `roles` (comma-separated text). Non-zero `cache_ttl_sec` caches successful auth per key.
+- `authorize` must run after an authentication pre-processor. An empty `rules` string means "authenticated only".
 
-### Auth rules expression syntax
+### Auth rules syntax
 
 ```
 #boss OR (ADMIN AND MANAGER)
 manager AND billing AND accounting
-(admin OR #superID) AND (billing OR #other_id)
 ```
 
-| Token | Meaning | Example |
-|-------|---------|---------|
-| `lowercase_word` | Role name (case-insensitive, normalized to uppercase) | `admin`, `MANAGER` |
-| `#word` | User ID match | `#boss` matches user with id `"boss"` |
-| `AND` / `OR` | Logical operators (must be UPPERCASE) | — |
-| `( )` | Grouping for precedence | `(A AND B) OR C` |
+| Token | Meaning |
+|-------|---------|
+| `word` (case-insensitive) | Role name |
+| `#word` | User-ID match |
+| `AND` / `OR` (UPPERCASE) | Logical operators |
+| `( )` | Grouping |
 
-Only one operator type per group: `(a AND b OR c)` is a config error. Mix via nesting: `admin OR (manager AND (billing OR #superID))`.
-
-An empty `rules` string in the `authorize` processor means "authenticated only" (no role/id checks).
+Only one operator type per group; mix via nesting: `admin OR (manager AND (billing OR #superID))`.
 
 ### Schema validation
 
-Schemas are split into `input` and `output` sub-tables. Both use the same `Schema` structure:
+Schemas are the `input` and `output` sub-tables, sharing one structure. The root is a `dict` or `tuple`.
 
 ```toml
 [endpoint.schema.input]
@@ -154,75 +153,57 @@ items = {
 
 [endpoint.schema.output]
 type = "dict"
-items = {
-    id = { type = "int" },
-}
+items = { id = { type = "int" } }
 ```
 
-| Schema `type` | Description |
-|---------------|-------------|
-| `text` | String value |
-| `boolean` | Boolean value |
-| `int` | Integer value |
-| `float` | Float value |
+| `type` | Description |
+|--------|-------------|
+| `text`, `boolean`, `int`, `float` | Scalar values |
 | `blob` | Binary data (base64 in JSON) |
-| `tuple` | Ordered array; use `items` (list of schemas) and optional `items_repeat` |
-| `dict` | Key-value map; use `items` (map of name→schema) |
+| `tuple` | Ordered array; `items` = list of schemas, optional `items_repeat` |
+| `dict` | Key-value map; `items` = name→schema map |
 
-**Validators** — the `validate` field holds a **single** validator object. Use `and` / `or` with a `nested` array to combine several:
+`validate` holds a **single** validator object. Combine with `and`/`or` + a `nested` array (nestable arbitrarily):
 
 | `kind` | Fields | Applies to |
 |--------|--------|------------|
 | `range` | `from`, `to` (int) | text length, int/float value, tuple length |
-| `range_float` | `from`, `to` (float) | same as range but with float bounds |
+| `range_float` | `from`, `to` (float) | same, float bounds |
 | `not_null` | — | rejects null/undefined |
-| `and` | `nested` (list of validators) | all must pass |
-| `or` | `nested` (list of validators) | at least one must pass |
-
-`and` / `or` take a `nested` **array** of validators, which themselves may be `and` / `or` again — so you can build arbitrary trees.
+| `and` / `or` | `nested` (list of validators) | all / at least one must pass |
 
 ```toml
-# 1) Single validator — text length must be 5..255
+# single validator — text length 5..255
 validate = { kind = "range", from = 5, to = 255 }
 
-# 2) AND — all nested validators must pass (not null AND length 5..255)
+# not_null AND length 5..255
 validate = { kind = "and", nested = [
     { kind = "not_null" },
     { kind = "range", from = 5, to = 255 },
 ] }
 
-# 3) OR — at least one nested validator must pass
-#    (an int either 0, or in the range 10..100)
+# OR — an int either 0, or in 10..100
 validate = { kind = "or", nested = [
     { kind = "range", from = 0, to = 0 },
     { kind = "range", from = 10, to = 100 },
 ] }
-
-# 4) Nested trees — AND of (a sub-OR) and a not_null check
-validate = { kind = "and", nested = [
-    { kind = "not_null" },
-    { kind = "or", nested = [
-        { kind = "range", from = 1, to = 3 },     # short form: 1..3 chars
-        { kind = "range", from = 8, to = 12 },    # or medium form: 8..12 chars
-    ] },
-] }
 ```
 
-Note: `range` / `range_float` bounds are interpreted per value type — string length, integer/float value, or tuple length. A validator that does not apply to a type is a validation error for that type (e.g. `range` on a `blob` fails).
+`range`/`range_float` bounds are interpreted per value type (string length, number value, or tuple length). A validator that does not apply to a type is an error for that type (e.g. `range` on `blob`).
 
 ### Query argument syntax
 
-SQL queries use `{{arg_name}}` placeholders. Special keys for pagination:
+SQL uses `{{arg_name}}` placeholders. Special pagination keys (require `fetch_limit` to be set):
 
-| Placeholder | Meaning | Source |
-|-------------|---------|--------|
-| `{{user_id}}` | URI path parameter | `/users/{user_id}` |
-| `{{-limit-}}` | Pagination limit | Query param or default |
-| `{{-offset-}}` | Pagination offset | Query param or default |
+| Placeholder | Source |
+|-------------|--------|
+| `{{user_id}}` | URI path param |
+| `{{-limit-}}` | `limit` query param or default |
+| `{{-offset-}}` | `offset` query param or default |
 
 ### JSON-RPC endpoints (`[[rpc]]`)
 
-Each `[[rpc]]` defines one JSON-RPC 2.0 service bound to a `uri`. Only HTTP **POST** is allowed and the body must be a JSON object (no CBOR). The `methods` table maps a method name to a method spec — a method spec works like a REST endpoint (same `resource`, `schema`, `pre_processors`, `fetch_limit`, `single_record_response`).
+Each `[[rpc]]` binds one JSON-RPC 2.0 service to a `uri`. Only HTTP **POST**, JSON body only (no CBOR). The `methods` table maps a method name to a spec with the same fields as a REST endpoint (`resource`, `schema`, `pre_processors`, `fetch_limit`, `single_record_response`).
 
 ```toml
 [[rpc]]
@@ -237,13 +218,12 @@ single_record_response = true
 resource = { type = "query", query = "SELECT * FROM posts WHERE id = {{0}}" }
 ```
 
-- **Request** (JSON-RPC 2.0): `{ "jsonrpc": "2.0", "id": 1, "method": "get", "params": [1] }`. `params` is applied through the method's input schema and becomes the body args (a JSON array → positional args `0`, `1`, ...). `strict_schema` is always enforced for RPC.
-- **Success response:** `{ "jsonrpc": "2.0", "id": 1, "result": <value> }`. With `single_record_response = true`, a missing record yields an empty object `{}` (not an error).
-- **Error codes:** `-32700` parse, `-32600` invalid request, `-32601` method not found, `-32602` invalid params, `-32603` internal, `-32403` forbidden.
+- The request `params` pass through the input schema and become body args (JSON array → positional args `0`, `1`, ...). `strict_schema` is always enforced.
+- Response/error format follows JSON-RPC 2.0. With `single_record_response = true`, a missing record yields `{}` (not an error).
 
 ### MCP servers (`[[mcp]]`)
 
-Each `[[mcp]]` defines one MCP server (JSON-RPC 2.0 over HTTP POST) bound to a `uri`. The `tools` table maps a tool name to a tool spec (same `resource`, `schema`, `pre_processors`, `fetch_limit` as above).
+Each `[[mcp]]` binds one MCP server (JSON-RPC 2.0 over HTTP POST) to a `uri`. The `tools` table maps a tool name to a spec (same fields as above). You **must** define an input schema per tool.
 
 ```toml
 [[mcp]]
@@ -257,568 +237,268 @@ server_version = "1.0.0"
 title = "List posts"
 description = "List posts with pagination"
 annotations.read_only = true
-schema.input = {
-    type = "dict",
-    items = {
-        limit  = { type = "int", required = true },
-        offset = { type = "int", required = true },
-    }
-}
+schema.input = { type = "dict", items = {
+    limit  = { type = "int", required = true },
+    offset = { type = "int", required = true },
+} }
 resource = { type = "query", query = "SELECT * FROM posts ORDER BY id LIMIT {{limit}} OFFSET {{offset}}" }
 ```
 
-- `annotations` (all optional booleans): `read_only`, `destructive`, `idempotent`, `open_world`.
+- `annotations` (optional booleans): `read_only`, `destructive`, `idempotent`, `open_world`.
 - The input schema is exposed to clients as the tool's JSON-Schema `inputSchema`.
-- Supported JSON-RPC methods: `initialize`, `notifications/initialized`, `ping`, `tools/list`, `tools/call`.
-- `tools/call` takes `params = { name, arguments }`; `arguments` are applied through the tool's input schema. A tool result is `{ isError, content: [{ type: "text", text: <json> }] }`.
+- Supported methods: `initialize`, `notifications/initialized`, `ping`, `tools/list`, `tools/call`. `tools/call` takes `params = { name, arguments }`; `arguments` pass through the tool input schema. A tool response is a single `text` content element.
 
 ---
 
-## LUA Scripting API
+## 3. Lua scripting API
 
-Lua scripts run in a thread-local VM with a per-request isolated environment (compiled functions are cached). Each script receives a `ctx` global plus a set of global helper functions:
+Each script runs in an isolated per-request environment and receives a `ctx` global plus helper functions.
 
 ### Context (`ctx`)
 
 ```lua
--- Check if argument exists (URI path params + query/body args)
-if ctx:has_arg("user_id") then ... end
-
--- Get argument value as Lua type (auto-converted from XepakValue)
-local name = ctx:get_arg("name")
-
--- Set argument value with schema conversion applied
-ctx:set_arg("user_id", user.id)
-
--- Get full request input (usable as args for storage_query*)
-local input = ctx:load_input()
-
--- HTTP method of the current request ("GET", "POST", etc.)
-local method = ctx:get_request_method()
-
--- Authentication data (available after auth pre-processor runs)
-local auth_id = ctx:get_auth_id()       -- returns string or nil
-local roles   = ctx:get_auth_roles()    -- returns table of strings
-local is_admin = ctx:has_auth_role("admin")  -- returns boolean
+ctx:has_arg("user_id")            -- bool: arg exists
+local v   = ctx:get_arg("name")   -- value as a Lua type
+ctx:set_arg("user_id", id)        -- set arg (schema conversion applied)
+local input = ctx:load_input()    -- full request input (usable as args for storage_query*)
+local m  = ctx:get_request_method()          -- "GET", "POST", ...
+local id = ctx:get_auth_id()                 -- string or nil (after auth runs)
+local roles = ctx:get_auth_roles()           -- table of strings
+local is_admin = ctx:has_auth_role("admin")  -- bool
 ```
 
-### Query Builder
+### Query builder
+
+Parts are joined in call order with single spaces, so add `WHERE` **before** `LIMIT`. The base string must not already contain a `WHERE`. `add_joined_parts` is a no-op when its parts table is empty.
 
 ```lua
--- Create a query builder instance
-local query = query_builder("SELECT * FROM users WHERE username={{name}}")
-
--- Add parts to the query
-query:add("LIMIT {{-limit-}} OFFSET {{-offset-}}")
-
--- Add joined parts with separator (e.g., WHERE clauses)
-local where_parts = {}
-if ctx:has_arg("name") then
-    table.insert(where_parts, "username = {{name}}")
-end
-if ctx:has_arg("pass") then
-    table.insert(where_parts, "password = {{pass}}")
-end
-query:add_joined_parts("WHERE", where_parts, "OR", "")
-
--- Build final query string (must return this from script)
-return query:build()
+local q = query_builder("SELECT * FROM posts")
+local parts = {}
+if ctx:has_arg("author") then table.insert(parts, "username = {{author}}") end
+q:add_joined_parts("WHERE", parts, "AND", "")   -- (prefix, parts, separator, suffix)
+q:add("LIMIT {{-limit-}} OFFSET {{-offset-}}")
+return q:build()
 ```
 
-### Blob constructor
+### Blob
 
 ```lua
--- Create a blob (binary) value from a Lua string (bytes)
-local b = blob_type("\x01\x02\x03")
-
--- Read bytes back
-local bytes = b:as_bytes()  -- returns Lua string
+local b = blob_type("\x01\x02\x03")  -- from bytes
+local bytes = b:as_bytes()           -- back to a Lua string
 ```
 
-### Database functions
+### Database functions (run against the default data source `""` only)
 
 ```lua
--- All take (query_string, args) where args is a Lua table or ctx:load_input()
--- {{name}} placeholders in query are bound from args table
-
--- Query multiple rows → returns Lua table of tables (1-indexed)
-local rows = storage_query("SELECT * FROM users WHERE id={{id}}", {id = 42})
-
--- Query single row → returns Lua table (map) or nil
-local user = storage_query_one("SELECT * FROM users WHERE id={{id}}", {id = 42})
-
--- Query single value (first column of first row) → returns scalar or nil
-local count = storage_query_value("SELECT COUNT(*) FROM users", {})
+storage_query("SELECT * FROM users WHERE id={{id}}", {id = 42})     -- table of rows (1-indexed)
+storage_query_one("SELECT * FROM users WHERE id={{id}}", {id = 42}) -- one row (map) or nil
+storage_query_value("SELECT COUNT(*) FROM users", {})               -- scalar or nil
 ```
 
-Note: `storage_query*` always run against the **default** data source (`""`); they cannot target a named storage from within Lua.
+`args` is a Lua table or `ctx:load_input()`. `{{name}}` placeholders bind from it. They cannot target a named storage from within Lua.
 
-### Cache API
-
-```lua
--- Get cached value by key (returns XepakValue or nil)
-local val = app:cache_get("my_key")
-
--- Set cached value with default TTL
-app:cache_set("my_key", "value")
-
--- In query_script_lua resources, the script must return a string (SQL query),
--- so caching is typically done in data_script or lua_script pre-processors.
-```
-
-### Registry and secrets access
+### Cache, registry, secrets
 
 ```lua
--- Get custom registry value (set in config.toml [registry])
-local val = app:get_registry_value("my_config")  -- returns XepakValue or nil
-
--- Get secret from registry (from_env or text)
-local secret = app:get_secret("secret1")  -- returns string or nil
+app:cache_get("key")                 -- value or nil
+app:cache_set("key", "value")        -- default TTL
+app:get_registry_value("my_config")  -- custom registry value or nil
+app:get_secret("secret1")            -- secret string or nil
 ```
 
 ### HTTP client
 
 ```lua
--- GET request → returns response object with methods: is_success(), get_status_code(), read_body_string(), read_body_json()
-local resp = http_get("http://example.com/api", { ["x-api-key"] = "key123" })
-
--- POST JSON request
-local resp = http_post_json(
-    "http://example.com/api",
-    { ["Content-Type"] = "application/json" },
-    { message = "Hello from Xepak" }
-)
+local resp = http_get("http://example.com/api", { ["x-api-key"] = "key" })
+local resp = http_post_json("http://example.com/api", { ["Content-Type"] = "application/json" }, { message = "hi" })
+-- resp:is_success(), resp:get_status_code(), resp:read_body_string(), resp:read_body_json()
 ```
 
-### Error functions (throw errors that map to HTTP status codes)
+### Errors & logging
 
 ```lua
-error_input("Bad request message")       -- 400 Bad Request
-error_not_found("Record not found")     -- 404 Not Found
-error_forbidden("Access denied")        -- 403 Forbidden
-error_server("Internal error")          -- 500 Internal Server Error
-```
+error_input("...")      -- 400
+error_not_found("...")  -- 404
+error_forbidden("...")  -- 403
+error_server("...")     -- 500
 
-### Logging
-
-```lua
-log_info("Users count is " .. count)
-log_debug(string.format("I said users count is %d", count))
+log_info("...")
+log_debug("...")
 ```
 
 ---
 
-## DSL Usage Examples (Use Cases)
+## 4. Use cases
 
-### Use Case 1: Simple CRUD endpoints
+### CRUD + pagination
 
-**config.toml:**
 ```toml
-port = 8080
-[[storage]]
-type = "sqlite"
-file = "./db.sqlite3"
-create_db = true
-wal = true
-migrations_dir = "migrations"
-```
-
-**specs/users.toml:**
-```toml
-# List users with pagination
+# specs/users.toml
 [[endpoint]]
 uri = "/user/list"
 fetch_limit = 20
-
 [endpoint.resource]
 type = "query"
 query = "SELECT * FROM users LIMIT {{-limit-}} OFFSET {{-offset-}}"
 
-# Get single user by ID
 [[endpoint]]
 uri = "/user/{user_id:\\d+}"
 single_record_response = true
-
 [endpoint.resource]
 type = "query"
 query = "SELECT * FROM users WHERE id={{user_id}}"
 
-# Create user with schema validation (use POST method)
 [[endpoint]]
 uri = "/user"
 allow_methods = ["POST"]
 single_record_response = true
-
 [endpoint.schema.input]
 type = "dict"
 items = {
     username = { type = "text", required = true, validate = { kind = "range", from = 3, to = 50 } },
     password = { type = "text", required = true },
 }
-
 [[endpoint.pre_processors]]
 type = "parse_body_args"
-
 [endpoint.resource]
 type = "query"
-query = """
-INSERT INTO users (username, password) VALUES ({{username}}, {{password}})
-RETURNING id, username
-"""
+query = "INSERT INTO users (username, password) VALUES ({{username}}, {{password}}) RETURNING id, username"
 ```
 
-### Use Case 2: Lua-generated dynamic queries
+### Dynamic query in Lua
 
-**specs/posts.toml:**
 ```toml
 [[endpoint]]
 uri = "/post/list"
 fetch_limit = 20
-
 [endpoint.resource]
 type = "query_script_lua"
 script = """
-local query = query_builder("SELECT * FROM posts")
-
+local q = query_builder("SELECT * FROM posts")
 if ctx:has_arg("author") then
-    local author = ctx:get_arg("author")
-    if #author < 3 then
-        error_input("Author name must be at least 3 characters")
-    end
-    query:add_joined_parts("WHERE", {"username = {{author}}"}, "AND", "")
+    local a = ctx:get_arg("author")
+    if #a < 3 then error_input("author must be at least 3 characters") end
+    q:add_joined_parts("WHERE", {"username = {{author}}"}, "AND", "")
 end
-
-query:add("LIMIT {{-limit-}} OFFSET {{-offset-}}")
-return query:build()
+q:add("LIMIT {{-limit-}} OFFSET {{-offset-}}")
+return q:build()
 """
 ```
 
-### Use Case 3: Authentication + Authorization
+### Authentication + authorization
 
-**config.toml:**
 ```toml
-[registry]
-auth = [
-    { id = "boss", key = "BossKEY", from_env = false, roles = ["ADMIN", "MANAGER"] },
-    { id = "manager", key = "ManagerKEY", from_env = false, roles = ["MANAGER"] },
-    { id = "user", key = "UserKEY", from_env = false },
-]
-```
+# [registry] auth is defined in config.toml (see section 1)
 
-**specs/admin.toml:**
-```toml
-# Boss-only endpoint (requires ADMIN role)
 [[endpoint]]
-uri = "/admin/posts/boss"
-
+uri = "/admin/posts"
 [[endpoint.pre_processors]]
 type = "config_authentication"
-
-[[endpoint.pre_processors]]
-type = "authorize"
-rules = "ADMIN"
-
-[endpoint.resource]
-type = "query"
-query = "SELECT * FROM posts"
-
-# Boss OR (Admin AND Manager) endpoint
-[[endpoint]]
-uri = "/admin/revalidate/{payment_id:\\d+}"
-single_record_response = true
-
-[[endpoint.pre_processors]]
-type = "config_authentication"
-
 [[endpoint.pre_processors]]
 type = "authorize"
 rules = "#boss OR (ADMIN AND MANAGER)"
-
 [endpoint.resource]
-type = "query_script_lua"
-script = """
--- Check if reprocessing is allowed (max once per 20 seconds)
-local allowed = storage_query_value(
-    "SELECT COALESCE(reprocess_trigger <= datetime('now', '-20 seconds'), 1) FROM payments WHERE id = {{payment_id}}",
-    ctx:load_input()
-)
-
-if allowed ~= 1 then
-    error_input("Can't trigger reprocessing more than once in 20 seconds")
-end
-
-return "UPDATE payments SET reprocess_trigger = current_timestamp WHERE id = {{payment_id}} RETURNING id, reprocess_trigger"
-"""
+type = "query"
+query = "SELECT * FROM posts"
 ```
 
-### Use Case 4: Database-backed token authentication
+### DB-backed token auth + reading auth in Lua
 
-**specs/token_auth.toml:**
 ```toml
 [[endpoint]]
 uri = "/auth/token/info"
-
 [[endpoint.pre_processors]]
 type = "storage_authentication"
-data_source = "default"
 query = "SELECT user_id AS id, roles FROM tokens WHERE api_key = {{api-key}}"
 cache_ttl_sec = 300
-
 [endpoint.resource]
 type = "data_script"
 script = """
-return {
-    id = ctx:get_auth_id(),
-    roles = ctx:get_auth_roles(),
-    is_admin = ctx:has_auth_role("admin"),
-}
+return { id = ctx:get_auth_id(), roles = ctx:get_auth_roles(), is_admin = ctx:has_auth_role("admin") }
 """
 ```
 
-### Use Case 5: Lua pre-processor for validation
+### Lua pre-processor (validation / guard)
 
-**specs/validation.toml:**
 ```toml
 [[endpoint]]
 uri = "/script/lua/pp/{token:\\w+}"
-
 [[endpoint.pre_processors]]
 type = "lua_script"
 script = """
-if ctx:has_arg("token") and ctx:get_arg("token") == "bad" then
-    error_forbidden("You are BAD")
-end
+if ctx:get_arg("token") == "bad" then error_forbidden("You are BAD") end
 """
+[endpoint.resource]
+type = "data_script"
+script = "return {}"
+```
 
+### Lua utilities (registry, secrets, cache, http)
+
+```toml
+# registry values + secrets are defined in config.toml [registry] (see section 1)
+
+[[endpoint]]
+uri = "/demo"
 [endpoint.resource]
 type = "data_script"
 script = """
-return {}
+local cfg  = app:get_registry_value("my_config")  -- custom [registry] value
+local sec  = app:get_secret("secret1")            -- secret string (or nil)
+app:cache_set("k", "v")                           -- cache with default TTL
+local resp = http_get("http://example.com/api", { ["x-api-key"] = "key" })
+return { cfg = cfg, cached = app:cache_get("k"), status = resp:get_status_code() }
 """
 ```
 
-### Use Case 6: Registry values + secrets in Lua scripts
+### Anonymous auth & default pre-processors
 
-**config.toml:**
 ```toml
-[registry]
-auth = [ ... ]
-
-# Custom registry data (accessible via app:get_registry_value())
-int_val = 1
-float_val = 2.2
-string_val = "registry_val"
-map_val = { host = "localhost", ["weird.key"] = "some_value" }
-
-# Secrets (loaded from ENV or raw text)
-secrets = {
-    secret1 = { type = "env", name = "SECRET_ENV_1" },
-    secret2 = { type = "text", value = "raw_text_value_4" },
-}
-```
-
-**specs/registry_access.toml:**
-```toml
-[[endpoint]]
-uri = "/script/lua/registry"
-
-[endpoint.resource]
-type = "data_script"
-script = """
-return {
-    int_val = app:get_registry_value("int_val"),
-    float_val = app:get_registry_value("float_val"),
-    string_val = app:get_registry_value("string_val"),
-    map_val = app:get_registry_value("map_val"),
-}
-"""
-
-[[endpoint]]
-uri = "/script/lua/secrets"
-
-[endpoint.resource]
-type = "data_script"
-script = """
-return {
-    secret_1 = app:get_secret("secret1"),
-    secret_2 = app:get_secret("secret2"),
-}
-"""
-```
-
-### Use Case 7: Lua cache operations
-
-**specs/cache.toml:**
-```toml
-[[endpoint]]
-uri = "/script/lua/cache/set/{key:\\w+}/{value:\\w+}"
-
-[endpoint.resource]
-type = "data_script"
-script = """
-app:cache_set(ctx:get_arg("key"), ctx:get_arg("value"))
-return {}
-"""
-
-[[endpoint]]
-uri = "/script/lua/cache/get/{key:\\w+}"
-
-[endpoint.resource]
-type = "data_script"
-script = """
-return { app:cache_get(ctx:get_arg("key")) }
-"""
-```
-
-### Use Case 8: Lua HTTP client calls
-
-**specs/http_client.toml:**
-```toml
-[[endpoint]]
-uri = "/script/http/get"
-
-[endpoint.resource]
-type = "data_script"
-script = """
-local resp = http_get(
-    "http://example.com/api",
-    { ["x-api-key"] = "GET-API-key" }
-)
-
-return {
-    success = resp:is_success(),
-    status  = resp:get_status_code(),
-    body    = resp:is_success() and resp:read_body_json() or {}
-}
-"""
-
-[[endpoint]]
-uri = "/script/http/post"
-
-[endpoint.resource]
-type = "data_script"
-script = """
-local resp = http_post_json(
-    "http://example.com/api",
-    { ["x-api-key"] = "POST-API-key" },
-    { message = "Hello from Xepak" }
-)
-
-return {
-    success = resp:is_success(),
-    status  = resp:get_status_code(),
-    body    = resp:is_success() and resp:read_body_json() or {}
-}
-"""
-```
-
-### Use Case 9: Anonymous authentication
-
-**specs/anon_auth.toml:**
-```toml
-[[endpoint]]
-uri = "/auth/script/anon"
-
-[[endpoint.pre_processors]]
-type = "config_authentication"
-anonymous_auth = true
-
-[endpoint.resource]
-type = "data_script"
-script = """
-return {
-    id = ctx:get_auth_id(),       -- empty string for anonymous
-    roles = ctx:get_auth_roles(),  -- empty table for anonymous
-}
-"""
-```
-
-### Use Case 10: Default pre-processors (global auth requirement)
-
-**config.toml:**
-```toml
+# config.toml: require auth on every endpoint by default
 default_pre_processors = [
     { type = "config_authentication", anonymous_auth = false },
 ]
-```
 
-This makes all endpoints require authentication by default. To skip for specific endpoints:
-
-```toml
+# spec: skip the default for one endpoint and allow anonymous
+# (a registry entry with id = "" supplies the anonymous roles)
 [[endpoint]]
-uri = "/public/info"
-pre_processors_ignore_default = true   -- skip default pre-processors
-
+uri = "/auth/script/anon"
+pre_processors_ignore_default = true
+[[endpoint.pre_processors]]
+type = "config_authentication"
+anonymous_auth = true
 [endpoint.resource]
 type = "data_script"
-script = """
-return { always = "public" }
-"""
+script = "return { id = ctx:get_auth_id(), roles = ctx:get_auth_roles() }"
 ```
 
 ---
 
-## Internal Type System (XepakValue)
+## 5. Request → response
 
-Xepak uses a unified dynamic value type that transcends all environments: JSON, CBOR, SQLite, Lua, and TOML.
+- Data moves through one unified value type; conversions are automatic. The only user-visible details: a `blob` is a base64 string in JSON but raw bytes in CBOR, and a `tuple`/`dict` value bound into a SQL placeholder is serialized to a JSON text string.
 
-| XepakType | JSON representation | CBOR representation | SQLite type | Lua type |
-|-----------|---------------------|---------------------|-------------|----------|
-| `Null` | `null` | `null` | NULL | `nil` |
-| `Boolean` | `true/false` | `true/false` | INTEGER (0/1) | `boolean` |
-| `Int` | number | integer | INTEGER (i64) | `number` (integer) |
-| `Float` | number | float | REAL | `number` (float) |
-| `Text` | string | text string | TEXT | `string` |
-| `Blob` | base64 string | byte string | BLOB | userdata (`blob_type`) |
-| `Tuple` | array | array | TEXT (JSON) | table (1-indexed) |
-| `Dict` | object | map | TEXT (JSON) | table (key-value) |
-
-**Key properties:**
-- Binary data (`Blob`) serializes as base64 in JSON, raw bytes in CBOR.
-- `Int` is `i128` in memory but bound to SQLite as `i64` (values beyond 64-bit range are truncated on write).
-- `Tuple`/`Dict` are stored in SQLite as a JSON text string.
-- Type conversions between environments are automatic (not always lossless across JSON — e.g. `Blob` round-trips via base64).
-- Planned future types: `date`, `decimal`.
-
----
-
-## Error Response Format
-
-All errors return a consistent JSON/CBOR structure:
+### Error format (REST)
 
 ```json
-{
-    "code": "bad_request",
-    "message": "Input argument 'name' length must be greater than 2"
-}
+{ "code": "bad_request", "message": "Input argument 'name' length must be greater than 2" }
 ```
 
-| Code | HTTP Status | Triggered by |
-|------|-------------|--------------|
+| Code | HTTP | Triggered by |
+|------|------|--------------|
 | `not_found` | 404 | Record not found, or Lua `error_not_found()` |
-| `bad_request` | 400 | Input validation failure, schema errors, Lua `error_input()` |
-| `forbidden` | 403 | Auth/authorization failures, Lua `error_forbidden()` |
-| `internal_error` | 500 | Server errors, Lua `error_server()` |
-| `unknown_error` | 520 | Unhandled exceptions |
+| `bad_request` | 400 | Input/schema validation, or Lua `error_input()` |
+| `forbidden` | 403 | Auth/authorization failure, or Lua `error_forbidden()` |
+| `internal_error` | 500 | Server error, or Lua `error_server()` |
+| `unknown_error` | 520 | Unhandled exception |
 
----
+JSON-RPC and MCP errors follow their respective protocol standards.
 
-## Response Headers
+### Response headers
 
-Paginated responses include:
+Paginated responses include `X-Limit` and `X-Offset` (the exact values used). The response `Content-Type` is `application/json` by default, or `application/cbor` when `Accept: application/cbor`.
 
-| Header | Value | When present |
-|--------|-------|--------------|
-| `X-Limit` | integer | When limit > 0 |
-| `X-Offset` | integer | When offset > 0 |
-
-Content-Type is set based on the `Accept` header:
-- `application/json` (default)
-- `application/cbor` (when `Accept: application/cbor`)
-
----
-
-## CLI Usage
+### CLI
 
 ```bash
 xepak [-p PORT] [-l LOG_LEVEL] <config_file>
