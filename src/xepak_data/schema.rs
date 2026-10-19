@@ -203,7 +203,7 @@ pub fn apply_schema(
     validate: bool,
 ) -> Result<XepakValue, XepakDataError> {
     // Note required must be checked at a top level
-        // Not good but if we are already passing XepakValue then it must exist
+    // Not good but if we are already passing XepakValue then it must exist
     // so checking if required is no longer makes sense
     let linked_type = schema.linked_type();
     tracing::warn!("Linked type: {linked_type:?}");

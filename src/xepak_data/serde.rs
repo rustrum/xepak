@@ -10,7 +10,9 @@ use super::XepakValue;
 impl XepakValue {
     pub fn to_json(&self) -> Result<String, XepakDataError> {
         serde_json::to_string(self).map_err(|err| {
-            XepakDataError::Decode(format!("Failed to encode XepakValue into JSON string {err}"))
+            XepakDataError::Decode(format!(
+                "Failed to encode XepakValue into JSON string {err}"
+            ))
         })
     }
 

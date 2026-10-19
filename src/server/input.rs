@@ -163,7 +163,7 @@ impl RequestInput {
     }
 
     fn key_to_usize(&self, key: &str) -> Option<usize> {
-            // let's keep it simple for now
+        // let's keep it simple for now
         key.parse().ok()
     }
 
