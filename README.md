@@ -31,7 +31,7 @@ Running it in WAL mode behind Xepak would allow you to have simple and cheap sel
 
 The first MVP is almost ready! 🥳 
 
-I just need to write human friendly documentation and provide some examples.
+Need to polish the documentation and provide examples of real-world use cases.
 
 **I encourage you to bookmark and visit this project a little bit**.
 
