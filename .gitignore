@@ -2,7 +2,8 @@
 prompt-codebase.txt
 agents_work
 
-**/db.sqlite3
+**/*.sqlite3
+**/*.sqlite3-*
 examples/sqlite/db.*
 
 # Rust

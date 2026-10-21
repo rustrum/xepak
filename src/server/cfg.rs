@@ -140,6 +140,11 @@ pub struct McpEpSpecs {
     /// MCP server instructions for agent
     pub instructions: String,
 
+    /// Custom text message to return if response data is empty.
+    /// If not set - default value will be used.
+    #[serde(default)]
+    pub empty_response_text: String,
+
     /// MCP optional server version field
     #[serde(default)]
     pub server_version: String,

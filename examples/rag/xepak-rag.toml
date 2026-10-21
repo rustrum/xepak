@@ -1,0 +1,6 @@
+[[storage]]
+type = "sqlite"
+file = "db/xepak-rag.sqlite3"
+create_db = true
+wal = true
+migrations_dir = "migrations"

@@ -147,7 +147,10 @@ impl Storage {
         let query = pquery.build_query("?");
         let sql_query = self.prepare_query(&request, &pquery, &query)?;
 
-        let result = sql_query.fetch_all(&mut *connection).await.expect("TODO");
+        let result = sql_query
+            .fetch_all(&mut *connection)
+            .await
+            .expect("TODO fetch_all");
 
         let mut out = Vec::new();
         for row in result {
@@ -242,8 +245,8 @@ impl Storage {
         let cols = row.columns();
         let mut out_row = HashMap::new();
         for (idx, c) in cols.iter().enumerate() {
-            let col = row.try_get_raw(idx).expect("TODO");
-            let cval = XepakValue::try_from(SqlxValue::new(col)).expect("TODO");
+            let col = row.try_get_raw(idx).expect("TODO get raw");
+            let cval = XepakValue::try_from(SqlxValue::new(col)).expect("TODO xepak try_from");
 
             out_row.insert(c.name().to_string(), cval);
         }

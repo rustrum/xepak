@@ -1,0 +1,99 @@
+# Xepak MCP RAG Testing Justfile
+# 
+# Override defaults:
+#   just server=http://localhost:9090 project=alpha add_note "Test" "Data"
+
+server := env_var_or_default("MCP_SERVER", "http://localhost:8080")
+project := env_var_or_default("MCP_PROJECT", "xepak-test-project")
+
+
+# Runs Xepak server (launches in the separate terminal session)
+run:
+    #!/usr/bin/env sh
+    mkdir -p ./db
+    cargo run --bin xepak -- ./xepak-rag.toml
+
+# Add knowledge note
+add_note title content:
+    #!/usr/bin/env sh
+    payload=$(jq -n \
+      --arg tool "add_note" \
+      --arg title {{quote(title)}} \
+      --arg content {{quote(content)}} \
+      '{jsonrpc: "2.0", id: 1, method: "tools/call", params: {name: $tool, arguments: {title: $title, content: $content}}}')
+    
+    curl -s -X POST "{{server}}/mcp/rag/{{project}}" \
+      -H "Content-Type: application/json" \
+      -H "Accept: application/json, text/event-stream" \
+      -d "$payload" | jq
+
+# List notes
+list_notes limit="42" offset="0":
+    #!/usr/bin/env sh
+    payload=$(jq -n \
+      --arg tool "list_notes" \
+      --argjson limit {{limit}} \
+      --argjson offset {{offset}} \
+      '{jsonrpc: "2.0", id: 1, method: "tools/call", params: {name: $tool, arguments: {limit: $limit, offset: $offset}}}')
+    
+    curl -s -X POST "{{server}}/mcp/rag/{{project}}" \
+      -H "Content-Type: application/json" \
+      -H "Accept: application/json, text/event-stream" \
+      -d "$payload" | jq
+
+
+# Add progress
+add_progress milestone details="" status="in_progress":
+    #!/usr/bin/env sh
+    args=$(jq -n \
+      --arg milestone {{quote(milestone)}} \
+      --arg details {{quote(details)}} \
+      --arg status {{quote(status)}} \
+      '{milestone: $milestone} + (if $details != "" then {details: $details} else {} end) + (if $status != "" then {status: $status} else {} end)')
+      
+    payload=$(jq -n \
+      --arg tool "add_progress" \
+      --argjson args "$args" \
+      '{jsonrpc: "2.0", id: 1, method: "tools/call", params: {name: $tool, arguments: $args}}')
+    
+    curl -s -X POST "{{server}}/mcp/rag/{{project}}" \
+      -H "Content-Type: application/json" \
+      -H "Accept: application/json, text/event-stream" \
+      -d "$payload" | jq 
+
+# List progress
+list_progress status="" limit="42" offset="0":
+    #!/usr/bin/env sh
+    payload=$(jq -n \
+      --arg tool "list_progress" \
+      --arg status {{quote(status)}} \
+      --argjson limit {{limit}} \
+      --argjson offset {{offset}} \
+      '{jsonrpc: "2.0", id: 1, method: "tools/call", params: {name: $tool, arguments: {limit: $limit, offset: $offset} + (if $status != "" then {status: $status} else {} end)} }')
+
+    curl -s -X POST "{{server}}/mcp/rag/{{project}}" \
+      -H "Content-Type: application/json" \
+      -H "Accept: application/json, text/event-stream" \
+      -d "$payload" \
+      | jq
+
+# Search notes
+search_notes query limit="42" offset="0":
+    #!/usr/bin/env sh
+    payload=$(jq -n \
+      --arg tool "search_notes" \
+      --arg search_query {{quote(query)}} \
+      --argjson limit {{limit}} \
+      --argjson offset {{offset}} \
+      '{jsonrpc: "2.0", id: 1, method: "tools/call", params: {name: $tool, arguments: {search_query: $search_query, limit: $limit, offset: $offset}}}')
+    
+    curl -s -X POST "{{server}}/mcp/rag/{{project}}" \
+      -H "Content-Type: application/json" \
+      -H "Accept: application/json, text/event-stream" \
+      -d "$payload" | jq
+
+# Clean DB folder
+clean:
+    #!/usr/bin/env sh
+    rm -rf ./db/*
+    echo "Cleaned up local database directory."

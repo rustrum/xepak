@@ -55,10 +55,14 @@ But now you should have only one for SQLite.
 id = ""                          # datasource identifier (do not define it use default one)
 type = "sqlite"
 file = "/path/to/db.sqlite3"     # empty string = shared in-memory DB; relative paths resolve against config file dir
-migrations_dir = "migrations"    # path to folder with migrations *.sql files
+migrations_dir = "migrations"    # path to folder with migrations files: <version>_<description>.sql
 create_db = true                 # create DB if missing
 wal = true                       # enable WAL mode
 ```
+
+**Important Note!** SQL migration files must follow sqlx migrator rules.
+All these scripts must be stored in files with names using the format <VERSION>_<DESCRIPTION>.sql,
+where <VERSION> is a string that can be parsed into i64 and its value is greater than zero, and <DESCRIPTION> is a string.
 
 #### Registry
 

@@ -1,0 +1,152 @@
+# It is not possible to split specs
+# for single MCP into different TOMLs
+
+[[mcp]]
+# The {project_name} path variable is automatically captured and exposed 
+# to SQL/Lua resources as the {{project_name}} argument.
+uri = "/mcp/rag/{project_name:[a-zA-Z0-9_-]+}"
+name = "Project Knowledge Base"
+protocol_version = "1971-01-01"
+instructions = """
+Provides isolated, multi-tenant project progress tracking and knowledge base storage. 
+Use this to store notes, track milestones, and retrieve project-specific context via full-text search.
+"""
+
+# ----------------------------------------------------------------------------
+# 1. ADD KNOWLEDGE NOTE
+# ----------------------------------------------------------------------------
+[mcp.tools.add_note]
+title = "Add Knowledge Note"
+description = "Creates a new text note in the project's knowledge base."
+[mcp.tools.add_note.schema.input]
+type = "dict"
+items = {
+    title = { type = "text", required = true, validate = { kind = "range", from = 1, to = 255 } },
+    content = { type = "text", required = true }
+}
+[mcp.tools.add_note.resource]
+type = "query"
+# {{project_name}} is safely bound as a parameter from the URI path
+query = """
+INSERT INTO notes (project_name, title, content) 
+VALUES ({{project_name}}, {{title}}, {{content}}) 
+RETURNING id, title, created_at
+"""
+
+# ----------------------------------------------------------------------------
+# 2. LIST RECENT NOTES
+# ----------------------------------------------------------------------------
+[mcp.tools.list_notes]
+title = "List Notes"
+description = "Retrieves recent knowledge notes for the current project."
+annotations = { read_only = true }
+[mcp.tools.list_notes.schema.input]
+type = "dict"
+items = {
+    limit = { type = "int" },
+    offset = { type = "int" }
+}
+[mcp.tools.list_notes.resource]
+type = "query_script_lua"
+script = """
+local q = query_builder("SELECT id, title, content, created_at FROM notes")
+q:add_joined_parts("WHERE", {"project_name = {{project_name}}"}, "AND", "")
+local limit = ctx:get_arg("limit") or 42
+local offset = ctx:get_arg("offset") or 0
+q:add("ORDER BY created_at DESC LIMIT " .. limit .. " OFFSET " .. offset)
+return q:build()
+"""
+
+# ----------------------------------------------------------------------------
+# 3. LOG PROGRESS UPDATE
+# ----------------------------------------------------------------------------
+[mcp.tools.add_progress]
+title = "Log Progress Update"
+description = "Logs a milestone or status update for the project's progress."
+[mcp.tools.add_progress.schema.input]
+type = "dict"
+items = {
+    milestone = { type = "text", required = true },
+    details = { type = "text", required = false },
+    status = { type = "text", required = false }
+}
+
+[mcp.tools.add_progress.resource]
+type = "query_script_lua"
+script = """
+local cols = {"project_name", "milestone"}
+local vals = {"{{project_name}}", "{{milestone}}"}
+
+if ctx:has_arg("details") then 
+    table.insert(cols, "details")
+    table.insert(vals, "{{details}}")
+end
+if ctx:has_arg("status") then 
+    table.insert(cols, "status")
+    table.insert(vals, "{{status}}")
+else
+    table.insert(cols, "status")
+    table.insert(vals, "'in_progress'")
+end
+
+local cols_str = table.concat(cols, ", ")
+local vals_str = table.concat(vals, ", ")
+
+return "INSERT INTO progress (" .. cols_str .. ") VALUES (" .. vals_str .. ") RETURNING id, milestone, status, updated_at"
+"""
+
+# ----------------------------------------------------------------------------
+# 4. LIST PROGRESS UPDATES
+# ----------------------------------------------------------------------------
+[mcp.tools.list_progress]
+title = "List Progress"
+description = "Retrieves recent progress updates and milestones for the project."
+annotations = { read_only = true }
+[mcp.tools.list_progress.schema.input]
+type = "dict"
+items = {
+    status = { type = "text" },
+    limit = { type = "int" },
+    offset = { type = "int" }
+}
+[mcp.tools.list_progress.resource]
+type = "query_script_lua"
+script = """
+local q = query_builder("SELECT id, milestone, details, status, updated_at FROM progress")
+local where_parts = {"project_name = {{project_name}}"}
+if ctx:has_arg("status") then
+    table.insert(where_parts, "status = {{status}}")
+end
+q:add_joined_parts("WHERE", where_parts, "AND", "")
+local limit = ctx:get_arg("limit") or 42
+local offset = ctx:get_arg("offset") or 0
+q:add("ORDER BY updated_at DESC LIMIT " .. limit .. " OFFSET " .. offset)
+return q:build()
+"""
+
+# ----------------------------------------------------------------------------
+# 5. SEMANTIC / FULL-TEXT SEARCH (FTS5)
+# ----------------------------------------------------------------------------
+[mcp.tools.search_notes]
+title = "Search Knowledge Base"
+description = "Performs a full-text search across all note titles and contents using SQLite FTS5 BM25 ranking."
+annotations = { read_only = true, open_world = true }
+[mcp.tools.search_notes.schema.input]
+type = "dict"
+items = {
+    search_query = { type = "text", required = true, validate = { kind = "range", from = 1, to = 255 } },
+    limit = { type = "int" },
+    offset = { type = "int" }
+}
+[mcp.tools.search_notes.resource]
+type = "query_script_lua"
+script = """
+local q = query_builder("SELECT n.id, n.title, snippet(notes_fts, 2, '<b>', '</b>', '...', 64) as snippet, rank FROM notes_fts JOIN notes n ON n.id = notes_fts.rowid")
+local where_parts = {"notes_fts.project_name = {{project_name}}", "notes_fts MATCH {{search_query}}"}
+q:add_joined_parts("WHERE", where_parts, "AND", "")
+local limit = ctx:get_arg("limit") or 42
+local offset = ctx:get_arg("offset") or 0
+q:add("ORDER BY rank LIMIT " .. limit .. " OFFSET " .. offset)
+return q:build()
+"""
+

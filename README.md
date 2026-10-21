@@ -29,11 +29,11 @@ Running it in WAL mode behind Xepak would allow you to have simple and cheap sel
 
 Given its current SQLite support, Xepak is ideal for:
 
-- 👨🏻‍💻**rapid prototyping:** quickly exposing a stateful API without writing backend boilerplate
-- 🌐**self-hosted services:** running on your own hardware or VMs with zero cloud dependency, ensuring you retain full ownership of your data
-- 📟**edge computing and IoT:** deploying a lightweight, high-performance API on a Raspberry Pi or other embedded devices
-- 💻**local-first applications:** serving as a sync layer or API for desktop applications that store data locally
-- 🤖**local RAG for AI/LLM sandboxes:** keeping AI agent knowledge local to prioritize data privacy and ownership
+- 👨🏻‍💻 **rapid prototyping:** quickly buid a stateful API without writing backend boilerplate
+- 🌐 **self-hosted services:** running on your own hardware or VMs with zero cloud dependency, ensuring you retain full ownership of your data
+- 📟 **edge computing and IoT:** deploying a lightweight, high-performance API on a Raspberry Pi or other embedded devices
+- 💻 **local-first applications:** serving as a sync layer or API for desktop applications that store data locally
+- 🤖 **local RAG for AI/LLM sandboxes:** keeping AI agent knowledge local to prioritize data privacy and ownership
 
 
 ## Current project status
@@ -110,4 +110,6 @@ Simple but usable authentication and authorization functionality available:
 This product distributed under MIT license BUT only under certain conditions that are listed in the LICENSE-TERMS file.
 
 I know it's kind of silly but I'm not in the mood right now to write my own license. Will do it later.
+
+Anyway. This project license is and always will be suted for personal usage and for small development teams.
 

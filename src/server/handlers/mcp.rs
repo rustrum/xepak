@@ -26,7 +26,7 @@ use crate::{
 };
 use serde_json::Value;
 
-const NO_DATA_RESPONSE: &str = "No data available for provided request";
+const NO_DATA_RESPONSE: &str = "Empty! No data available for your request.";
 
 #[derive(Clone)]
 struct McpToolHandler {
@@ -283,7 +283,12 @@ impl McpHandler {
 
         // TODO : if no data available must still return text with readable info
         if response.is_empty() {
-            return Ok(XepakValue::from(NO_DATA_RESPONSE));
+            let msg = if self.ep.empty_response_text.is_empty() {
+                XepakValue::from(NO_DATA_RESPONSE)
+            } else {
+                XepakValue::from(self.ep.empty_response_text.as_str())
+            };
+            return mcp_tool_success_content(msg);
         }
 
         mcp_tool_success_content(response)
