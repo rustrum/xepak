@@ -4,6 +4,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use sqlx::{Encode, Type};
+
 use crate::{
     XepakError,
     schema::{Schema, apply_schema, convert_with_schema},
@@ -269,12 +271,41 @@ impl StorageRequestArgs for RequestInput {
     }
 }
 
+// impl SqlxRequestArgs for RequestInput {
+//     fn bind_arg<'a>(
+//         &'a self,
+//         arg_name: &str,
+//         query: sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments>,
+//     ) -> Result<sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments>, XepakError> {
+//         let Some(value) = self.get_arg_value(arg_name) else {
+//             return Err(XepakError::Input(format!(
+//                 "Can't bind argument '{arg_name}' - does not exist in request."
+//             )));
+//         };
+//         Ok(match value {
+//             Cow::Borrowed(v) => v.bind_sqlx(query),
+//             Cow::Owned(v) => v.bind_sql_move(query),
+//         })
+//     }
+// }
+
 impl SqlxRequestArgs for RequestInput {
-    fn bind_arg<'a>(
-        &'a self,
+    fn bind_arg<'q, DB>(
+        &'q self,
         arg_name: &str,
-        query: sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments>,
-    ) -> Result<sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments>, XepakError> {
+        query: sqlx::query::Query<'q, DB, <DB as sqlx::Database>::Arguments>,
+    ) -> Result<sqlx::query::Query<'q, DB, <DB as sqlx::Database>::Arguments>, XepakError>
+    where
+        DB: sqlx::Database,
+        Option<String>: Encode<'q, DB>,
+        f64: Type<DB>,
+        String: Encode<'q, DB> + Type<DB>,
+        bool: Encode<'q, DB> + Type<DB>,
+        i64: Encode<'q, DB> + Type<DB>,
+        f64: Encode<'q, DB> + Type<DB>,
+        String: Encode<'q, DB> + Type<DB>,
+        Vec<u8>: Encode<'q, DB> + Type<DB>,
+    {
         let Some(value) = self.get_arg_value(arg_name) else {
             return Err(XepakError::Input(format!(
                 "Can't bind argument '{arg_name}' - does not exist in request."
