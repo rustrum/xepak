@@ -1,7 +1,6 @@
 [[mcp]]
 uri = "/mcp"
 name = "Posts MCP server"
-protocol_version = "1971-01-01"
 instructions = """
 Provides information about posts and access to posts by ID
 """

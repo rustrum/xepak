@@ -198,7 +198,7 @@ impl Handler<EndpointHandlerArgs> for RpcHandler {
     type Future = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn call(&self, (req, state, body): EndpointHandlerArgs) -> Self::Future {
-        tracing::debug!("Calling RPC endpoint CALL function with {:?}", self.ep);
+        tracing::trace!("Calling RPC endpoint CALL function with {:?}", self.ep);
         let this = self.clone();
         Box::pin(async move { this.handle_request(req, state, body).await })
     }

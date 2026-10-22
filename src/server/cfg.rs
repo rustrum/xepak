@@ -134,9 +134,6 @@ pub struct McpEpSpecs {
     /// MCP name
     pub name: String,
 
-    /// MCP version
-    pub protocol_version: String,
-
     /// MCP server instructions for agent
     pub instructions: String,
 

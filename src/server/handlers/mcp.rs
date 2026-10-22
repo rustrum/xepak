@@ -26,6 +26,12 @@ use crate::{
 };
 use serde_json::Value;
 
+// TODO must move to next protocol version.
+// would require dropping initialization
+// must refactor initialization to server/discover method
+// const PROTOCOL_VERSION: &str = "2026-07-28";
+const PROTOCOL_VERSION: &str = "2024-11-05";
+
 const NO_DATA_RESPONSE: &str = "Empty! No data available for your request.";
 
 #[derive(Clone)]
@@ -148,10 +154,11 @@ impl McpHandler {
     }
 
     fn mcp_initialize(&self) -> XepakValue {
+        tracing::debug!("MCP intialize called");
         XepakValue::from(HashMap::from([
             (
                 "protocolVersion".to_string(),
-                XepakValue::from(self.ep.protocol_version.as_str()),
+                XepakValue::from(PROTOCOL_VERSION),
             ),
             (
                 "instructions".to_string(),
@@ -182,6 +189,7 @@ impl McpHandler {
     }
 
     fn mcp_tools_list(&self) -> XepakValue {
+        tracing::debug!("MCP tools/list called");
         let mut tools = Vec::new();
         for (name, specs) in &self.ep.tools {
             let mut tool_dict = HashMap::new();
@@ -323,7 +331,7 @@ impl Handler<EndpointHandlerArgs> for McpHandler {
     type Future = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn call(&self, (req, state, body): EndpointHandlerArgs) -> Self::Future {
-        tracing::debug!("Calling RPC endpoint CALL function with {:?}", self.ep);
+        tracing::trace!("Calling MCP endpoint CALL function with {:?}", self.ep);
         let this = self.clone();
         Box::pin(async move { this.handle_request(req, state, body).await })
     }
@@ -357,7 +365,7 @@ fn mcp_tool_error(message: &str) -> Result<XepakValue, XepakError> {
         ("isError".to_string(), XepakValue::from(true)),
         (
             "content".to_string(),
-            xepak_to_text_content(XepakValue::from(message))?,
+            XepakValue::from(vec![xepak_to_text_content(XepakValue::from(message))?]),
         ),
     ])))
 }
@@ -366,11 +374,28 @@ fn mcp_tool_error(message: &str) -> Result<XepakValue, XepakError> {
 fn mcp_tool_success_content(value: XepakValue) -> Result<XepakValue, XepakError> {
     Ok(XepakValue::Dict(HashMap::from([
         ("isError".to_string(), XepakValue::from(false)),
-        (
-            "content".to_string(),
-            XepakValue::from(vec![xepak_to_text_content(value)?]),
-        ),
+        ("content".to_string(), xepak_to_content_elements(value)?),
     ])))
+}
+
+/// Wraps value in to array for MCP content elements for tuples
+/// or single row tuple if not
+fn xepak_to_content_elements(value: XepakValue) -> Result<XepakValue, XepakError> {
+    let mut result = Vec::new();
+    match value {
+        XepakValue::Tuple(items) => {
+            for xv in items {
+                result.push(xepak_to_text_content(xv)?)
+            }
+        }
+        xv => {
+            if !xv.is_empty() {
+                result.push(xepak_to_text_content(xv)?)
+            }
+        }
+    }
+
+    Ok(XepakValue::from(result))
 }
 
 /// Wraps value into a single MCP text content element.

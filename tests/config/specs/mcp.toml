@@ -1,7 +1,6 @@
 [[mcp]]
 uri = "/mcp"
 name = "Test MCP posts server"
-protocol_version = "2025-03-26"
 instructions = """
 Provides access to posts data for MCP functionality testing
 """

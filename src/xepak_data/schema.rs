@@ -206,7 +206,6 @@ pub fn apply_schema(
     // Not good but if we are already passing XepakValue then it must exist
     // so checking if required is no longer makes sense
     let linked_type = schema.linked_type();
-    tracing::warn!("Linked type: {linked_type:?}");
     let value = value.to_type(linked_type, true)?;
 
     if validate {

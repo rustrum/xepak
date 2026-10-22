@@ -395,7 +395,6 @@ Notice! 🫵 You must define input schema for your tools! MCP specs require it.
 [[mcp]]
 uri = "/mcp"
 server_version = "1.0.0"
-protocol_version = "2025-03-26"
 name = "Posts server"
 instructions = "Provides access to posts data"
 

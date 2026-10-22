@@ -229,7 +229,6 @@ Each `[[mcp]]` binds one MCP server (JSON-RPC 2.0 over HTTP POST) to a `uri`. Th
 [[mcp]]
 uri = "/mcp"
 name = "Posts server"
-protocol_version = "2025-03-26"
 instructions = "Provides access to posts data"
 server_version = "1.0.0"
 

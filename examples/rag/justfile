@@ -41,18 +41,58 @@ list_notes limit="42" offset="0":
       -H "Accept: application/json, text/event-stream" \
       -d "$payload" | jq
 
+# Get note by id 
+get_note id:
+    #!/usr/bin/env sh
+    payload=$(jq -n \
+      --arg tool "get_note" \
+      --argjson id {{id}} \
+      '{jsonrpc: "2.0", id: 1, method: "tools/call", params: {name: $tool, arguments: {id: $id}}}')
+    
+    curl -s -X POST "{{server}}/mcp/rag/{{project}}" \
+      -H "Content-Type: application/json" \
+      -H "Accept: application/json, text/event-stream" \
+      -d "$payload" | jq
 
-# Add progress
-add_progress milestone details="" status="in_progress":
+# Delete note by id
+delete_note id:
+    #!/usr/bin/env sh
+    payload=$(jq -n \
+      --arg tool "delete_note" \
+      --argjson id {{id}} \
+      '{jsonrpc: "2.0", id: 1, method: "tools/call", params: {name: $tool, arguments: {id: $id}}}')
+    
+    curl -s -X POST "{{server}}/mcp/rag/{{project}}" \
+      -H "Content-Type: application/json" \
+      -H "Accept: application/json, text/event-stream" \
+      -d "$payload" | jq
+
+# Search notes (FTS5)
+search_notes query limit="42" offset="0":
+    #!/usr/bin/env sh
+    payload=$(jq -n \
+      --arg tool "search_notes" \
+      --arg search_query {{quote(query)}} \
+      --argjson limit {{limit}} \
+      --argjson offset {{offset}} \
+      '{jsonrpc: "2.0", id: 1, method: "tools/call", params: {name: $tool, arguments: {query: $search_query, limit: $limit, offset: $offset}}}')
+    
+    curl -s -X POST "{{server}}/mcp/rag/{{project}}" \
+      -H "Content-Type: application/json" \
+      -H "Accept: application/json, text/event-stream" \
+      -d "$payload" | jq
+
+# Add action update (previously add_progress)
+add_action milestone details="" status="in_progress":
     #!/usr/bin/env sh
     args=$(jq -n \
       --arg milestone {{quote(milestone)}} \
       --arg details {{quote(details)}} \
       --arg status {{quote(status)}} \
       '{milestone: $milestone} + (if $details != "" then {details: $details} else {} end) + (if $status != "" then {status: $status} else {} end)')
-      
+    
     payload=$(jq -n \
-      --arg tool "add_progress" \
+      --arg tool "add_action" \
       --argjson args "$args" \
       '{jsonrpc: "2.0", id: 1, method: "tools/call", params: {name: $tool, arguments: $args}}')
     
@@ -61,39 +101,82 @@ add_progress milestone details="" status="in_progress":
       -H "Accept: application/json, text/event-stream" \
       -d "$payload" | jq 
 
-# List progress
-list_progress status="" limit="42" offset="0":
+# Update action status
+update_action_status id status:
     #!/usr/bin/env sh
     payload=$(jq -n \
-      --arg tool "list_progress" \
+      --arg tool "update_action_status" \
+      --argjson id {{id}} \
       --arg status {{quote(status)}} \
-      --argjson limit {{limit}} \
-      --argjson offset {{offset}} \
-      '{jsonrpc: "2.0", id: 1, method: "tools/call", params: {name: $tool, arguments: {limit: $limit, offset: $offset} + (if $status != "" then {status: $status} else {} end)} }')
-
-    curl -s -X POST "{{server}}/mcp/rag/{{project}}" \
-      -H "Content-Type: application/json" \
-      -H "Accept: application/json, text/event-stream" \
-      -d "$payload" \
-      | jq
-
-# Search notes
-search_notes query limit="42" offset="0":
-    #!/usr/bin/env sh
-    payload=$(jq -n \
-      --arg tool "search_notes" \
-      --arg search_query {{quote(query)}} \
-      --argjson limit {{limit}} \
-      --argjson offset {{offset}} \
-      '{jsonrpc: "2.0", id: 1, method: "tools/call", params: {name: $tool, arguments: {search_query: $search_query, limit: $limit, offset: $offset}}}')
+      '{jsonrpc: "2.0", id: 1, method: "tools/call", params: {name: $tool, arguments: {id: $id, status: $status}}}')
     
     curl -s -X POST "{{server}}/mcp/rag/{{project}}" \
       -H "Content-Type: application/json" \
       -H "Accept: application/json, text/event-stream" \
       -d "$payload" | jq
 
+# List actions (with optional status filter)
+list_actions status="" limit="42" offset="0":
+    #!/usr/bin/env sh
+    payload=$(jq -n \
+      --arg tool "list_actions" \
+      --arg status {{quote(status)}} \
+      --argjson limit {{limit}} \
+      --argjson offset {{offset}} \
+      '{jsonrpc: "2.0", id: 1, method: "tools/call", params: {name: $tool, arguments: {limit: $limit, offset: $offset} + (if $status != "" then {status: $status} else {} end)}}')
+
+    curl -s -X POST "{{server}}/mcp/rag/{{project}}" \
+      -H "Content-Type: application/json" \
+      -H "Accept: application/json, text/event-stream" \
+      -d "$payload" | jq
+
+# Delete action by id
+delete_action id:
+    #!/usr/bin/env sh
+    payload=$(jq -n \
+      --arg tool "delete_action" \
+      --argjson id {{id}} \
+      '{jsonrpc: "2.0", id: 1, method: "tools/call", params: {name: $tool, arguments: {id: $id}}}')
+
+    curl -s -X POST "{{server}}/mcp/rag/{{project}}" \
+      -H "Content-Type: application/json" \
+      -H "Accept: application/json, text/event-stream" \
+      -d "$payload" | jq
+
+# Search actions (FTS5)
+search_actions query limit="42" offset="0":
+    #!/usr/bin/env sh
+    payload=$(jq -n \
+      --arg tool "search_actions" \
+      --arg search_query {{quote(query)}} \
+      --argjson limit {{limit}} \
+      --argjson offset {{offset}} \
+      '{jsonrpc: "2.0", id: 1, method: "tools/call", params: {name: $tool, arguments: {query: $search_query, limit: $limit, offset: $offset}}}')
+
+    curl -s -X POST "{{server}}/mcp/rag/{{project}}" \
+      -H "Content-Type: application/json" \
+      -H "Accept: application/json, text/event-stream" \
+      -d "$payload" | jq
+
+
 # Clean DB folder
 clean:
     #!/usr/bin/env sh
     rm -rf ./db/*
     echo "Cleaned up local database directory."
+
+mcp-initialize:
+    @curl -i \
+        -X POST "{{server}}/mcp/rag/{{project}}" \
+        --header 'Content-Type: application/json' \
+        --header 'Accept: application/json, text/event-stream' \
+        --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"just","version":"1.0"}}}' \
+    @echo ""
+
+# List available MCP tools (no session)
+mcp-tools:
+    @curl -sS -X POST "{{server}}/mcp/rag/{{project}}" \
+        -H 'Content-Type: application/json' \
+        -H 'Accept: application/json, text/event-stream' \
+        -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
+        | jq
