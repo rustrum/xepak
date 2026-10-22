@@ -8,12 +8,12 @@ use std::sync::Arc;
 use crate::XepakError;
 use crate::sql_key_args::ParametrizedQuery;
 use crate::xepak_data::XepakValue;
-use crate::xepak_data::sql::SqlxValue;
+use crate::xepak_data::sql::{SqlxBindable, SqlxValue};
 use serde::Deserialize;
 use sqlx::migrate::Migrate;
 use sqlx::query::Query;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-use sqlx::{Acquire, ColumnIndex, Database, Decode, Encode, IntoArguments, SqlitePool, Type};
+use sqlx::{Acquire, ColumnIndex, Database, IntoArguments, SqlitePool};
 use sqlx::{Row, migrate::Migrator};
 use sqlx_core::column::Column;
 
@@ -35,39 +35,6 @@ pub async fn init_storage_connectors(
                 migrations_dir,
                 create_db,
             } => {
-                // let pool = if file.is_empty() {
-                //     let aco = AnyConnectOptions::from_str(
-                //         "sqlite:///file:inmem?mode=memory&cache=shared",
-                //     )
-                //     .expect("Must be valid");
-                //
-                //     tracing::info!("Using SQLite in-memory DB");
-                //
-                //     sqlx::any::AnyPoolOptions::new()
-                //         .max_connections(1)
-                //         .min_connections(1)
-                //         .connect_with(aco)
-                //         .await
-                //         .expect("Must work for in memory")
-                // } else {
-                //     let db_file = normalize_config_path(conf_dir, file);
-                //     tracing::info!("Init SQLite storage \"{id}\" using path \"{db_file:?}\"");
-                //
-                //     let options = SqliteConnectOptions::new()
-                //         .filename(db_file)
-                //         .create_if_missing(*create_db);
-                //
-                //     let options = if *wal {
-                //         options.journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
-                //     } else {
-                //         options
-                //     };
-                //
-                //     let aco = AnyConnectOptions::from_str(options.to_url_lossy().as_str())
-                //         .expect("Query string must be valid but it is not");
-                //
-                //     AnyPool::connect_lazy_with(aco)
-                // };
                 let pool = if file.is_empty() {
                     let options = SqliteConnectOptions::from_str(
                         "sqlite:///file:inmem?mode=memory&cache=shared",
@@ -204,14 +171,13 @@ impl Storage {
     where
         DB: sqlx::Database,
         RA: SqlxRequestArgs,
-        // XepakValue related types
-        for<'q> Option<String>: Encode<'q, DB>,
-        for<'q> String: Encode<'q, DB> + Decode<'q, DB> + Type<DB>,
-        for<'q> bool: Encode<'q, DB> + Decode<'q, DB> + Type<DB>,
-        for<'q> i64: Encode<'q, DB> + Decode<'q, DB> + Type<DB>,
-        for<'q> f64: Encode<'q, DB> + Decode<'q, DB> + Type<DB>,
-        for<'q> String: Encode<'q, DB> + Decode<'q, DB> + Type<DB>,
-        for<'q> Vec<u8>: Encode<'q, DB> + Decode<'q, DB> + Type<DB>,
+        // XepakValue wrapped types
+        for<'a> Option<String>: SqlxBindable<'a, DB>,
+        for<'a> bool: SqlxBindable<'a, DB>,
+        for<'a> i64: SqlxBindable<'a, DB>,
+        for<'a> f64: SqlxBindable<'a, DB>,
+        for<'a> String: SqlxBindable<'a, DB>,
+        for<'a> Vec<u8>: SqlxBindable<'a, DB>,
         // Neede by fetch_all
         <DB as Database>::Arguments: IntoArguments<DB>,
         for<'c> &'c mut <DB as sqlx::Database>::Connection: sqlx::Executor<'c, Database = DB>,
@@ -259,14 +225,13 @@ impl Storage {
     where
         DB: sqlx::Database,
         RA: SqlxRequestArgs,
-        // XepakValue related types
-        for<'q> Option<String>: Encode<'q, DB>,
-        for<'q> String: Encode<'q, DB> + Decode<'q, DB> + Type<DB>,
-        for<'q> bool: Encode<'q, DB> + Decode<'q, DB> + Type<DB>,
-        for<'q> i64: Encode<'q, DB> + Decode<'q, DB> + Type<DB>,
-        for<'q> f64: Encode<'q, DB> + Decode<'q, DB> + Type<DB>,
-        for<'q> String: Encode<'q, DB> + Decode<'q, DB> + Type<DB>,
-        for<'q> Vec<u8>: Encode<'q, DB> + Decode<'q, DB> + Type<DB>,
+        // XepakValue wrapped types
+        for<'a> Option<String>: SqlxBindable<'a, DB>,
+        for<'a> bool: SqlxBindable<'a, DB>,
+        for<'a> i64: SqlxBindable<'a, DB>,
+        for<'a> f64: SqlxBindable<'a, DB>,
+        for<'a> String: SqlxBindable<'a, DB>,
+        for<'a> Vec<u8>: SqlxBindable<'a, DB>,
         // Neede by fetch_all
         <DB as Database>::Arguments: IntoArguments<DB>,
         for<'c> &'c mut <DB as sqlx::Database>::Connection: sqlx::Executor<'c, Database = DB>,
@@ -317,25 +282,22 @@ impl Storage {
         }
     }
 
-    fn prepare_query<'q, DB, RA>(
+    fn prepare_query<'a, DB, RA>(
         &self,
-        request: &'q ResourceRequest<'q, RA>,
-        pquery: &'q ParametrizedQuery<'q>,
-        query: &'q Cow<'q, str>,
-    ) -> Result<Query<'q, DB, <DB as Database>::Arguments>, XepakError>
+        request: &'a ResourceRequest<'a, RA>,
+        pquery: &'a ParametrizedQuery<'a>,
+        query: &'a Cow<'a, str>,
+    ) -> Result<Query<'a, DB, <DB as Database>::Arguments>, XepakError>
     where
         DB: Database,
         RA: SqlxRequestArgs,
-        // Binds types associated with XepakValue
-        Option<String>: Encode<'q, DB>,
-        String: Encode<'q, DB> + Type<DB>,
-        bool: Encode<'q, DB> + Type<DB>,
-        i64: Encode<'q, DB> + Type<DB>,
-        f64: Encode<'q, DB> + Type<DB>,
-        String: Encode<'q, DB> + Type<DB>,
-        Vec<u8>: Encode<'q, DB> + Type<DB>,
-        // Bounds for the value bound by `bind_arg`
-        // XepakValue: Encode<'q, DB> + Type<DB>,
+        // XepakValue wrapped types
+        Option<String>: SqlxBindable<'a, DB>,
+        bool: SqlxBindable<'a, DB>,
+        i64: SqlxBindable<'a, DB>,
+        f64: SqlxBindable<'a, DB>,
+        String: SqlxBindable<'a, DB>,
+        Vec<u8>: SqlxBindable<'a, DB>,
     {
         tracing::debug!("Executing query: {}", pquery.get_query());
         tracing::debug!("Executing build: {}", query);
@@ -365,13 +327,6 @@ impl Storage {
     where
         DB: Database,
         usize: ColumnIndex<<DB as Database>::Row>,
-        // Option<bool>: Decode< DB> + Type<DB>,
-        // String: Decode<'r, DB> + Type<DB>,
-        // bool: Decode<'r, DB> + Type<DB>,
-        // i64: Decode<'r, DB> + Type<DB>,
-        // f64: Decode<'r, DB> + Type<DB>,
-        // String: Decode<'r, DB> + Type<DB>,
-        // Vec<u8>: Decode<'r, DB> + Type<DB>,
         for<'r> XepakValue: TryFrom<SqlxValue<'r, DB>>,
         for<'r> <XepakValue as TryFrom<SqlxValue<'r, DB>>>::Error: std::fmt::Debug,
     {
@@ -409,28 +364,19 @@ pub trait StorageRequestArgs {
 }
 
 /// SQLx related request args bind functionality
-// pub trait SqlxRequestArgs: StorageRequestArgs {
-//     fn bind_arg<'a>(
-//         &'a self,
-//         arg_name: &str,
-//         query: sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments>,
-//     ) -> Result<sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments>, XepakError>;
-// }
 pub trait SqlxRequestArgs: StorageRequestArgs {
-    fn bind_arg<'q, DB>(
-        &'q self,
+    fn bind_arg<'a, DB>(
+        &'a self,
         arg_name: &str,
-        query: Query<'q, DB, <DB as sqlx::Database>::Arguments>,
-    ) -> Result<Query<'q, DB, <DB as sqlx::Database>::Arguments>, XepakError>
+        query: Query<'a, DB, <DB as sqlx::Database>::Arguments>,
+    ) -> Result<Query<'a, DB, <DB as sqlx::Database>::Arguments>, XepakError>
     where
         DB: sqlx::Database,
-        Option<String>: Encode<'q, DB>,
-        String: Encode<'q, DB> + Type<DB>,
-        bool: Encode<'q, DB> + Type<DB>,
-        i64: Encode<'q, DB> + Type<DB>,
-        f64: Encode<'q, DB> + Type<DB>,
-        String: Encode<'q, DB> + Type<DB>,
-        Vec<u8>: Encode<'q, DB> + Type<DB>;
-    // The value borrowed from `self` must be encodable for THIS driver.
-    // XepakValue: sqlx::Encode<'q, DB> + sqlx::Type<DB>;
+        // XepakValue wrapped types
+        Option<String>: SqlxBindable<'a, DB>,
+        bool: SqlxBindable<'a, DB>,
+        i64: SqlxBindable<'a, DB>,
+        f64: SqlxBindable<'a, DB>,
+        String: SqlxBindable<'a, DB>,
+        Vec<u8>: SqlxBindable<'a, DB>;
 }

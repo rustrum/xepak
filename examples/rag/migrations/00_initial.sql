@@ -1,15 +1,8 @@
--- ============================================================================
--- Multi-Tenant RAG SQLite Schema for Xepak MCP Server
--- ============================================================================
-
--- ----------------------------------------------------------------------------
--- 1. CORE KNOWLEDGE TABLE: NOTES
+-- KNOWLEDGE TABLE: NOTES
 -- Stores discrete pieces of text knowledge, facts, and observations.
--- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS notes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     
-    -- The multi-tenant discriminator. Every query MUST filter by this.
     project_name TEXT NOT NULL, 
     
     title TEXT NOT NULL,
@@ -19,18 +12,15 @@ CREATE TABLE IF NOT EXISTS notes (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Critical index for tenant isolation and fast filtering
+-- index for tenant isolation and fast filtering
 CREATE INDEX IF NOT EXISTS idx_notes_project ON notes(project_name);
 CREATE INDEX IF NOT EXISTS idx_notes_project_date ON notes(project_name, created_at DESC);
 
--- ----------------------------------------------------------------------------
--- 2. CORE WORKFLOW TABLE: PROGRESS
+-- WORKFLOW TABLE: PROGRESS
 -- Tracks project milestones, status updates, and temporal context.
--- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS progress (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     
-    -- The multi-tenant discriminator.
     project_name TEXT NOT NULL, 
     
     milestone TEXT NOT NULL,
@@ -41,16 +31,12 @@ CREATE TABLE IF NOT EXISTS progress (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Critical index for tenant isolation and status filtering
+-- index for tenant isolation and status filtering
 CREATE INDEX IF NOT EXISTS idx_progress_project ON progress(project_name);
 CREATE INDEX IF NOT EXISTS idx_progress_project_status ON progress(project_name, status);
 
--- ----------------------------------------------------------------------------
--- 3. RAG RETRIEVAL LAYER: FTS5 (Full-Text Search)
--- Provides the "Retrieval" mechanism for the RAG system using BM25 ranking.
--- This allows the MCP tools to perform fast, relevant text searches scoped 
--- strictly to the requested project_name.
--- ----------------------------------------------------------------------------
+-- RAG RETRIEVAL LAYER: FTS5 (Full-Text Search)
+-- Provides the full-text search via native SQLite capabilities
 
 -- Virtual table for searching Notes
 CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
@@ -72,10 +58,8 @@ CREATE VIRTUAL TABLE IF NOT EXISTS progress_fts USING fts5(
     tokenize="porter unicode61"
 );
 
--- ----------------------------------------------------------------------------
--- 4. FTS SYNC TRIGGERS
+-- FTS SYNC TRIGGERS
 -- Automatically keeps the FTS5 search indexes in sync with the main tables.
--- ----------------------------------------------------------------------------
 
 -- Triggers for Notes FTS
 CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
@@ -113,9 +97,7 @@ CREATE TRIGGER IF NOT EXISTS progress_au AFTER UPDATE ON progress BEGIN
     VALUES (new.id, new.project_name, new.milestone, new.details);
 END;
 
--- ----------------------------------------------------------------------------
--- 5. HELPER TRIGGER: Auto-update `updated_at` timestamps
--- ----------------------------------------------------------------------------
+-- HELPER TRIGGER: Auto-update `updated_at` timestamps
 CREATE TRIGGER IF NOT EXISTS trg_notes_updated_at AFTER UPDATE ON notes
 FOR EACH ROW
 BEGIN

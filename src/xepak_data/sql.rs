@@ -5,20 +5,17 @@ use super::XepakValue;
 impl XepakValue {
     pub fn bind_sqlx<'a, DB>(
         &self,
-        // query: sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments>,
         query: sqlx::query::Query<'a, DB, <DB as sqlx::Database>::Arguments>,
-        // ) -> sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments>
     ) -> sqlx::query::Query<'a, DB, <DB as sqlx::Database>::Arguments>
     where
         DB: sqlx::Database,
-        Option<String>: Encode<'a, DB> + Type<DB>,
-        f64: Type<DB>,
-        String: Encode<'a, DB> + Type<DB>,
-        bool: Encode<'a, DB> + Type<DB>,
-        i64: Encode<'a, DB> + Type<DB>,
-        f64: Encode<'a, DB> + Type<DB>,
-        String: Encode<'a, DB> + Type<DB>,
-        Vec<u8>: Encode<'a, DB> + Type<DB>,
+        // XepakValue wrapped types
+        Option<String>: SqlxBindable<'a, DB>,
+        bool: SqlxBindable<'a, DB>,
+        i64: SqlxBindable<'a, DB>,
+        f64: SqlxBindable<'a, DB>,
+        String: SqlxBindable<'a, DB>,
+        Vec<u8>: SqlxBindable<'a, DB>,
     {
         match self {
             XepakValue::Null => query.bind(None::<String>),
@@ -32,23 +29,19 @@ impl XepakValue {
     }
 
     /// Not sure that it will provide some optimizations but anyway.
-    // pub fn bind_sql_move<'a>(
-    //     self,
-    //     query: sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments>,
-    // ) -> sqlx::query::Query<'a, sqlx::Any, sqlx::any::AnyArguments> {
-    pub fn bind_sql_move<'q, DB>(
+    pub fn bind_sql_move<'a, DB>(
         self,
-        query: sqlx::query::Query<'q, DB, <DB as sqlx::Database>::Arguments>,
-    ) -> sqlx::query::Query<'q, DB, <DB as sqlx::Database>::Arguments>
+        query: sqlx::query::Query<'a, DB, <DB as sqlx::Database>::Arguments>,
+    ) -> sqlx::query::Query<'a, DB, <DB as sqlx::Database>::Arguments>
     where
         DB: sqlx::Database,
-        String: Encode<'q, DB>,
-        bool: Encode<'q, DB> + Type<DB>,
-        i64: Encode<'q, DB> + Type<DB>,
-        f64: Encode<'q, DB> + Type<DB>,
-        String: Encode<'q, DB> + Type<DB>,
-        Vec<u8>: Encode<'q, DB> + Type<DB>,
-        Option<String>: Encode<'q, DB>,
+        // XepakValue wrapped types
+        Option<String>: SqlxBindable<'a, DB>,
+        bool: SqlxBindable<'a, DB>,
+        i64: SqlxBindable<'a, DB>,
+        f64: SqlxBindable<'a, DB>,
+        String: SqlxBindable<'a, DB>,
+        Vec<u8>: SqlxBindable<'a, DB>,
     {
         match self {
             XepakValue::Null => query.bind(None::<String>),
@@ -62,7 +55,6 @@ impl XepakValue {
     }
 }
 
-// pub struct SqlxValue<'r>(pub sqlx::any::AnyValueRef<'r>);
 /// A workaround to fix rust error: `try_from` has an incompatible type for trait.
 pub struct SqlxValue<'r, DB: Database>(pub <DB as Database>::ValueRef<'r>);
 
@@ -72,19 +64,19 @@ impl<'r, DB: Database> SqlxValue<'r, DB> {
     }
 }
 
-impl<'r, DB: Database> TryFrom<SqlxValue<'r, DB>> for XepakValue
+impl<'a, DB: Database> TryFrom<SqlxValue<'a, DB>> for XepakValue
 where
-    Option<bool>: Decode<'r, DB> + Type<DB>,
-    String: Decode<'r, DB> + Type<DB>,
-    bool: Decode<'r, DB> + Type<DB>,
-    i64: Decode<'r, DB> + Type<DB>,
-    f64: Decode<'r, DB> + Type<DB>,
-    String: Decode<'r, DB> + Type<DB>,
-    Vec<u8>: Decode<'r, DB> + Type<DB>,
+    // XepakValue wrapped types
+    Option<String>: SqlxBindable<'a, DB>,
+    bool: SqlxBindable<'a, DB>,
+    i64: SqlxBindable<'a, DB>,
+    f64: SqlxBindable<'a, DB>,
+    String: SqlxBindable<'a, DB>,
+    Vec<u8>: SqlxBindable<'a, DB>,
 {
     type Error = sqlx::error::BoxDynError;
 
-    fn try_from(vw: SqlxValue<'r, DB>) -> Result<Self, Self::Error> {
+    fn try_from(vw: SqlxValue<'a, DB>) -> Result<Self, Self::Error> {
         let value = vw.0;
 
         // 1) NULL first. Ask the value's storage class - not `name()`,
@@ -123,46 +115,31 @@ where
     }
 }
 
+/// Attempt to organize somehow tricky sqlx related generics
+pub trait SqlxBindable<'a, DB: Database>:
+    Encode<'a, DB> + Decode<'a, DB> + Type<DB> + Send + Sync
+{
+}
+
+impl<'a, DB, T> SqlxBindable<'a, DB> for T
+where
+    DB: Database,
+    T: Encode<'a, DB> + Decode<'a, DB> + Type<DB> + Send + Sync,
+{
+}
+
 /*
-    fn try_from(vw: SqlxValue<'r, DB>) -> Result<Self, Self::Error> {
-        let value = vw.0;
-
-        // Use the Database's TypeInfo to check column type names
-        let type_info = value.type_info();
-
-        // Maybe use type_info.type_compatible(other)
-        let res = match type_info.name() {
-            "NULL" => Self::Null,
-            "INTEGER" | "INT" | "BIGINT" => {
-                // TODO handle unsigned integers better
-                let v: i64 = sqlx::Decode::<DB>::decode(value)?;
-                Self::Integer(v as i128)
-            }
-            "REAL" | "DOUBLE" => {
-                // TODO handle unsigned integers better
-                let v: f64 = sqlx::Decode::<DB>::decode(value)?;
-                Self::Float(v)
-            }
-            "BLOB" => {
-                let b: Vec<u8> = sqlx::Decode::<DB>::decode(value)?;
-                Self::Blob(b)
-            }
-            _ => Self::Text(sqlx::Decode::<DB>::decode(value)?),
-        };
-
-        Ok(res)
-    }
 SQLITE
-            DataType::Null => "NULL",
-            DataType::Text => "TEXT",
-            DataType::Float => "REAL",
-            DataType::Blob => "BLOB",
-            DataType::Int4 | DataType::Integer => "INTEGER",
-            DataType::Numeric => "NUMERIC",
+    DataType::Null => "NULL",
+    DataType::Text => "TEXT",
+    DataType::Float => "REAL",
+    DataType::Blob => "BLOB",
+    DataType::Int4 | DataType::Integer => "INTEGER",
+    DataType::Numeric => "NUMERIC",
 
-            // non-standard extensions
-            DataType::Bool => "BOOLEAN",
-            DataType::Date => "DATE",
-            DataType::Time => "TIME",
-            DataType::Datetime => "DATETIME",
+    // non-standard extensions
+    DataType::Bool => "BOOLEAN",
+    DataType::Date => "DATE",
+    DataType::Time => "TIME",
+    DataType::Datetime => "DATETIME",
 */
