@@ -117,11 +117,13 @@ async fn mcp_initialize_tools_and_call() {
     assert!(call.is_ok(), "{call:?}");
     let call = call.unwrap();
     assert!(!call.is_error, "{call:?}");
-    assert_eq!(call.content.len(), 4, "{call:?}");
+    assert_eq!(call.content.len(), 1, "{call:?}");
     assert_eq!(call.content[0].content_type, "text", "{call:?}");
-    let post: domain::PostsRecord =
-        serde_json::from_str(&call.content[0].text).expect("list_posts content must be JSON");
-    assert_eq!(post.id, 1, "{post:?}");
+    assert!(
+        &call.content[0].text.contains("ecord number: 4"),
+        "{:?}",
+        call.content[0].text
+    );
 
     // 4) tools/call get_post must return the requested post
     let call = client
@@ -130,9 +132,11 @@ async fn mcp_initialize_tools_and_call() {
     assert!(call.is_ok(), "{call:?}");
     let call = call.unwrap();
     assert!(!call.is_error, "{call:?}");
-    let post: domain::PostsRecord =
-        serde_json::from_str(&call.content[0].text).expect("get_post content must be JSON");
-    assert_eq!(post.id, 1, "{post:?}");
+    assert!(
+        call.content[0].text.contains("id: 1") && call.content[0].text.contains("id: 1"),
+        "{:?}",
+        call.content[0].text
+    );
 
     // Auth check
     let mut headers = HeaderMap::new();

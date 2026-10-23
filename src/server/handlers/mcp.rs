@@ -5,6 +5,7 @@ use actix_web::{
     dev::HttpServiceFactory,
     web::{self, Bytes, Data},
 };
+use base64::Engine as _;
 use serde::Deserialize;
 
 use super::rpc::{JSON_RPC_VERSION, JsonRpcRequest, RPC_ERROR_INVALID_REQUEST, RPC_ERROR_PARSE};
@@ -33,6 +34,12 @@ use serde_json::Value;
 const PROTOCOL_VERSION: &str = "2024-11-05";
 
 const NO_DATA_RESPONSE: &str = "Empty! No data available for your request.";
+
+#[derive(Deserialize)]
+struct McpToolParams<T> {
+    name: String,
+    arguments: T,
+}
 
 #[derive(Clone)]
 struct McpToolHandler {
@@ -365,7 +372,10 @@ fn mcp_tool_error(message: &str) -> Result<XepakValue, XepakError> {
         ("isError".to_string(), XepakValue::from(true)),
         (
             "content".to_string(),
-            XepakValue::from(vec![xepak_to_text_content(XepakValue::from(message))?]),
+            XepakValue::from(vec![xepak_to_text_content(
+                XepakValue::from(message),
+                false,
+            )?]),
         ),
     ])))
 }
@@ -384,13 +394,21 @@ fn xepak_to_content_elements(value: XepakValue) -> Result<XepakValue, XepakError
     let mut result = Vec::new();
     match value {
         XepakValue::Tuple(items) => {
-            for xv in items {
-                result.push(xepak_to_text_content(xv)?)
+            let mut markdown = String::new();
+            for (idx, xv) in items.into_iter().enumerate() {
+                let record = xepak_to_markdown_kv(xv, Some(idx + 1));
+
+                markdown.push_str(&record);
+                markdown.push('\n');
             }
+            result.push(XepakValue::Dict(HashMap::from([
+                ("type".to_string(), XepakValue::from("text")),
+                ("text".to_string(), XepakValue::from(markdown)),
+            ])));
         }
         xv => {
             if !xv.is_empty() {
-                result.push(xepak_to_text_content(xv)?)
+                result.push(xepak_to_text_content(xv, false)?)
             }
         }
     }
@@ -399,22 +417,67 @@ fn xepak_to_content_elements(value: XepakValue) -> Result<XepakValue, XepakError
 }
 
 /// Wraps value into a single MCP text content element.
-/// Original value will be JSON serialized as a string.
-fn xepak_to_text_content(value: XepakValue) -> Result<XepakValue, XepakError> {
-    let text = match value {
+/// Original value will be JSON string or markdown-kv.
+fn xepak_to_text_content(value: XepakValue, markdown_kv: bool) -> Result<XepakValue, XepakError> {
+    let text_value = match value {
         XepakValue::Text(txt) => txt,
-        jval => serde_json::to_string(&jval).map_err(XepakError::other)?,
+        xval => {
+            if markdown_kv {
+                xepak_to_markdown_kv(xval, None)
+            } else {
+                serde_json::to_string(&xval).map_err(XepakError::other)?
+            }
+        }
     };
     Ok(XepakValue::Dict(HashMap::from([
         ("type".to_string(), XepakValue::from("text")),
-        ("text".to_string(), XepakValue::from(text)),
+        ("text".to_string(), XepakValue::from(text_value)),
     ])))
 }
 
-#[derive(Deserialize)]
-struct McpToolParams<T> {
-    name: String,
-    arguments: T,
+/// Convert [`XepakValue`] to text in markdown-kv format
+/// `seq_number` - If set will output record with sequential number
+fn xepak_to_markdown_kv(value: XepakValue, seq_number: Option<usize>) -> String {
+    let mut result = "# Record".to_string();
+
+    if let Some(seq) = seq_number {
+        result.push_str(&format!(" number: {seq}"));
+    }
+    result.push('\n');
+
+    let data = match value {
+        XepakValue::Dict(dict) => {
+            let mut kv_map = String::new();
+            for (k, v) in dict {
+                kv_map.push_str(&k);
+                kv_map.push_str(": ");
+
+                let val = v.as_string();
+                let valtrim = val.trim();
+                if valtrim.contains('\n') {
+                    kv_map.push_str(" |\n");
+                    let val_indent: String = valtrim
+                        .split_inclusive('\n')
+                        .map(|line| format!("  {}", line))
+                        .collect();
+                    kv_map.push_str(&val_indent);
+                } else {
+                    kv_map.push_str(valtrim);
+                }
+
+                kv_map.push('\n');
+            }
+            kv_map
+        }
+        XepakValue::Blob(blob) => {
+            let encoded = base64::engine::general_purpose::STANDARD.encode(blob);
+            format!("BASE64: {encoded}")
+        }
+        xv => xv.as_string(),
+    };
+    result.push_str(&data);
+    result.push('\n');
+    result
 }
 
 pub mod schema {

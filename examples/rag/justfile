@@ -9,8 +9,6 @@ project := env_var_or_default("MCP_PROJECT", "xepak-test-project")
 
 # Runs Xepak server (launches in the separate terminal session)
 run:
-    #!/usr/bin/env sh
-    mkdir -p ./db
     cargo run --bin xepak -- ./xepak-rag.toml
 
 # Add knowledge note

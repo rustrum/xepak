@@ -51,6 +51,7 @@ pub async fn init_storage_connectors(
                         .expect("Must work for in memory")
                 } else {
                     let db_file = normalize_config_path(conf_dir, file);
+                    create_parent_dirs(&db_file)?;
                     tracing::info!("Init SQLite storage \"{id}\" using path \"{db_file:?}\"");
 
                     let options = SqliteConnectOptions::new()
@@ -112,6 +113,17 @@ where
         .map_err(|e| XepakError::Other(Arc::new(e.into())))?;
 
     Ok(())
+}
+
+fn create_parent_dirs(file_path: &Path) -> Result<(), XepakError> {
+    let Some(parent) = file_path.parent() else {
+        return Ok(());
+    };
+    if parent.as_os_str().is_empty() {
+        return Ok(());
+    }
+
+    std::fs::create_dir_all(parent).map_err(|err| XepakError::Cfg(err.to_string()))
 }
 
 #[derive(Clone, Debug, Deserialize)]

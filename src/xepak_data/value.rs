@@ -1,6 +1,5 @@
 use base64::Engine;
 use std::collections::HashMap;
-use strum::Display;
 
 use super::XepakDataError;
 use super::XepakType;
@@ -11,7 +10,7 @@ use super::XepakType;
 /// Plus it must be compatible with sqlx type system to be used as a query argument.
 ///
 /// Deserialization will be a little bit tricky
-#[derive(Debug, Clone, Display)]
+#[derive(Debug, Clone)]
 pub enum XepakValue {
     /// Null/nothing/undefined type
     Null,
@@ -334,6 +333,11 @@ impl XepakValue {
     }
 }
 
+impl std::fmt::Display for XepakValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.as_string())
+    }
+}
 impl PartialEq for XepakValue {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
