@@ -266,15 +266,15 @@ mod tests {
         let value = dict_all_types();
         let expected = value.clone();
 
-        let json = value.to_json().unwrap();
-        let mut decoded: XepakValue = serde_json::from_str(&json).unwrap();
+        let json = value.to_json().expect("Test failed");
+        let mut decoded: XepakValue = serde_json::from_str(&json).expect("Test failed");
 
         // Blob serializes as a base64 string, so it can't roundtrip as Blob via JSON
         if let XepakValue::Dict(map) = &mut decoded {
             map.entry("blob".to_string()).and_modify(|e| {
                 *e = e
                     .to_type(XepakType::Blob, true)
-                    .expect("Must convert to blob")
+                    .expect("Test failed: must convert to blob")
             });
         }
         assert_eq!(decoded, expected);
@@ -287,8 +287,8 @@ mod tests {
             XepakValue::Text("three".to_string()),
             XepakValue::Boolean(false),
         ]);
-        let json = tuple.to_json().unwrap();
-        let decoded: XepakValue = serde_json::from_str(&json).unwrap();
+        let json = tuple.to_json().expect("Test failed");
+        let decoded: XepakValue = serde_json::from_str(&json).expect("Test failed");
         assert_eq!(decoded, tuple);
     }
 
@@ -296,8 +296,8 @@ mod tests {
     fn cbor_decode_encode_consistency() {
         let value = dict_all_types();
 
-        let bytes = value.to_cbor_vec().unwrap();
-        let decoded: XepakValue = cbor2::from_slice(&bytes).unwrap();
+        let bytes = value.to_cbor_vec().expect("Test failed");
+        let decoded: XepakValue = cbor2::from_slice(&bytes).expect("Test failed");
         assert_eq!(decoded, value);
 
         // Just check same for root tuple element
@@ -308,8 +308,8 @@ mod tests {
             XepakValue::Text("three".to_string()),
             XepakValue::Boolean(false),
         ]);
-        let bytes = tuple.to_cbor_vec().unwrap();
-        let decoded: XepakValue = cbor2::from_slice(&bytes).unwrap();
+        let bytes = tuple.to_cbor_vec().expect("Test failed");
+        let decoded: XepakValue = cbor2::from_slice(&bytes).expect("Test failed");
         assert_eq!(decoded, tuple);
     }
 
@@ -364,7 +364,7 @@ mod tests {
         ];
         for (expected, json_value) in cases {
             let json = json_value.to_string();
-            let decoded: XepakValue = serde_json::from_str(&json).unwrap();
+            let decoded: XepakValue = serde_json::from_str(&json).expect("Test failed");
             assert_eq!(decoded, expected, "failed to decode {json}");
         }
 
@@ -372,8 +372,8 @@ mod tests {
         // but they do through CBOR
         for big in [i128::MAX, i128::MIN, u64::MAX as i128] {
             let value = XepakValue::Integer(big);
-            let bytes = value.to_cbor_vec().unwrap();
-            let decoded: XepakValue = cbor2::from_slice(&bytes).unwrap();
+            let bytes = value.to_cbor_vec().expect("Test failed");
+            let decoded: XepakValue = cbor2::from_slice(&bytes).expect("Test failed");
             assert_eq!(decoded, value, "failed to decode {big}");
         }
     }

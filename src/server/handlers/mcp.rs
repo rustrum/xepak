@@ -637,7 +637,8 @@ pub mod schema {
         use super::*;
 
         fn assert_json_equal(actual: XepakValue, expected: &serde_json::Value) {
-            let actual_json = serde_json::to_value(actual).expect("Failed to serialize XepakValue");
+            let actual_json =
+                serde_json::to_value(actual).expect("Test failed to serialize XepakValue");
             assert_eq!(actual_json, *expected, "JSON mismatch");
         }
 

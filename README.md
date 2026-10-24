@@ -33,7 +33,7 @@ Given its current SQLite support, Xepak is ideal for:
 - 🌐 **self-hosted services:** running on your own hardware or VMs with zero cloud dependency, ensuring you retain full ownership of your data
 - 📟 **edge computing and IoT:** deploying a lightweight, high-performance API on a Raspberry Pi or other embedded devices
 - 💻 **local-first applications:** serving as a sync layer or API for desktop applications that store data locally
-- 🤖 **local RAG for AI/LLM sandboxes:** keeping AI agent knowledge local to prioritize data privacy and ownership
+- 🤖 **[local RAG for AI/LLM sandboxes](./examples/rag/README.md):** keeping AI agent knowledge local to prioritize data privacy and ownership
 
 
 ## Current project status

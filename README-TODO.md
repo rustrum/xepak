@@ -1,7 +1,12 @@
-# In general
+# Next things to do
 
-Should I rename endpoint "resource"?
+IMPORTANT limit/offset logic must be moved to pre-processors.
+RequestInput must not be aware of such custom fields - it just holds and transfer data
 
+# General thoughts
+
+- Should I rename endpoint "resource"?
+- Should add more input validators
 
 # Blob type updates
 
@@ -23,14 +28,10 @@ Must think from the perspective of file uploads.
 
 Idea! Wrap input reader (to do not read all) instead of using blob. 
 
-# DB named arg improvements
+
+# DB named arg improvements (next release)
 
 Should add support for nested fields and array indexes like `{{[0].name}}` if top level input is array.
-
-
-# Input validators
-
-Should enable and add some tests to it.
 
 
 # Sqlite Vector support (do later)
@@ -39,13 +40,12 @@ It is possible using sqlite-vec but unfortunately it is an experimental
 library and it does not support indexing.
 It is more reasonable to support PostgreSQL first.
 
+
 # Optimization
 
-## Do it with RequestInput or not?
+## Request input
 
-I can not mutate RequestInput via set_arg from script because of cloning.
-
-Thus custom arguments now inside Arch<Mutex<Map>>.
+RequestInput is cloned into Lua so custom arguments now inside Arch<Mutex<Map>>.
 
 Access to RequestInput should be sequential, read only for most cases.
 

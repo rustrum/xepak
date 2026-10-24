@@ -238,7 +238,7 @@ pub fn rpc_error_response(id: Option<RpcId>, code: isize, message: String) -> Ht
         id,
         error: payload,
     };
-    let body = serde_json::to_string(&envelope).expect("JsonRpcError is always serializable");
+    let body = serde_json::to_string(&envelope).expect("Expect JsonRpcError to be serializable");
     HttpResponse::Ok()
         .insert_header(("Content-Type", "application/json"))
         .body(body)
@@ -276,7 +276,7 @@ pub fn rpc_success_response(id: Option<RpcId>, result: XepakValue) -> HttpRespon
         result,
     };
 
-    let body = serde_json::to_string(&envelope).expect("success envelope is always serializable");
+    let body = serde_json::to_string(&envelope).expect("Expect response to be serializable");
     HttpResponse::Ok()
         .insert_header(("Content-Type", "application/json"))
         .body(body)

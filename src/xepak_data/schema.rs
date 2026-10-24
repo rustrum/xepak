@@ -471,7 +471,7 @@ mod tests {
         };
 
         let value = XepakValue::from(123);
-        apply_schema(&schema, value, "test", false, false).unwrap();
+        apply_schema(&schema, value, "test", false, false).expect("Test failed");
 
         let schema_bool = Schema::Boolean {
             required: Default::default(),
@@ -479,7 +479,7 @@ mod tests {
         };
 
         let value_bool = XepakValue::Boolean(true);
-        apply_schema(&schema_bool, value_bool, "test", false, false).unwrap();
+        apply_schema(&schema_bool, value_bool, "test", false, false).expect("Test failed");
 
         let schema_float = Schema::Float {
             required: Default::default(),
@@ -487,7 +487,7 @@ mod tests {
         };
 
         let value_float = XepakValue::from(std::f64::consts::PI);
-        apply_schema(&schema_float, value_float, "test", false, false).unwrap();
+        apply_schema(&schema_float, value_float, "test", false, false).expect("Test failed");
 
         let schema_text = Schema::Text {
             required: Default::default(),
@@ -495,7 +495,7 @@ mod tests {
         };
 
         let value_text = XepakValue::from("hello");
-        apply_schema(&schema_text, value_text, "test", false, false).unwrap();
+        apply_schema(&schema_text, value_text, "test", false, false).expect("Test failed");
 
         let schema_blob = Schema::Blob {
             required: Default::default(),
@@ -503,7 +503,7 @@ mod tests {
         };
 
         let value_blob = XepakValue::Blob(vec![1u8, 2, 3]);
-        apply_schema(&schema_blob, value_blob, "test", false, false).unwrap();
+        apply_schema(&schema_blob, value_blob, "test", false, false).expect("Test failed");
     }
 
     #[test]
@@ -538,7 +538,7 @@ mod tests {
         let value: XepakValue = XepakValue::from(vec![XepakValue::from("42")]);
         let result = apply_schema(&schema, value, "", false, false);
         assert_eq!(
-            result.unwrap(),
+            result.expect("Test failed"),
             XepakValue::Tuple(vec![XepakValue::Integer(42)])
         );
 
@@ -551,7 +551,7 @@ mod tests {
         let value: XepakValue = XepakValue::from(vec![XepakValue::from(true)]);
         let result = apply_schema(&schema, value, "", false, false);
         assert_eq!(
-            result.unwrap(),
+            result.expect("Test failed"),
             XepakValue::Tuple(vec![XepakValue::Integer(1)])
         );
 
@@ -563,7 +563,7 @@ mod tests {
         ]);
         let result = apply_schema(&schema, value, "", false, false);
         assert_eq!(
-            result.unwrap(),
+            result.expect("Test failed"),
             XepakValue::Tuple(vec![
                 XepakValue::Integer(1),
                 XepakValue::Text("hello".to_string()),
@@ -625,7 +625,7 @@ mod tests {
             XepakValue::from(vec![XepakValue::from("1"), XepakValue::from("2")]);
         let result = apply_schema(&schema, value, "", false, false);
         assert_eq!(
-            result.unwrap(),
+            result.expect("Test failed"),
             XepakValue::Tuple(vec![XepakValue::Integer(1), XepakValue::Integer(2)])
         );
 
@@ -637,7 +637,7 @@ mod tests {
         ]);
         let result = apply_schema(&schema, value, "", false, false);
         assert_eq!(
-            result.unwrap(),
+            result.expect("Test failed"),
             XepakValue::Tuple(vec![
                 XepakValue::Integer(1),
                 XepakValue::Integer(2),
@@ -676,7 +676,7 @@ mod tests {
         ]);
         let result = apply_schema(&schema, value, "", false, false);
         assert_eq!(
-            result.unwrap(),
+            result.expect("Test failed"),
             XepakValue::Tuple(vec![
                 XepakValue::Integer(1),
                 XepakValue::Text("a".to_string()),
@@ -711,7 +711,7 @@ mod tests {
         ]);
         let result = apply_schema(&schema, value, "", false, false);
         assert_eq!(
-            result.unwrap(),
+            result.expect("Test failed"),
             XepakValue::Tuple(vec![
                 XepakValue::Integer(1),
                 XepakValue::Text("a".to_string()),

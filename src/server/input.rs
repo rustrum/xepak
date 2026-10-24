@@ -102,7 +102,12 @@ impl RequestInput {
     }
 
     pub fn has_any_arg(&self, arg_name: &str) -> bool {
-        if self.args.lock().unwrap().contains_key(arg_name) {
+        if self
+            .args
+            .lock()
+            .expect("Lock is poisoned, can't recover")
+            .contains_key(arg_name)
+        {
             return true;
         }
         if self.path_args.dict_contains(arg_name) {
@@ -116,7 +121,7 @@ impl RequestInput {
 
     pub fn get_arg_value(&self, name: &str) -> Option<Cow<'_, XepakValue>> {
         // Custom defined args has higher priority
-        let args_lock = self.args.lock().unwrap();
+        let args_lock = self.args.lock().expect("Lock is poisoned, can't recover");
         if args_lock.contains_key(name) {
             return args_lock.get(name).cloned().map(Cow::Owned);
         }
@@ -242,7 +247,10 @@ impl RequestInput {
             }
         };
 
-        self.args.lock().unwrap().insert(name, value);
+        self.args
+            .lock()
+            .expect("Lock is poisoned, can't recover")
+            .insert(name, value);
         Ok(())
     }
 

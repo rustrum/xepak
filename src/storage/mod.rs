@@ -39,7 +39,7 @@ pub async fn init_storage_connectors(
                     let options = SqliteConnectOptions::from_str(
                         "sqlite:///file:inmem?mode=memory&cache=shared",
                     )
-                    .expect("Must be valid");
+                    .expect("Constant connection string must work");
 
                     tracing::info!("Using SQLite in-memory DB");
 
@@ -105,12 +105,12 @@ where
 {
     let migrator = Migrator::new(dir)
         .await
-        .map_err(|e| XepakError::Other(Arc::new(e.into())))?;
+        .map_err(|e| XepakError::Storage(format!("{e:?}")))?;
 
     migrator
         .run(pool)
         .await
-        .map_err(|e| XepakError::Other(Arc::new(e.into())))?;
+        .map_err(|e| XepakError::Storage(format!("{e:?}")))?;
 
     Ok(())
 }
@@ -168,7 +168,10 @@ impl Storage {
     ) -> Result<Vec<XepakValue>, XepakError> {
         match &self.pool {
             StorageConnection::Sqlite(pool) => {
-                let mut connection = pool.acquire().await.unwrap();
+                let mut connection = pool
+                    .acquire()
+                    .await
+                    .map_err(|e| XepakError::Storage(format!("{e:?}")))?;
                 self.query_impl::<sqlx::Sqlite, RA>(&mut connection, &request)
                     .await
             }
@@ -204,12 +207,12 @@ impl Storage {
         let result = sql_query
             .fetch_all(&mut *connection)
             .await
-            .expect("TODO fetch_all");
+            .map_err(|e| XepakError::Other(Arc::new(e.into())))?;
 
         let mut out = Vec::new();
         for row in result {
             let out_row = self.map_row(row);
-            out.push(out_row.into());
+            out.push(out_row?.into());
         }
 
         Ok(out)
@@ -222,7 +225,10 @@ impl Storage {
     ) -> Result<Option<XepakValue>, XepakError> {
         match &self.pool {
             StorageConnection::Sqlite(pool) => {
-                let mut connection = pool.acquire().await.unwrap();
+                let mut connection = pool
+                    .acquire()
+                    .await
+                    .map_err(|e| XepakError::Storage(format!("{e:?}")))?;
                 self.query_one_impl::<sqlx::Sqlite, RA>(&mut connection, &request)
                     .await
             }
@@ -258,9 +264,11 @@ impl Storage {
         let result = sql_query
             .fetch_optional(&mut *connection)
             .await
-            .expect("TODO");
+            .map_err(|e| XepakError::Other(Arc::new(e.into())))?;
 
-        Ok(result.map(|r| self.map_row(r).into()))
+        result
+            .map(|r| self.map_row(r).map(|v| v.into()))
+            .transpose()
     }
 
     /// Execute query that must have one row with only one column.
@@ -335,7 +343,10 @@ impl Storage {
         Ok(sql_query)
     }
 
-    fn map_row<DB>(&self, row: <DB as Database>::Row) -> HashMap<String, XepakValue>
+    fn map_row<DB>(
+        &self,
+        row: <DB as Database>::Row,
+    ) -> Result<HashMap<String, XepakValue>, XepakError>
     where
         DB: Database,
         usize: ColumnIndex<<DB as Database>::Row>,
@@ -346,13 +357,16 @@ impl Storage {
         let cols = row.columns();
         let mut out_row = HashMap::new();
         for (idx, c) in cols.iter().enumerate() {
-            let col = row.try_get_raw(idx).expect("TODO get raw");
-            let cval =
-                XepakValue::try_from(SqlxValue::<DB>::new(col)).expect("TODO xepak try_from");
+            let col = row
+                .try_get_raw(idx)
+                .map_err(|e| XepakError::Storage(format!("{e:?}")))?;
+            let cval = XepakValue::try_from(SqlxValue::<DB>::new(col))
+                .map_err(|e| XepakError::Convert(format!("{e:?}")))?;
 
             out_row.insert(c.name().to_string(), cval);
         }
-        out_row
+
+        Ok(out_row)
     }
 }
 

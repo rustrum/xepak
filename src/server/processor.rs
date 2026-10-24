@@ -269,7 +269,7 @@ impl PreProcessorHandler for BodyToArgsProcessor {
                 input
                     .args
                     .lock()
-                    .unwrap()
+                    .expect("Lock is poisoned, can't recover")
                     .insert(key.clone(), XepakValue::Null);
             }
         }

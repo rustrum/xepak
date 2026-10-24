@@ -260,22 +260,22 @@ mod tests {
     #[test]
     fn lexer_next_ok() {
         let mut lexer = SqlLexer::new("SELECT 'it''s a text' {{key1}}");
-        let (key, range) = lexer.next_key_arg().unwrap();
+        let (key, range) = lexer.next_key_arg().expect("Test failed");
         assert_eq!(key, "key1");
         assert_eq!(range, 22..=29);
 
         let mut lexer =
             SqlLexer::new("SELECT {{key1}} WHERE x={{key_2}} {{notkey1},{notkey2}} y={{key-3}}");
 
-        let (key, range) = lexer.next_key_arg().unwrap();
+        let (key, range) = lexer.next_key_arg().expect("Test failed");
         assert_eq!(key, "key1");
         assert_eq!(range, 7..=14);
 
-        let (key, range) = lexer.next_key_arg().unwrap();
+        let (key, range) = lexer.next_key_arg().expect("Test failed");
         assert_eq!(key, "key_2");
         assert_eq!(range, 24..=32);
 
-        let (key, range) = lexer.next_key_arg().unwrap();
+        let (key, range) = lexer.next_key_arg().expect("Test failed");
         assert_eq!(key, "key-3");
         assert_eq!(range, 58..=66);
 
@@ -285,15 +285,15 @@ mod tests {
             "SELECT * FROM users WHERE id={{123}} LIMIT {{--LIMIT--}} OFFSET {{__OFFSET__}}",
         );
 
-        let (key, range) = lexer.next_key_arg().unwrap();
+        let (key, range) = lexer.next_key_arg().expect("Test failed");
         assert_eq!(key, "123");
         assert_eq!(range, 29..=35);
 
-        let (key, range) = lexer.next_key_arg().unwrap();
+        let (key, range) = lexer.next_key_arg().expect("Test failed");
         assert_eq!(key, "--LIMIT--");
         assert_eq!(range, 43..=55);
 
-        let (key, range) = lexer.next_key_arg().unwrap();
+        let (key, range) = lexer.next_key_arg().expect("Test failed");
         assert_eq!(key, "__OFFSET__");
         assert_eq!(range, 64..=77);
 

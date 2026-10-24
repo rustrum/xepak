@@ -119,7 +119,7 @@ impl<'a> RulesParser<'a> {
             return Err(parse_err("missing closing brace", self.pos, self.input));
         }
 
-        let root = self.scopes.pop().unwrap();
+        let root = self.scopes.pop().expect("Element existence checked above");
         if root.items.is_empty() {
             return Err(parse_err("empty auth string", self.pos, ""));
         }
@@ -219,11 +219,10 @@ impl<'a> RulesParser<'a> {
     }
 
     fn consume_word(&mut self, word: &str, idx: usize) -> Result<(), XepakError> {
+        let scope = self.scopes.last_mut().expect("One scope expected at least");
         if let Some(new_op) = classify_keyword(word, idx, self.input)? {
-            let scope = self.scopes.last_mut().unwrap();
             scope.op = scope.op.on_operator(new_op, idx, self.input)?;
         } else {
-            let scope = self.scopes.last_mut().unwrap();
             if matches!(scope.op, OpKind::Empty) && !scope.items.is_empty() {
                 return Err(parse_err(
                     "expected operator between operands",
@@ -243,7 +242,7 @@ impl<'a> RulesParser<'a> {
         if word.is_empty() {
             return Err(parse_err("empty id after '#'", idx, self.input));
         }
-        let scope = self.scopes.last_mut().unwrap();
+        let scope = self.scopes.last_mut().expect("One scope expected at least");
         if matches!(scope.op, OpKind::Empty) && !scope.items.is_empty() {
             return Err(parse_err(
                 "expected operator between operands",
@@ -258,8 +257,9 @@ impl<'a> RulesParser<'a> {
         Ok(())
     }
 
+    /// Entering the scope "(".
     fn push_scope(&mut self, idx: usize) -> Result<(), XepakError> {
-        let scope = self.scopes.last().unwrap();
+        let scope = self.scopes.last().expect("One scope expected at least");
         if !scope.op.expecting_operand() && !scope.items.is_empty() {
             return Err(parse_err("expected operator before '('", idx, self.input));
         }
@@ -267,16 +267,20 @@ impl<'a> RulesParser<'a> {
         Ok(())
     }
 
+    /// Exiting the scope ")".
     fn pop_scope(&mut self, idx: usize) -> Result<(), XepakError> {
         if self.scopes.len() <= 1 {
             return Err(parse_err("unexpected ')'", idx, self.input));
         }
-        let inner = self.scopes.pop().unwrap();
+        let inner = self.scopes.pop().expect("Element existence checked above");
         if inner.items.is_empty() {
             return Err(parse_err("empty group", idx, self.input));
         }
         let combined = inner.combine();
-        let scope = self.scopes.last_mut().unwrap();
+        let scope = self
+            .scopes
+            .last_mut()
+            .expect("Element existence checked above");
         scope.items.push(combined);
         scope.op = scope.op.on_operand();
         Ok(())
@@ -319,6 +323,7 @@ impl OpKind {
     }
 }
 
+/// Combines N rules via single operator.
 struct Scope {
     items: Vec<AuthRules>,
     op: OpKind,
@@ -335,7 +340,11 @@ impl Scope {
     fn combine(self) -> AuthRules {
         match self.items.len() {
             0 => unreachable!(),
-            1 => self.items.into_iter().next().unwrap(),
+            1 => self
+                .items
+                .into_iter()
+                .next()
+                .expect("Element existence checked above"),
             _ => match self.op {
                 OpKind::And | OpKind::AndExpecting => AuthRules::And { nested: self.items },
                 OpKind::Or | OpKind::OrExpecting => AuthRules::Or { nested: self.items },
@@ -383,7 +392,7 @@ mod tests {
     #[test]
     fn test_role_simple() {
         let mut parser = RulesParser::new("user");
-        let conf = parser.parse().expect("should parse");
+        let conf = parser.parse().expect("Test failed: must parse");
         assert_eq!(
             conf,
             AuthRules::Role {
@@ -395,7 +404,7 @@ mod tests {
     #[test]
     fn test_id_simple() {
         let mut parser = RulesParser::new("#boss");
-        let conf = parser.parse().expect("should parse");
+        let conf = parser.parse().expect("Test failed: must parse");
         assert_eq!(
             conf,
             AuthRules::Id {
@@ -407,7 +416,7 @@ mod tests {
     #[test]
     fn test_and_two_roles() {
         let mut parser = RulesParser::new("manager AND billing");
-        let conf = parser.parse().expect("should parse");
+        let conf = parser.parse().expect("Test failed: must parse");
         assert_eq!(
             conf,
             AuthRules::And {
@@ -426,7 +435,7 @@ mod tests {
     #[test]
     fn test_and_three_roles() {
         let mut parser = RulesParser::new("manager AND billing AND accounting");
-        let conf = parser.parse().expect("should parse");
+        let conf = parser.parse().expect("Test failed: must parse");
         assert_eq!(
             conf,
             AuthRules::And {
@@ -448,7 +457,7 @@ mod tests {
     #[test]
     fn test_and_role_with_id() {
         let mut parser = RulesParser::new("admin AND #superID");
-        let conf = parser.parse().expect("should parse");
+        let conf = parser.parse().expect("Test failed: must parse");
         assert_eq!(
             conf,
             AuthRules::And {
@@ -467,7 +476,7 @@ mod tests {
     #[test]
     fn test_or_two_roles() {
         let mut parser = RulesParser::new("manager OR billing");
-        let conf = parser.parse().expect("should parse");
+        let conf = parser.parse().expect("Test failed: must parse");
         assert_eq!(
             conf,
             AuthRules::Or {
@@ -486,7 +495,7 @@ mod tests {
     #[test]
     fn test_or_three_roles() {
         let mut parser = RulesParser::new("billing OR accounting OR #super_manager_id");
-        let conf = parser.parse().expect("should parse");
+        let conf = parser.parse().expect("Test failed: must parse");
         assert_eq!(
             conf,
             AuthRules::Or {
@@ -508,7 +517,7 @@ mod tests {
     #[test]
     fn test_braced_and_or() {
         let mut parser = RulesParser::new("(manager AND billing) OR #boss");
-        let conf = parser.parse().expect("should parse");
+        let conf = parser.parse().expect("Test failed: must parse");
         assert_eq!(
             conf,
             AuthRules::Or {
@@ -531,7 +540,7 @@ mod tests {
         );
 
         let mut parser = RulesParser::new("#boss OR (ADMIN AND MANAGER)");
-        let conf = parser.parse().expect("should parse");
+        let conf = parser.parse().expect("Test failed: must parse");
         assert_eq!(
             conf,
             AuthRules::Or {
@@ -558,7 +567,7 @@ mod tests {
     fn test_braced_and_three() {
         let mut parser =
             RulesParser::new("(manager AND billing AND accounting) OR (admin AND super)");
-        let conf = parser.parse().expect("should parse");
+        let conf = parser.parse().expect("Test failed: must parse");
         assert_eq!(
             conf,
             AuthRules::Or {
@@ -594,7 +603,7 @@ mod tests {
     #[test]
     fn test_nested_braces() {
         let mut parser = RulesParser::new("admin OR (manager AND (billing OR #superID))");
-        let conf = parser.parse().expect("should parse");
+        let conf = parser.parse().expect("Test failed: must parse");
         assert_eq!(
             conf,
             AuthRules::Or {
@@ -628,7 +637,7 @@ mod tests {
     fn test_complex_nested() {
         let mut parser =
             RulesParser::new("manager AND (billing OR accounting OR #super_manager_id)");
-        let conf = parser.parse().expect("should parse");
+        let conf = parser.parse().expect("Test failed: must parse");
         assert_eq!(
             conf,
             AuthRules::And {
@@ -657,7 +666,7 @@ mod tests {
     #[test]
     fn test_single_in_braces_unwrapped() {
         let mut parser = RulesParser::new("(user)");
-        let conf = parser.parse().expect("should parse");
+        let conf = parser.parse().expect("Test failed: must parse");
         assert_eq!(
             conf,
             AuthRules::Role {
@@ -669,7 +678,7 @@ mod tests {
     #[test]
     fn test_id_with_underscore() {
         let mut parser = RulesParser::new("#super_manager_id");
-        let conf = parser.parse().expect("should parse");
+        let conf = parser.parse().expect("Test failed: must parse");
         assert_eq!(
             conf,
             AuthRules::Id {
@@ -681,7 +690,7 @@ mod tests {
     #[test]
     fn test_role_with_underscore() {
         let mut parser = RulesParser::new("super_manager AND billing");
-        let conf = parser.parse().expect("should parse");
+        let conf = parser.parse().expect("Test failed: must parse");
         assert_eq!(
             conf,
             AuthRules::And {
@@ -700,7 +709,7 @@ mod tests {
     #[test]
     fn test_whitespace_around_tokens() {
         let mut parser = RulesParser::new("  manager   AND   billing  ");
-        let conf = parser.parse().expect("should parse");
+        let conf = parser.parse().expect("Test failed: must parse");
         assert_eq!(
             conf,
             AuthRules::And {
@@ -719,7 +728,7 @@ mod tests {
     #[test]
     fn test_multiple_braces_nested() {
         let mut parser = RulesParser::new("(admin OR (manager AND (billing OR #superID)))");
-        let conf = parser.parse().expect("should parse");
+        let conf = parser.parse().expect("Test failed: must parse");
         assert_eq!(
             conf,
             AuthRules::Or {

@@ -23,6 +23,7 @@ TODO: Think about representing errors in a form of an object like
 }
 */
 
+/// Note: must be clonable because of Lua passthrough
 #[derive(Error, Debug, Clone)]
 pub enum XepakError {
     #[error("Config error: {0}")]
@@ -57,11 +58,15 @@ pub enum XepakError {
     #[error("Inconsistency found: {0}")]
     NotConsistent(String),
 
-    #[error("Unexpected: {0}")]
-    Unexpected(String),
+    #[error("Storage error: {0}")]
+    Storage(String),
 
     #[error("Other error: {0}")]
     Other(Arc<Box<dyn core::error::Error + Send + Sync>>),
+
+    /// Something that must not happen.
+    #[error("Unexpected: {0}")]
+    Unexpected(String),
 }
 
 impl XepakError {

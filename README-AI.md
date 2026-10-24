@@ -1,6 +1,6 @@
 # Xepak — AI Agent Reference
 
-**Version:** 0.0.5-pre-release | **Commit:** ac8a0c4
+**Version:** 0.0.5-pre-release | **Commit:** 
 
 ---
 
