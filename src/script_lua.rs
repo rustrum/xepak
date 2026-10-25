@@ -3,8 +3,8 @@ use std::{cell::RefCell, collections::HashMap, str::FromStr as _, sync::Arc};
 use actix_web::web::Data;
 use async_trait::async_trait;
 use mlua::{
-    Error as LuaError, ExternalError, FromLua, FromLuaMulti, Function, IntoLua, Lua, Table,
-    UserData, UserDataMethods, Value,
+    Error as LuaError, ExternalError, FromLua, FromLuaMulti, Function, IntoLua, Lua, LuaOptions,
+    Table, UserData, UserDataMethods, Value,
 };
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 
@@ -368,10 +368,10 @@ impl FromLua for XepakValue {
                 }
                 Ok(XepakValue::Dict(map))
             }
+            // Dealing with Blob wrapped in UserData
             Value::UserData(ud) if let Ok(ud_ref) = ud.borrow::<LuaBlob>() => {
                 Ok(XepakValue::Blob(ud_ref.0.to_vec()))
             }
-            // TODO lua handles bytes as string so it is not possible to explicitly convert back to Blob
             other => Err(LuaError::runtime(format!(
                 "{} not compatible with XepakValue",
                 other.type_name()
@@ -385,8 +385,13 @@ pub fn build_lua_engine(app_state: &XepakAppData) -> Result<Lua, XepakError> {
     let app_data = LuaAppData {
         data: Arc::new(app_state.clone()),
     };
-    let lua = Lua::new();
-
+    // let lua = Lua::new();
+    // The same as default but let's define options explicitly
+    // in a case if deafauls will change
+    let lua = Lua::new_with(
+        mlua::StdLib::ALL_SAFE,
+        LuaOptions::default().catch_rust_panics(true),
+    )?;
     // This state can be accessed from any rust function
     lua.set_app_data(app_data.clone());
 
@@ -731,8 +736,11 @@ async fn http_get(_lua: Lua, (uri, headers): (String, Value)) -> mlua::Result<Lu
     let client = reqwest::Client::new();
     let builder = client.get(uri).headers(http_build_header_map(headers)?);
 
-    let result = builder.send().await.expect("Request must not fail");
-    Ok(result.into())
+    builder
+        .send()
+        .await
+        .map(Into::into)
+        .map_err(|e| XepakError::Other(Arc::new(e.into())).into_lua_err())
 }
 
 async fn http_post_json(
@@ -747,8 +755,11 @@ async fn http_post_json(
         .headers(http_build_header_map(headers)?)
         .json(&body_json);
 
-    let result = builder.send().await.expect("Request must not fail");
-    Ok(result.into())
+    builder
+        .send()
+        .await
+        .map(Into::into)
+        .map_err(|e| XepakError::Other(Arc::new(e.into())).into_lua_err())
 }
 
 //

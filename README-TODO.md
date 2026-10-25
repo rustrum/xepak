@@ -3,10 +3,19 @@
 IMPORTANT limit/offset logic must be moved to pre-processors.
 RequestInput must not be aware of such custom fields - it just holds and transfer data
 
+## Scheduled jobs
+
+This is important because it would allow to do:
+
+- embedings indexing for vector search
+- offload long executions that require external services calls
+
+
 # General thoughts
 
 - Should I rename endpoint "resource"?
 - Should add more input validators
+- Multiple data sources (this could be a killer feature)
 
 # Blob type updates
 
@@ -34,7 +43,7 @@ Idea! Wrap input reader (to do not read all) instead of using blob.
 Should add support for nested fields and array indexes like `{{[0].name}}` if top level input is array.
 
 
-# Sqlite Vector support (do later)
+# Sqlite Vector support (later)
 
 It is possible using sqlite-vec but unfortunately it is an experimental
 library and it does not support indexing.
@@ -54,10 +63,6 @@ So it is not clear should I optimize something here or not.
 I was thinking about using ArcSwap instead but it could be overkill.
 MutexGuard also does not look as a reasonable solution.
 
-
-# HINTS
-
-Multiple data sources (this could be a killer feature)
 
 ## CORS processing
 

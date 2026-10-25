@@ -548,6 +548,9 @@ return query:build()
 Lua also has application level context as an `app` variable.
 You can use it to access app level data.
 
+Execution error will cause to exit Lua.
+Use use `xpcall` to deal with errors on Lua level.
+
 ```lua
 -- Accessing registry
 -- Get custom registry value from the root TOML
@@ -608,6 +611,9 @@ log_debug(string.format("I said users count is %d", count))
 
 What if during request processing you will need to query some external API.
 
+Execution error will cause to exit Lua.
+Use use `xpcall` to deal with errors on Lua level.
+
 ```lua
 -- You should not use this API if can't understand examples below
 
@@ -635,6 +641,34 @@ local b = blob_type("\x01\x02\x03")
 -- Getting lua string from bytes object
 -- that can be passed in the input
 local bytes = b:as_bytes()
+```
+
+### Error handling
+
+Some additional functionality exposed to Lua could fail/panic duric execution.
+By default it would lead to exiting Lua script and failing with 5xx HTTP error.
+
+To handle such errors in Lua you must use `xpcall`.
+
+```lua
+local success, result = xpcall(
+    -- main execution logic
+    function()
+        http_get( "http://some_hosts/http/get", { })
+    end,
+    -- error/exception handler
+    function(err)
+        -- you can use next line instead return string
+        -- but err object is not passing now for rust functions
+        -- tostring(err)
+        return "http_get failed"
+    end
+)
+
+if not success then
+    -- success = false means second argument is a value returned from an error handler
+    log_info("LUA HTTP failed " .. result)
+end
 ```
 
 

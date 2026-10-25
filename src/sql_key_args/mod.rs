@@ -108,8 +108,6 @@ impl<'a> SqlLexer<'a> {
     pub fn next_key_arg(&mut self) -> Option<KeyArgPositionRef<'a>> {
         let mut state = LexerState::Sql;
         while let Some(cur_char) = self.next_char() {
-            // DEBUG \(^_^)/
-            // println!("{} -> {:?}", self.offset, state);
             match cur_char {
                 '\\' => match state {
                     LexerState::StringSingle { escape } => {

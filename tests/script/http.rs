@@ -107,18 +107,19 @@ async fn test_apate_mock() {
     assert_eq!(body["message"], "POST Success");
 
     // Test missing endpoint directly
-    let resp = client
-        .get("http://localhost:8228/http/missing")
-        .send()
-        .await
-        .unwrap();
-    println!("Missing endpoint status: {}", resp.status());
-    println!("Missing endpoint body: {:?}", resp.text().await.unwrap());
+    // let resp = client
+    //     .get("http://localhost:8228/http/missing")
+    //     .send()
+    //     .await
+    //     .unwrap();
+    //println!("Missing endpoint status: {}", resp.status());
+    //println!("Missing endpoint body: {:?}", resp.text().await.unwrap());
 }
 
 #[tokio::test]
 #[serial]
 async fn test_script_http_requests() {
+    // init_logger();
     let _apate = init_test_server();
     let _server = init_default_test_server(INIT_DELAY_DEFAULT).await;
 
@@ -142,9 +143,19 @@ async fn test_script_http_requests() {
     // http error path (404 with JSON response)
     let response = client::get("/script/http/error").await;
     let result: JsonValue = client::extract_from_json(response, Some(StatusCode::OK)).await;
-    println!("Error result: {:?}", result);
+    //println!("Error result: {:?}", result);
 
     // is_success() checks HTTP status (4xx/5xx = false), not our custom field
     assert_eq!(result["success"], false); // should be false because apate returns 404
     assert_eq!(result["status"], 404);
+
+    // Check how pcall wraps http calls
+    let response = client::get("/script/http/xpcall").await;
+    let result: JsonValue = client::extract_from_json(response, Some(StatusCode::OK)).await;
+    assert_eq!(result["get_ok"], true);
+    assert_eq!(result["get_err"], false);
+    assert_eq!(result["get_err_res"], "http_get failed");
+    assert_eq!(result["post_ok"], true);
+    assert_eq!(result["post_err"], false);
+    assert_eq!(result["post_err_res"], "http_post_json failed");
 }

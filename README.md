@@ -109,7 +109,5 @@ Simple but usable authentication and authorization functionality available:
 
 This product distributed under MIT license BUT only under certain conditions that are listed in the LICENSE-TERMS file.
 
-I know it's kind of silly but I'm not in the mood right now to write my own license. Will do it later.
-
-Anyway. This project license is and always will be suted for personal usage and for small development teams.
+This project license will be always focused on personal private usage and small development teams. Maybe I will change the license in the future but the core principles would likely to stay.
 

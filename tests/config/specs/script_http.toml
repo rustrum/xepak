@@ -50,3 +50,55 @@ return {
     body    = resp:is_success() and resp:read_body_json() or {}
 }
 """
+
+[[endpoint]]
+uri = "/script/http/xpcall"
+
+[endpoint.resource]
+type = "data_script"
+script = """
+local get_ok = xpcall(
+    function()
+        http_get("http://localhost:8228/http/get", { ["x-api-key"] = "GET-API-key" })
+    end,
+    function(err)
+        tostring(err)
+    end
+)
+
+local get_err, get_err_res = xpcall(
+    function()
+        http_get("http://wrong_host/get", {})
+    end,
+    function(err)
+        return "http_get failed"
+    end
+)
+
+local post_ok = xpcall(
+    function()
+        http_post_json("http://localhost:8228/http/post", { ["x-api-key"] = "POST-API-key" }, { message = "X" })
+    end,
+    function(err)
+        tostring(err)
+    end
+)
+
+local post_err, post_err_res = xpcall(
+    function()
+        http_post_json("http://no_host/post", {}, { message = "X" })
+    end,
+    function(err)
+        return "http_post_json failed"
+    end
+)
+return {
+    get_ok = get_ok,
+    get_err = get_err,
+    get_err_res = get_err_res,
+
+    post_ok = post_ok,
+    post_err = post_err,
+    post_err_res = post_err_res,
+}
+"""

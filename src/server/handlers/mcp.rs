@@ -247,7 +247,6 @@ impl McpHandler {
         state: Data<XepakAppData>,
         request: JsonRpcRequest<Option<Value>>,
     ) -> Result<XepakValue, XepakError> {
-        // TODO: maybe should start to return MCP tool response with isError = true
         let tool_params =
             bind_mcp_params::<McpToolParams<XepakValue>>(request.params, "tools/call")?;
         let tool_name = &tool_params.name;
@@ -296,7 +295,7 @@ impl McpHandler {
             }
         };
 
-        // TODO : if no data available must still return text with readable info
+        // Returns meaningfull MCP response if no data available
         if response.is_empty() {
             let msg = if self.ep.empty_response_text.is_empty() {
                 XepakValue::from(NO_DATA_RESPONSE)
