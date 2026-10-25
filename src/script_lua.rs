@@ -455,7 +455,7 @@ fn prepare_args(lua: &Lua, args: Value) -> mlua::Result<RequestInput> {
                 let (k, v) = pair?;
                 map.insert(k, XepakValue::from_lua(v, lua)?);
             }
-            Ok(RequestInput::new_simple(map, 0, 0))
+            Ok(RequestInput::new_simple(map))
         }
         Value::UserData(ud) => {
             let ri = ud.borrow::<RequestInput>()?;

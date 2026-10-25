@@ -1,6 +1,5 @@
 [[endpoint]]
 uri = "/script/lua/query/posts/{username:\\w+}"
-fetch_limit = 20
 
 [endpoint.resource]
 type = "query_script_lua"
@@ -27,7 +26,6 @@ return "SELECT * FROM posts WHERE user_id = {{user_id}}"
 # instead custom error return strings
 [[endpoint]]
 uri = "/script/lua/query/check/{user_id}/{tt}"
-fetch_limit = 20
 
 [endpoint.resource]
 type = "query_script_lua"

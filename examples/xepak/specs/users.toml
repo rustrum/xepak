@@ -9,7 +9,12 @@ query = "SELECT * FROM users WHERE id={{user_id}}"
 
 [[endpoint]]
 uri = "/user/lua/list"
-fetch_limit = 20
+pre_processors = [
+    {
+        type = "limit_offset",
+        limit_max_value = 20
+    }
+]
 
 [endpoint.resource]
 type = "query_script_lua"
@@ -49,7 +54,12 @@ return query:build();
 
 [[endpoint]]
 uri = "/user/lua/list2"
-fetch_limit = 20
+pre_processors = [
+    {
+        type = "limit_offset",
+        limit_max_value = 20
+    }
+]
 
 [endpoint.resource]
 type = "query_script_lua"

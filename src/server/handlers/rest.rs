@@ -14,6 +14,7 @@ use crate::{
         CONTENT_TYPE_CBOR, RequestInput, XepakAppData,
         cfg::RestEpSpecs,
         handlers::{handle_resource, validate_resource},
+        input::{ARG_NAME_LIMIT, ARG_NAME_OFFSET},
         processor::PreProcessorHandler,
         to_error_object,
     },
@@ -71,15 +72,13 @@ impl EndpointHandler {
     ) -> HttpResponse {
         tracing::debug!("Handler called for {:?}", self.ep.uri);
 
-        let mut ri = match self.pre_process_request(&req, &state, &body).await {
+        let ri = match self.pre_process_request(&req, &state, &body).await {
             Ok(result) => result,
             Err(err) => {
                 let (status_code, data) = to_error_object(err);
                 return self.data_to_response(&req, None, status_code, &data);
             }
         };
-        // Maybe it should be in processors
-        ri.parse_offset_limit(&self.ep.offset_arg, &self.ep.limit_arg, self.ep.fetch_limit);
 
         let resource_exec = handle_resource(
             &ri,
@@ -156,9 +155,16 @@ impl EndpointHandler {
             false
         };
 
-        // TODO should normalize headers output instead of providing limit/offset
         let (limit, offset) = match input {
-            Some(inp) => (inp.get_limit(), inp.get_offset()),
+            // In any unexpected situation seting limit/offset to zero
+            Some(inp) => (
+                inp.get_arg(ARG_NAME_LIMIT)
+                    .map(|xv| xv.as_int().unwrap_or_default())
+                    .unwrap_or_default() as usize,
+                inp.get_arg(ARG_NAME_OFFSET)
+                    .map(|xv| xv.as_int().unwrap_or_default())
+                    .unwrap_or_default() as usize,
+            ),
             None => (0, 0),
         };
 

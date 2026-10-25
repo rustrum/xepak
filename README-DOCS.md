@@ -155,12 +155,6 @@ Basic endpoint definition.
 uri = "/users/{user_id:\\d+}"        # {name} path params captured automatically; regex allowed after ':' (escape backslash in TOML)
 allow_methods = ["GET", "DELETE"]    # optional HTTP methods whitelist; if absent only GET accepted
 single_record_response = true        # if true return 404 if DB returns no records
-fetch_limit = 20                     # max rows for paginated queries (also the default limit)
-
-# optional; custom names for limit/offset arguments
-# if you need to have `/users/list?count=1` instead of `/users/list?limit=1`
-limit_arg = "limit"
-offset_arg = "offset"
 
 # if true does not allow requests with arguments not defined in the schema
 strict_schema = false
@@ -169,13 +163,6 @@ strict_schema = false
 pre_processors_ignore_default = false
 ```
 
-**Limit & offset** arguments are handled differently.
-If your input has `limit` or `offset` argument (or if you defined `fetch_limit`) then the response will have `X-Limit` and `X-Offset` headers.
-Response header will return exact values that were used to fetch records from DB.
-These arguments will be represented in SQL like this `{{-limit-}}`, `{{-offset-}}`.
-
-In order to use limit/offset feature you have to define `fetch_limit` upper bound
-and then you can use query arguments regardless of having limit/offset in the input form client.
 
 
 ### Resources
@@ -192,6 +179,9 @@ Argument names match the ones from URI path, query string, or keys from object s
 ```toml
 [[endpoint]]
 # ...
+# this one is for limit/offset args normalization
+pre_processors = [ { type = "limit_offset", limit_max_value = 20 } ]
+
 [endpoint.resource]
 type = "query"
 # optional param - skip it
@@ -203,7 +193,6 @@ query = "SELECT * FROM users WHERE id={{user_id}}"
 
 # ANOTHER EXAMPLE
 # /users/find?country=UK&offset=100
-# this one require `fetch_limit = YOUR_LIMIT`
 query = "SELECT * FROM users WHERE country={{country}} LIMIT {{-limit-}} OFFSET {{-offset-}}"
 ```
 
@@ -283,10 +272,13 @@ Things to remember:
 |------|-------------|------------|
 | `ref` | Reference to a shared pre-processor | `id: string` |
 | `parse_body_args` | Merges POST/PUT/PATCH body into request context | `null_if_absent: [keys]` - set listed keys to null if they are missing in request |
+| `limit_offset` | Parse limit/offset into context arguments `-limit-`,`-offset-`  | `limit_max_value` must be provided, optional args defines input variable names to read values from `limit_arg_name` & `offset_arg_name` |
 | `config_authentication` | API key lookup in registry | `anonymous_auth: bool` |
 | `storage_authentication` | Database-backed token auth | `data_source`, `query`, `cache_ttl_sec` |
 | `authorize` | Role-based authorization rules | `rules: string` |
 | `lua_script` | Lua script with custom logic | `script: string` |
+
+
 
 #### Shared pre-processors
 
@@ -344,6 +336,53 @@ Its elements are exposed as arguments `"0"`, `"1"`, `"2"`, ...
 This is a corner use case: it works well for positional RPC arguments and Lua scripting,
 but would barely work for direct SQL query building.
 
+
+### Limit/offset for partial data fetching
+
+Use `limit_offset` pre-processor to deal with limit/offset arguments to fetch data.
+If defined it will always add context arguments to safely use them inside query as `{{-limit-}} ... {{-offset-}}`.
+If no input provided `-limit-` will be equal to `limit_max_value` and `-offset-` is zero.
+
+By default values read from `limit` and `offset` keys from GET,POST,etc.
+But you can change this names if required via properties `limit_arg_name`, `offset_arg_name`.
+Notice that you can use indexes here if your POST input is a tuple.
+
+If limit/offset are defined in the context and these values are not zero
+REST endpoint will add appropriate headers to the response `x-limit` and `x-offset`.
+
+Basic example with maximum limit value = 20.
+```toml
+[[endpoint]]
+uri = "/payments/list"
+pre_processors = [ { type = "limit_offset", limit_max_value = 20 } ]
+[endpoint.resource]
+type = "query"
+query = "SELECT * FROM payments LIMIT {{-limit-}} OFFSET {{-offset-}}"
+```
+
+MCP/RPC behaviour is very similar.
+Notice that limit/offset will be defined even if input will be empty.
+```toml
+[mcp.tools.list_notes]
+#...
+pre_processors = [{
+    type = "limit_offset",
+    limit_max_value = 42
+}]
+[mcp.tools.list_notes.schema.input]
+type = "dict"
+items = {
+    limit = { type = "int" },
+    offset = { type = "int" }
+}
+[mcp.tools.list_notes.resource]
+type = "query_script_lua"
+script = """
+local q = query_builder("SELECT id, title, content, created_at FROM notes")
+q:add("ORDER BY created_at DESC LIMIT {{-limit-}} OFFSET {{-offset-}}")
+return q:build()
+"""
+```
 
 ### JSON-RPC services
 

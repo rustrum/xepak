@@ -3,6 +3,12 @@
 IMPORTANT limit/offset logic must be moved to pre-processors.
 RequestInput must not be aware of such custom fields - it just holds and transfer data
 
+# In General
+
+- Should I rename endpoint "resource"?
+- Should add more input validators
+- Multiple data sources (this could be a killer feature)
+
 ## Scheduled jobs
 
 This is important because it would allow to do:
@@ -10,14 +16,7 @@ This is important because it would allow to do:
 - embedings indexing for vector search
 - offload long executions that require external services calls
 
-
-# General thoughts
-
-- Should I rename endpoint "resource"?
-- Should add more input validators
-- Multiple data sources (this could be a killer feature)
-
-# Blob type updates
+# Blob type updates (later)
 
 Should probably wrap inner value in Arc to prevent cloning big Vec<u8>
 Must think from the perspective of file uploads.

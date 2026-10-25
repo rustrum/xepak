@@ -377,6 +377,23 @@ impl From<f64> for XepakValue {
     }
 }
 
+impl From<usize> for XepakValue {
+    fn from(value: usize) -> Self {
+        Self::Integer(value as i128)
+    }
+}
+
+impl From<isize> for XepakValue {
+    fn from(value: isize) -> Self {
+        Self::Integer(value as i128)
+    }
+}
+
+impl From<i32> for XepakValue {
+    fn from(value: i32) -> Self {
+        Self::Integer(value as i128)
+    }
+}
 impl From<i128> for XepakValue {
     fn from(value: i128) -> Self {
         Self::Integer(value)

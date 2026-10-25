@@ -264,11 +264,15 @@ impl McpHandler {
             )));
         };
 
-        let mut input = self
-            .pre_process_request(&req, &state, tool_specs, tool_handler)
+        let input = self
+            .pre_process_request(
+                &req,
+                &state,
+                tool_specs,
+                tool_handler,
+                tool_params.arguments,
+            )
             .await?;
-
-        input.body_args = input.apply_schema_to(".arguments", tool_params.arguments, true)?;
 
         tracing::debug!("Calling MCP tool: {}", tool_name);
 
@@ -314,6 +318,7 @@ impl McpHandler {
         state: &Data<XepakAppData>,
         specs: &McpEpToolSpecs,
         handler: &McpToolHandler,
+        tool_arguments: XepakValue,
     ) -> Result<RequestInput, XepakError> {
         let mut input = RequestInput::new(
             specs.schema.input.clone(),
@@ -322,8 +327,10 @@ impl McpHandler {
             &self.ep.uri,
             req.path(),
         );
-
         let body = Bytes::new();
+
+        input.body_args = input.apply_schema_to(".arguments", tool_arguments, true)?;
+
         for p in handler.pre_processors.as_ref() {
             p.handle(req, state, &body, &mut input).await?;
         }

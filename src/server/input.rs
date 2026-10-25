@@ -11,6 +11,10 @@ use crate::{
     xepak_data::{XepakDataError, XepakValue, sql::SqlxBindable},
 };
 
+pub const ARG_NAME_LIMIT: &str = "-limit-";
+
+pub const ARG_NAME_OFFSET: &str = "-offset-";
+
 /// Contains aggregated/formatted input from request that will be used to query resource.
 /// Input is updated/extended during processors execution.
 /// Also it could be updated from resource script before executing output query.
@@ -37,15 +41,11 @@ pub struct RequestInput {
     pub(crate) body_args: XepakValue,
 
     /// Final input args storage with schema applied
-    pub(crate) args: Arc<Mutex<HashMap<String, XepakValue>>>,
+    args: Arc<Mutex<HashMap<String, XepakValue>>>,
 
     /// Authentication data for current request.
     /// Should be provided by an appropriate pre-processor.
     pub(crate) auth: Arc<Option<(XepakValue, HashSet<String>)>>,
-
-    limit: usize,
-
-    offset: usize,
 }
 
 impl RequestInput {
@@ -78,15 +78,13 @@ impl RequestInput {
             get_args: XepakValue::Null,
             body_args: XepakValue::Null,
             args: Arc::new(Mutex::new(Default::default())),
-            limit: 0,
-            offset: 0,
         }
     }
 
     /// To use in other parts of code not linked with main request processing flow
     /// like script or processors.
     /// It will be unaware of HTTP request context.
-    pub fn new_simple(args: HashMap<String, XepakValue>, limit: usize, offset: usize) -> Self {
+    pub fn new_simple(args: HashMap<String, XepakValue>) -> Self {
         RequestInput {
             auth: Arc::new(None),
             schema: Schema::default(),
@@ -96,9 +94,23 @@ impl RequestInput {
             get_args: XepakValue::Null,
             body_args: XepakValue::Null,
             args: Arc::new(Mutex::new(args)),
-            limit,
-            offset,
         }
+    }
+
+    /// Return only custom argument value.
+    /// Custom args could be set by pre-processor or inside Lua.
+    pub fn get_arg(&self, key: &str) -> Option<XepakValue> {
+        let args_lock = self.args.lock().expect("Lock is poisoned, can't recover");
+        args_lock.get(key).cloned()
+    }
+
+    /// Set custom argument value.
+    /// Returns previos value if it was set.
+    pub fn set_arg(&self, key: &str, value: XepakValue) -> Option<XepakValue> {
+        self.args
+            .lock()
+            .expect("Lock is poisoned, can't recover")
+            .insert(key.to_string(), value)
     }
 
     pub fn has_any_arg(&self, arg_name: &str) -> bool {
@@ -172,47 +184,6 @@ impl RequestInput {
         key.parse().ok()
     }
 
-    pub fn get_limit(&self) -> usize {
-        self.limit
-    }
-
-    pub fn get_offset(&self) -> usize {
-        self.offset
-    }
-
-    /// Will try to parse limit/offset from existing arguments if possible.
-    /// Output debug message if parsing failed.
-    pub fn parse_offset_limit(&mut self, offset_arg: &str, limit_arg: &str, limit_max: usize) {
-        if !limit_arg.is_empty() {
-            self.limit = self.parse_usize_from(limit_arg).unwrap_or(limit_max);
-            if self.limit > limit_max {
-                self.limit = limit_max;
-            }
-        }
-        if !offset_arg.is_empty() {
-            self.offset = self.parse_usize_from(offset_arg).unwrap_or_default();
-        }
-    }
-
-    fn parse_usize_from(&self, arg_name: &str) -> Option<usize> {
-        let value = self.get_arg_value(arg_name)?;
-
-        let ivalue = match value.as_int() {
-            Ok(v) => v,
-            Err(e) => {
-                tracing::debug!("Can't get int from arg {arg_name}: {e}");
-                return None;
-            }
-        };
-
-        if ivalue < 0 || ivalue > usize::MAX as i128 {
-            tracing::debug!("Value not in range for arg {arg_name}: {ivalue}");
-            return None;
-        }
-
-        Some(ivalue as usize)
-    }
-
     pub(crate) fn apply_schema_to(
         &self,
         key_ref: &str,
@@ -267,15 +238,7 @@ impl RequestInput {
     }
 }
 
-impl StorageRequestArgs for RequestInput {
-    fn get_rows_limit(&self) -> usize {
-        self.get_limit()
-    }
-
-    fn get_rows_offset(&self) -> usize {
-        self.get_offset()
-    }
-}
+impl StorageRequestArgs for RequestInput {}
 
 impl SqlxRequestArgs for RequestInput {
     fn bind_arg<'a, DB>(

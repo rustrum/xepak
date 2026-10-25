@@ -17,9 +17,6 @@ use sqlx::{Acquire, ColumnIndex, Database, IntoArguments, SqlitePool};
 use sqlx::{Row, migrate::Migrator};
 use sqlx_core::column::Column;
 
-pub const LIMIT_KEY: &str = "-limit-";
-pub const OFFSET_KEY: &str = "-offset-";
-
 pub async fn init_storage_connectors(
     conf_dir: &Path,
     storages: &[StorageSettings],
@@ -327,17 +324,7 @@ impl Storage {
         tracing::debug!("Query arguments: {:?}", pquery.get_args());
         for argument_name in pquery.get_args() {
             let arg = *argument_name;
-            sql_query = match arg {
-                LIMIT_KEY => {
-                    tracing::debug!("Query limit: {}", request.args.get_rows_limit());
-                    sql_query.bind(request.args.get_rows_limit() as i64)
-                }
-                OFFSET_KEY => {
-                    tracing::debug!("Query offset: {}", request.args.get_rows_offset());
-                    sql_query.bind(request.args.get_rows_offset() as i64)
-                }
-                _ => request.args.bind_arg(arg, sql_query)?,
-            };
+            sql_query = request.args.bind_arg(arg, sql_query)?;
         }
 
         Ok(sql_query)
@@ -381,13 +368,9 @@ impl<'a, RA: StorageRequestArgs> ResourceRequest<'a, RA> {
     }
 }
 
-pub trait StorageRequestArgs {
-    /// Return records fetch limit
-    fn get_rows_limit(&self) -> usize;
-
-    /// Return records fetch offset
-    fn get_rows_offset(&self) -> usize;
-}
+/// Not sure about this trait maybe request args structure in the future will be different.
+/// Or maybe it should be removed
+pub trait StorageRequestArgs {}
 
 /// SQLx related request args bind functionality
 pub trait SqlxRequestArgs: StorageRequestArgs {

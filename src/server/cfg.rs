@@ -53,19 +53,6 @@ pub struct RestEpSpecs {
 
     pub resource: ResourceSpecs,
 
-    // pub validators: Vec<Validator>,
-    /// Custom name for an offset argument if needed.
-    #[serde(default = "default_offset_key")]
-    pub offset_arg: String,
-
-    /// Custom name for a limit argument if needed.
-    #[serde(default = "default_limit_key")]
-    pub limit_arg: String,
-
-    /// Max limit value for paginated queries
-    #[serde(default)]
-    pub fetch_limit: usize,
-
     /// Response will be a single record instead of a list.
     /// Will return 404 if no record available
     #[serde(default)]
@@ -201,12 +188,4 @@ where
         methods.insert(m);
     }
     Ok(methods)
-}
-
-fn default_limit_key() -> String {
-    "limit".to_string()
-}
-
-fn default_offset_key() -> String {
-    "offset".to_string()
 }

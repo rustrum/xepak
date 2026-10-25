@@ -1,10 +1,16 @@
 [[endpoint]]
 uri = "/payments/list"
-fetch_limit = 20
+pre_processors = [
+    {
+        type = "limit_offset",
+        limit_max_value = 20
+    }
+]
 
 [endpoint.resource]
 type = "query"
 query = "SELECT * FROM payments LIMIT {{-limit-}} OFFSET {{-offset-}}"
+
 
 [[endpoint]]
 uri = "/payment/{payment_id:\\d+}/revalidate"

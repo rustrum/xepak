@@ -1,6 +1,11 @@
 [[endpoint]]
 uri = "/limits"
-fetch_limit = 4
+pre_processors = [
+    {
+        type = "limit_offset",
+        limit_max_value = 4
+    }
+]
 
 [endpoint.resource]
 type = "query"
@@ -10,7 +15,12 @@ SELECT * FROM alltypes LIMIT {{-limit-}} OFFSET {{-offset-}}
 
 [[endpoint]]
 uri = "/limits/lua"
-fetch_limit = 4
+pre_processors = [
+    {
+        type = "limit_offset",
+        limit_max_value = 4
+    }
+]
 
 [endpoint.resource]
 type = "query_script_lua"

@@ -141,7 +141,7 @@ impl PreProcessorHandler for StorageAuthenticationProcessor {
 
         let mut args = HashMap::new();
         args.insert("api-key".to_string(), XepakValue::Text(api_key.to_string()));
-        let ri = RequestInput::new_simple(args, 0, 0);
+        let ri = RequestInput::new_simple(args);
         let rr = ResourceRequest::new(&self.query, &ri);
 
         let (user_id, roles) = Self::process_db_query(ds.query_one(rr).await?)?;

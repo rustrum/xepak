@@ -1,6 +1,5 @@
 [[endpoint]]
 uri = "/script/lua/err"
-fetch_limit = 20
 
 [endpoint.resource]
 type = "query_script_lua"

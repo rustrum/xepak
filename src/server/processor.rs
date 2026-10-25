@@ -15,7 +15,11 @@ use crate::{
     },
     cfg::ResourceRef,
     script_lua::LuaPreProcessor,
-    server::{CONTENT_TYPE_CBOR, RequestInput, XepakAppData, is_req_body_allowed, to_input_error},
+    server::{
+        CONTENT_TYPE_CBOR, RequestInput, XepakAppData,
+        input::{ARG_NAME_LIMIT, ARG_NAME_OFFSET},
+        is_req_body_allowed, to_input_error,
+    },
     xepak_data::XepakValue,
 };
 
@@ -60,6 +64,17 @@ pub enum PreProcessor {
         cache_ttl_sec: u16,
     },
 
+    LimitOffset {
+        /// Name for the limit argument (could be number for tuple inputs)
+        #[serde(default = "LimitOffsetProcessor::default_limit_key")]
+        limit_arg_name: String,
+        /// Name for the offset argument (could be number for tuple inputs)
+        #[serde(default = "LimitOffsetProcessor::default_offset_key")]
+        offset_arg_name: String,
+        /// Max limit value for paginated queries
+        #[serde(default)]
+        limit_max_value: usize,
+    },
     Authorize {
         rules: String,
     },
@@ -122,6 +137,15 @@ pub fn build_pre_processor(
             position,
             script,
         )?)),
+        PreProcessor::LimitOffset {
+            limit_arg_name,
+            offset_arg_name,
+            limit_max_value,
+        } => Ok(Box::new(LimitOffsetProcessor::new(
+            limit_arg_name,
+            offset_arg_name,
+            *limit_max_value,
+        ))),
     }
 }
 
@@ -266,11 +290,7 @@ impl PreProcessorHandler for BodyToArgsProcessor {
 
         for key in &self.null_if_absent {
             if !input.has_any_arg(key) {
-                input
-                    .args
-                    .lock()
-                    .expect("Lock is poisoned, can't recover")
-                    .insert(key.clone(), XepakValue::Null);
+                input.set_arg(key, XepakValue::Null);
             }
         }
 
@@ -279,5 +299,81 @@ impl PreProcessorHandler for BodyToArgsProcessor {
 
     fn priority(&self) -> u16 {
         PRIORITY_NORMAL
+    }
+}
+
+#[derive(Clone)]
+pub struct LimitOffsetProcessor {
+    limit_arg_name: String,
+    offset_arg_name: String,
+    limit_max_value: usize,
+}
+
+impl LimitOffsetProcessor {
+    pub fn new(limit_arg_name: &str, offset_arg_name: &str, limit_max_value: usize) -> Self {
+        Self {
+            limit_arg_name: limit_arg_name.to_string(),
+            offset_arg_name: offset_arg_name.to_string(),
+            limit_max_value,
+        }
+    }
+    fn default_limit_key() -> String {
+        "limit".to_string()
+    }
+
+    fn default_offset_key() -> String {
+        "offset".to_string()
+    }
+
+    fn parse_usize_from(input: &RequestInput, arg_name: &str) -> Option<usize> {
+        let value = input.get_arg_value(arg_name)?;
+
+        let ivalue = match value.as_int() {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::debug!("Can't get int from arg {arg_name}: {e}");
+                return None;
+            }
+        };
+
+        if ivalue < 0 || ivalue > usize::MAX as i128 {
+            tracing::debug!("Value not in range for arg {arg_name}: {ivalue}");
+            return None;
+        }
+
+        Some(ivalue as usize)
+    }
+}
+
+#[async_trait(?Send)]
+impl PreProcessorHandler for LimitOffsetProcessor {
+    fn priority(&self) -> u16 {
+        PRIORITY_QUERY_ARGS
+    }
+
+    async fn handle(
+        &self,
+        _req: &HttpRequest,
+        _state: &Data<XepakAppData>,
+        _body: &Bytes,
+        input: &mut RequestInput,
+    ) -> Result<(), XepakError> {
+        // Will try to parse limit/offset from existing arguments if possible.
+        // Output debug message if parsing failed.
+        if !self.limit_arg_name.is_empty() {
+            let mut limit_value =
+                Self::parse_usize_from(input, &self.limit_arg_name).unwrap_or(self.limit_max_value);
+            if limit_value > self.limit_max_value {
+                limit_value = self.limit_max_value;
+            }
+            input.set_arg(ARG_NAME_LIMIT, limit_value.into());
+        }
+
+        if !self.offset_arg_name.is_empty() {
+            let offset_value =
+                Self::parse_usize_from(input, &self.offset_arg_name).unwrap_or_default();
+            input.set_arg(ARG_NAME_OFFSET, offset_value.into());
+        }
+        Ok(())
     }
 }

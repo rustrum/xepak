@@ -8,7 +8,12 @@ query = "SELECT * FROM posts WHERE id={{post_id}}"
 
 [[endpoint]]
 uri = "/post/list"
-fetch_limit = 20
+pre_processors = [
+    {
+        type = "limit_offset",
+        limit_max_value = 20
+    }
+]
 
 [endpoint.resource]
 type = "query"

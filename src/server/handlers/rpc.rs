@@ -149,13 +149,9 @@ impl RpcHandler {
             )));
         };
 
-        let mut input = self
-            .pre_process_request(&req, &state, specs, handler)
+        let input = self
+            .pre_process_request(&req, &state, specs, handler, request.params)
             .await?;
-
-        if let Some(params_value) = request.params {
-            input.body_args = input.apply_schema_to(".params", params_value, true)?;
-        }
 
         tracing::debug!("Calling RPC method: {}", request.method);
 
@@ -175,6 +171,7 @@ impl RpcHandler {
         state: &Data<XepakAppData>,
         specs: &RpcEpMethodSpecs,
         handler: &RpcMethodHandler,
+        params: Option<XepakValue>,
     ) -> Result<RequestInput, XepakError> {
         let mut input = RequestInput::new(
             specs.schema.input.clone(),
@@ -183,8 +180,10 @@ impl RpcHandler {
             &self.ep.uri,
             req.path(),
         );
-
         let body = Bytes::new();
+        if let Some(params_value) = params {
+            input.body_args = input.apply_schema_to(".params", params_value, true)?;
+        }
         for p in handler.pre_processors.as_ref() {
             p.handle(req, state, &body, &mut input).await?;
         }
