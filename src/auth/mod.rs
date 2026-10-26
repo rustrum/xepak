@@ -24,7 +24,6 @@ pub fn extract_api_key(req: &actix_web::HttpRequest) -> Result<Option<&str>, Xep
     // POST only method is used for RPC/MCP servers
     // Thus we can check for a bearer here
     if api_key_value.is_none() && req.method() == Method::POST {
-        tracing::warn!("No key searching bearer");
         let bearer_header = req.headers().get(AUTH_BEARER_HEADER);
         if bearer_header.is_some() {
             api_key_value = bearer_header;

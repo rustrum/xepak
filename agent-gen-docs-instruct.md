@@ -8,8 +8,6 @@ It is a server that generates REST API, JSON-RPC/MCP server for database backend
 
 ## Must use memory file to track progress and store findings
 
-Do not rely on your memory store all meaningful information in memory file.
-
 Docs generation progress must be tracked in the memory file `agents_work/ai-docs-progress.md`.
 
 Must create this file before code investigation.

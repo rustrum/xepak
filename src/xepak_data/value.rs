@@ -125,9 +125,21 @@ impl XepakValue {
                 Self::Float(parsed)
             }
             XepakType::Text => Self::Text(v.to_string()),
-            XepakType::Blob => unimplemented!(),
-            XepakType::Tuple => unimplemented!(),
-            XepakType::Dict => unimplemented!(),
+            XepakType::Blob => {
+                return Err(XepakDataError::Decode(
+                    "Cant decode String to Blob".to_string(),
+                ));
+            }
+            XepakType::Tuple => {
+                return Err(XepakDataError::Decode(
+                    "Cant decode String to Tuple".to_string(),
+                ));
+            }
+            XepakType::Dict => {
+                return Err(XepakDataError::Decode(
+                    "Cant decode String to Dict".to_string(),
+                ));
+            }
         };
         Ok(xv)
     }
@@ -151,7 +163,7 @@ impl XepakValue {
                         TO_TYPE,
                         format!("Has fractional part {v}"),
                     ))
-                } else if *v > i64::MAX as f64 || *v < i64::MIN as f64 {
+                } else if *v > (i64::MAX - 1) as f64 || *v < (i64::MIN + 1) as f64 {
                     Err(XepakDataError::ConvertValue(
                         self.get_type(),
                         TO_TYPE,

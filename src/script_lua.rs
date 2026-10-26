@@ -1,11 +1,13 @@
-use std::{cell::RefCell, collections::HashMap, str::FromStr as _, sync::Arc};
+use std::{
+    cell::RefCell, collections::HashMap, rc::Rc, str::FromStr as _, sync::Arc, time::Duration,
+};
 
 use actix_web::web::Data;
 use async_trait::async_trait;
 use indexmap::IndexMap;
 use mlua::{
-    Error as LuaError, ExternalError, FromLua, FromLuaMulti, Function, IntoLua, Lua, LuaOptions,
-    Table, UserData, UserDataMethods, Value,
+    Error as LuaError, ExternalError, FromLua, FromLuaMulti, IntoLua, Lua, LuaOptions, Table,
+    UserData, UserDataMethods, Value,
 };
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 
@@ -20,10 +22,18 @@ use crate::{
     xepak_data::XepakValue,
 };
 
+/// Request timeout for HTTP functions in seconds (maybe should do it configurable later).
+const HTTP_REQUEST_TIMEOUT: u64 = 30;
+
 thread_local! {
     static LUA_CACHE: RefCell<Option<Lua>> = const { RefCell::new(None) };
 
-    static LUA_FNS_CACHE: RefCell<HashMap<String, Function>> = RefCell::new(HashMap::new());
+    /// Function bytecode is compatible with multiple lua instances.
+    /// Maybe thread_locsl is not required but it will be wrapped in RwLock
+    /// Could it be slower to take through RwLock ?
+    /// Maybe I could build cache then on start and do not use lock at all.
+    /// TODO: think about it.
+    static LUA_FNS_CACHE: RefCell<HashMap<String, Rc<Vec<u8>>>> = RefCell::new(HashMap::new());
 }
 
 /// Creates new Lua instance or returns current one from thread_local cache.
@@ -43,21 +53,29 @@ pub fn lua_load_engine(app_state: &XepakAppData) -> Result<Lua, XepakError> {
 }
 
 /// Build Lua function or returns it from its internal cache
-pub fn lua_load_function(lua: &Lua, cache_key: &str, script: &str) -> Result<Function, XepakError> {
+pub fn lua_load_function(
+    lua: &Lua,
+    cache_key: &str,
+    script: &str,
+) -> Result<Rc<Vec<u8>>, XepakError> {
+    // todo maybe should redo it later to cache Function
+    // but this function must not have any context for performance considerations
     let cached = LUA_FNS_CACHE.with(|cell| cell.borrow().get(cache_key).cloned());
 
-    if let Some(from_cache) = cached {
-        return Ok(from_cache);
+    if let Some(fn_bytes) = cached {
+        return Ok(fn_bytes);
     }
 
     let lua_fn = lua.load(script).into_function()?;
 
+    // TODO: dump(true) will strip debug info thus it may load faster
+    // Shold make this ability togglable and check how errors are vary
+    let fn_bytes = Rc::new(lua_fn.dump(false));
     LUA_FNS_CACHE.with(|cell| {
         cell.borrow_mut()
-            .insert(cache_key.to_string(), lua_fn.clone())
+            .insert(cache_key.to_string(), fn_bytes.clone());
     });
-
-    Ok(lua_fn)
+    Ok(fn_bytes)
 }
 
 /// Build & cache Lua environment and try to build `script` against it.
@@ -541,7 +559,7 @@ where
     let lua = lua_load_engine(state)?;
     let lua_fn = lua_load_function(&lua, lua_fn_cache_key, lua_fn_body)?;
 
-    execute_lua_script_inner(&lua, &lua_fn, input).await
+    execute_lua_script_inner(&lua, lua_fn, input).await
 }
 
 /// Execute LUA script in async way.
@@ -549,7 +567,7 @@ where
 /// thread cannot share or corrupt the `ctx` global.
 async fn execute_lua_script_inner<R>(
     lua: &Lua,
-    isolated_fn: &Function,
+    fn_bytes: Rc<Vec<u8>>,
     input: RequestInput,
 ) -> Result<R, XepakError>
 where
@@ -558,15 +576,20 @@ where
     let request_env = lua.create_table()?;
     request_env.set("ctx", LuaRequestContext::from(input))?;
 
+    // Adding globals to current context
     let globals = lua.globals();
     let meta = lua.create_table()?;
     meta.set("__index", globals)?;
     request_env.set_metatable(Some(meta))?;
 
-    isolated_fn.set_environment(request_env)?;
-
     // TODO: redo error handling later (may add line numbers logs if possible)
-    match isolated_fn.call_async::<R>(()).await {
+    let call_result = lua
+        .load(fn_bytes.as_ref())
+        .set_environment(request_env)
+        .eval_async::<R>()
+        .await;
+
+    match call_result {
         Ok(result) => Ok(result),
         Err(e) => {
             Err(if let Some(xerror) = extract_xepak_from_lua_error(&e) {
@@ -735,7 +758,10 @@ fn http_build_header_map(headers: Value) -> mlua::Result<HeaderMap> {
 
 async fn http_get(_lua: Lua, (uri, headers): (String, Value)) -> mlua::Result<LuaHttpResponse> {
     let client = reqwest::Client::new();
-    let builder = client.get(uri).headers(http_build_header_map(headers)?);
+    let builder = client
+        .get(uri)
+        .headers(http_build_header_map(headers)?)
+        .timeout(Duration::from_secs(HTTP_REQUEST_TIMEOUT));
 
     builder
         .send()
@@ -754,6 +780,7 @@ async fn http_post_json(
     let builder = client
         .post(uri)
         .headers(http_build_header_map(headers)?)
+        .timeout(Duration::from_secs(HTTP_REQUEST_TIMEOUT))
         .json(&body_json);
 
     builder

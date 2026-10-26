@@ -35,6 +35,9 @@ const LIMIT_HEADER: &str = "X-Limit";
 pub const CONTENT_TYPE_CBOR: &str = "application/cbor";
 pub const CONTENT_TYPE_JSON: &str = "application/json";
 
+// Keep alive timout in seconds (TODO should make it configurable).
+// const KEEP_ALIVE_TIMEOUT: u64 = 15;
+
 #[derive(Clone)]
 pub struct XepakAppData {
     storage_links: HashMap<String, Storage>,
@@ -152,6 +155,10 @@ pub async fn init_server(
     .bind((Ipv4Addr::UNSPECIFIED, port))
     .map_err(Arc::new)?
     .keep_alive(actix_web::http::KeepAlive::Disabled)
+    // TODO: weird with timeout lua script starting to fail in tests. Why?
+    // .keep_alive(actix_web::http::KeepAlive::Timeout(Duration::from_secs(
+    //     KEEP_ALIVE_TIMEOUT,
+    // )))
     .run();
 
     Ok(server)

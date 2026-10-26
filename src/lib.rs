@@ -80,14 +80,14 @@ impl XepakError {
     /// Expectable errors should be convertible to HTTP response with verbose message.
     /// This is type of errors that are expected during execution and should not be logged as errors.
     pub fn is_expectable(&self) -> bool {
-        match self {
+        matches!(
+            self,
             XepakError::Input(_)
-            | XepakError::NotFound(_)
-            | XepakError::Decode(_)
-            | XepakError::WeScrewed(_)
-            | XepakError::Forbidden(_) => false,
-            _ => false,
-        }
+                | XepakError::NotFound(_)
+                | XepakError::Decode(_)
+                | XepakError::WeScrewed(_)
+                | XepakError::Forbidden(_)
+        )
     }
 }
 

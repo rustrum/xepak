@@ -1,7 +1,23 @@
 # Next things to do
 
-IMPORTANT limit/offset logic must be moved to pre-processors.
-RequestInput must not be aware of such custom fields - it just holds and transfer data
+Error while activating KEEP_ALIVE_TIMEOUT in LUa scrips on RPC tests.
+WEIRD must be checked
+
+```
+ INFO actix_web::middleware::logger: 127.0.0.1 "POST /rpc HTTP/1.1" 200 69 "-" "-" 0.000385
+DEBUG hyper_util::client::legacy::pool: pooling idle connection for ("http", localhost:4321)
+DEBUG hyper_util::client::legacy::pool: reuse idle connection for ("http", localhost:4321)
+DEBUG xepak::server::handlers::rpc: Calling RPC method: script
+ERROR xepak::script_lua: Lua script error: runtime error: attempt to index a nil value
+stack traceback:
+        [C]: in for iterator 'for iterator'
+        src/script_lua.rs:69:12: in main chunk
+ERROR xepak::server::handlers::rpc: (O_o) error happened! LuaScript("runtime error: attempt to index a nil value\nstack traceback:\n\t[C]: in for iterator 'for iterator'\n\tsrc/script_lua.rs:69:12: in main chunk")
+ INFO actix_web::middleware::logger: 127.0.0.1 "POST /rpc HTTP/1.1" 200 87 "-" "-" 0.000218
+DEBUG hyper_util::client::legacy::pool: pooling idle connection for ("http", localhost:4321)
+thread 'rpc_resources' (236117) panicked at tests/rpc.rs:108:5:
+Err(Call(ErrorObject { code: InternalError, message: "unknown_error", data: None }))
+```
 
 # In General
 

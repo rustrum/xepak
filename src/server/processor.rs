@@ -73,7 +73,6 @@ pub enum PreProcessor {
         #[serde(default = "LimitOffsetProcessor::default_offset_key")]
         offset_arg_name: String,
         /// Max limit value for paginated queries
-        #[serde(default)]
         limit_max_value: usize,
     },
     Authorize {
@@ -349,7 +348,7 @@ impl LimitOffsetProcessor {
 #[async_trait(?Send)]
 impl PreProcessorHandler for LimitOffsetProcessor {
     fn priority(&self) -> u16 {
-        PRIORITY_QUERY_ARGS
+        PRIORITY_NORMAL
     }
 
     async fn handle(
