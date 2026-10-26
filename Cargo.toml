@@ -12,7 +12,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.0.7-pre-release"
+version = "0.0.8-pre-release"
 edition = "2024"
 homepage = "https://github.com/rustrum/xepak"
 repository = "https://github.com/rustrum/xepak.git"
@@ -21,13 +21,12 @@ description = "DSL based REST API server will be here"
 keywords = ["api", "rest", "db", "proxy", "sql"]
 
 [workspace.dependencies]
-async-lock = { version = "3.4", features = ["std"] }
-base64 = "0.22.1"
-env_logger = "0.11"
+base64 = "0.23.1"
+env_logger = "0.11.11"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
-serde_urlencoded = "0.7"
-toml = "1.1.4"
+serde_urlencoded = "0.7.1"
+toml = "1.1.8"
 
 [package]
 name = "xepak"
@@ -60,7 +59,7 @@ async-trait = "0.1.92"
 bon = "3.10.2"
 cbor2 = "1.1.6"
 futures-util = "0.3.34"
-getopt3 = { version = "2.5.0", optional = true }
+getopt3 = { version = "2.6.1", optional = true }
 mlua = { version = "0.12.2", features = ["lua55", "vendored", "async"] }
 moka = { version = "0.12.16", features = ["future"] }
 indexmap = { version="2.14.2", features = ["serde"] }
@@ -75,9 +74,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 
 
 [dev-dependencies]
-apate = "0.2.0"
-cbor2 = "1.1.4"
+apate = "0.2"
 maplit = "1.0"
-serial_test = "4.0.1"
+serial_test = "4.0"
 url = "2.5"
 jsonrpsee = { version = "0.26", features = ["http-client", "macros"] }

@@ -1,6 +1,6 @@
 # Xepak — AI Agent Reference
 
-**Version:** 0.0.5-pre-release | **Commit:** 
+**Version:** 0.0.8-pre-release | **Commit:** c58ec41
 
 ---
 
@@ -74,9 +74,6 @@ uri = "/users/{user_id:\\d+}"        # {name} path params captured automatically
 allow_methods = ["GET", "DELETE"]    # optional whitelist; if absent only GET is accepted
 strict_schema = false                # reject unknown input arg names (default: ignore them)
 single_record_response = true        # return 404 when no record, instead of an empty array
-fetch_limit = 20                     # max rows for paginated queries (also the default limit)
-limit_arg = "limit"                  # optional query param name (default "limit")
-offset_arg = "offset"                # optional query param name (default "offset")
 pre_processors_ignore_default = false # skip default_pre_processors for this endpoint
 
 [endpoint.resource]
@@ -116,11 +113,13 @@ rules = "#boss OR (ADMIN AND MANAGER)"
 | `parse_body_args` | Merge POST/PUT/PATCH flat-map body into args | `null_if_absent: [keys]` |
 | `config_authentication` | API-key lookup in registry | `anonymous_auth: bool` |
 | `storage_authentication` | DB-backed token auth | `data_source`, `query`, `cache_ttl_sec` |
+| `limit_offset` | Pagination: validates `limit`/`offset` args, sets `{{-limit-}}` / `{{-offset-}}` | `limit_max_value` (required), `limit_arg_name` (default `"limit"`), `offset_arg_name` (default `"offset"`) |
 | `authorize` | Role-based authorization rules | `rules: string` |
 | `lua_script` | Lua as a pre-processor (validation, etc.) | `script: string` |
 
 - `parse_body_args` parses only a flat-map body. A positional-array body is already exposed as args `"0"`, `"1"`, ...
 - `storage_authentication`: the query runs with an `{{api-key}}` arg and must return one row with columns `id` (text) and `roles` (comma-separated text). Non-zero `cache_ttl_sec` caches successful auth per key.
+- `limit_offset`: the `limit` arg is capped at `limit_max_value`; an absent or unparseable `limit` becomes `limit_max_value`; an absent `offset` becomes `0`. The validated values are exposed to the resource as `{{-limit-}}` / `{{-offset-}}` and echoed back in the `X-Limit` / `X-Offset` response headers.
 - `authorize` must run after an authentication pre-processor. An empty `rules` string means "authenticated only".
 
 ### Auth rules syntax
@@ -189,21 +188,23 @@ validate = { kind = "or", nested = [
 ] }
 ```
 
-`range`/`range_float` bounds are interpreted per value type (string length, number value, or tuple length). A validator that does not apply to a type is an error for that type (e.g. `range` on `blob`).
+`range`/`range_float` bounds are interpreted per value type (string length, number value, or tuple length). Validators that do not apply to a value type reject the value (e.g. `range` on `blob`).
 
 ### Query argument syntax
 
-SQL uses `{{arg_name}}` placeholders. Special pagination keys (require `fetch_limit` to be set):
+SQL uses `{{arg_name}}` placeholders, resolved in this priority order:
 
-| Placeholder | Source |
-|-------------|--------|
-| `{{user_id}}` | URI path param |
-| `{{-limit-}}` | `limit` query param or default |
-| `{{-offset-}}` | `offset` query param or default |
+- custom arguments set by pre-processors (`{{-limit-}}`, `{{-offset-}}`) or Lua scripts
+- URI path params
+- POST/PUT/PATCH k/v arguments deserialized from JSON/CBOR payload
+- JSON-RPC method k/v arguments or MCP tool arguments
+- URL query string arguments
+
+Numeric placeholders `{{0}}`, `{{1}}`, etc. are available for POST/PUT/PATCH tuple (array) payloads and JSON-RPC params passed as arrays.
 
 ### JSON-RPC endpoints (`[[rpc]]`)
 
-Each `[[rpc]]` binds one JSON-RPC 2.0 service to a `uri`. Only HTTP **POST**, JSON body only (no CBOR). The `methods` table maps a method name to a spec with the same fields as a REST endpoint (`resource`, `schema`, `pre_processors`, `fetch_limit`, `single_record_response`).
+Each `[[rpc]]` binds one JSON-RPC 2.0 service to a `uri`. Only HTTP **POST**, JSON body (no CBOR). The `methods` table maps a method name to a spec with the same fields as a REST endpoint (`resource`, `schema`, `pre_processors`, `single_record_response`).
 
 ```toml
 [[rpc]]
@@ -225,12 +226,15 @@ resource = { type = "query", query = "SELECT * FROM posts WHERE id = {{0}}" }
 
 Each `[[mcp]]` binds one MCP server (JSON-RPC 2.0 over HTTP POST) to a `uri`. The `tools` table maps a tool name to a spec (same fields as above). You **must** define an input schema per tool.
 
+URI path params in the `uri` (e.g. `/mcp/rag/{project_name}`) are captured and exposed to tool resources as `{{project_name}}` args — useful for per-tenant MCP servers.
+
 ```toml
 [[mcp]]
 uri = "/mcp"
 name = "Posts server"
 instructions = "Provides access to posts data"
 server_version = "1.0.0"
+empty_response_text = "No data found"  # optional: text returned when a tool result is empty (default: built-in message)
 
 [mcp.tools.list_posts]
 title = "List posts"
@@ -325,6 +329,9 @@ log_info("...")
 log_debug("...")
 ```
 
+- Use the `error_*` functions for client-visible errors. A plain Lua `error("...")` aborts the request with 520 `unknown_error` and **no message** is sent to the client.
+- `http_get` / `http_post_json` never panic; a failed request raises a Lua error that can be caught with `xpcall`.
+
 ---
 
 ## 4. Use cases
@@ -335,7 +342,9 @@ log_debug("...")
 # specs/users.toml
 [[endpoint]]
 uri = "/user/list"
-fetch_limit = 20
+[[endpoint.pre_processors]]
+type = "limit_offset"
+limit_max_value = 20
 [endpoint.resource]
 type = "query"
 query = "SELECT * FROM users LIMIT {{-limit-}} OFFSET {{-offset-}}"
@@ -369,7 +378,9 @@ query = "INSERT INTO users (username, password) VALUES ({{username}}, {{password
 ```toml
 [[endpoint]]
 uri = "/post/list"
-fetch_limit = 20
+[[endpoint.pre_processors]]
+type = "limit_offset"
+limit_max_value = 20
 [endpoint.resource]
 type = "query_script_lua"
 script = """
@@ -489,7 +500,7 @@ script = "return { id = ctx:get_auth_id(), roles = ctx:get_auth_roles() }"
 | `bad_request` | 400 | Input/schema validation, or Lua `error_input()` |
 | `forbidden` | 403 | Auth/authorization failure, or Lua `error_forbidden()` |
 | `internal_error` | 500 | Server error, or Lua `error_server()` |
-| `unknown_error` | 520 | Unhandled exception |
+| `unknown_error` | 520 | Unhandled exception (no `message` field); includes plain Lua `error()` |
 
 JSON-RPC and MCP errors follow their respective protocol standards.
 

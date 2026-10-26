@@ -53,7 +53,7 @@ impl AuthRules {
             AuthRules::And { nested } => Self::And {
                 nested: nested.iter().map(|v| v.normalize()).collect(),
             },
-            AuthRules::Or { nested } => Self::And {
+            AuthRules::Or { nested } => Self::Or {
                 nested: nested.iter().map(|v| v.normalize()).collect(),
             },
         }

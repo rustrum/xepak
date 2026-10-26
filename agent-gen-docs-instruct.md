@@ -78,14 +78,14 @@ Write report what errors were discovered in `README-DOCS.md` and what was fixed.
 
 Docs header must contain project version from `Cargo.toml` and latest git commit hash.
 
-`README-AI.md` is for AI agents and must be written from the **user/operator perspective**:
+`README-AI.md` targets AI agents. Write from the **user/operator perspective** only.
 
- - must omit architecture, internal design and implementation details
- - all info must be in one place must not require to read other project docs & examples
- - optimize for low token count: prefer tables and terse bullets over prose.
- - do not duplicate information (define once, reference elsewhere).
- - do not copy project examples as-is; generalize into the smallest set of complete, composable examples.
- - keep exactly what a model needs to write valid configuration and interpret responses without reading other docs.
+- **Self-contained.** No external links, no "see other docs". Everything an agent needs to write valid config and interpret responses lives here.
+- **No internals.** Omit architecture, design rationale, and implementation details.
+- **Dense, not terse.** Prefer tables, schemas, and bullets over prose. Cut filler, but never cut an example or constraint to save tokens.
+- **Examples generalize, don't copy.** Provide the minimal composable set: one happy path, one edge case, one error response. Each shows explicit input -> output.
+- **Be explicit.** State types, formats, defaults, allowed values, and error codes. No hedging.
+- **Define once.** Cross-reference by heading anchor within this file; never repeat a definition.
 
 `README-AI.md` should have struture similar to `README-DOCS.md` with compact DSL usage examples (use-cases).
 

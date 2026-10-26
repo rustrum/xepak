@@ -453,6 +453,7 @@ resource = { type = "query", query = "SELECT * FROM posts ORDER BY id LIMIT {{li
 Additional information:
 
 - `annotations` property could have next (optional) flags: `read_only`, `destructive`, `idempotent`, `open_world`
+- `empty_response_text` (optional) is a text returned when a tool produces an empty result; a built-in message is used if not set
 - `tools/call` schema must be only in a form of a `dict`
 - tool response for now is only in a form of a single content element of type `text` (should not care about it much)
 
@@ -543,7 +544,7 @@ ctx:get_arg("user_id") -- return arg value
 ctx:set_arg("user_id", user.id) -- set custom argument
 
 -- Authentication data (if available)
-ctx:get_auth_id()          -- string or null
+ctx:get_auth_id()          -- string or nil
 ctx:get_auth_roles()       -- returns table of strings
 ctx:has_auth_role("admin") -- check role ignoring case
 
@@ -588,7 +589,7 @@ Lua also has application level context as an `app` variable.
 You can use it to access app level data.
 
 Execution error will cause to exit Lua.
-Use use `xpcall` to deal with errors on Lua level.
+Use `xpcall` to deal with errors on Lua level.
 
 ```lua
 -- Accessing registry
@@ -651,7 +652,7 @@ log_debug(string.format("I said users count is %d", count))
 What if during request processing you will need to query some external API.
 
 Execution error will cause to exit Lua.
-Use use `xpcall` to deal with errors on Lua level.
+Use `xpcall` to deal with errors on Lua level.
 
 ```lua
 -- You should not use this API if can't understand examples below
@@ -684,7 +685,7 @@ local bytes = b:as_bytes()
 
 ### Error handling
 
-Some additional functionality exposed to Lua could fail/panic duric execution.
+Some additional functionality exposed to Lua could fail/panic during execution.
 By default it would lead to exiting Lua script and failing with 5xx HTTP error.
 
 To handle such errors in Lua you must use `xpcall`.
