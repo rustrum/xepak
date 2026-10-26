@@ -8,7 +8,7 @@ mod queries;
 use std::{collections::HashMap, env, path::PathBuf, str::FromStr};
 
 use common::*;
-use maplit::hashmap;
+use indexmap::indexmap;
 use reqwest::StatusCode;
 use serde_json::Value as JsonValue;
 use serial_test::serial;
@@ -32,7 +32,7 @@ async fn script_access_registry_kv() {
         Some(&XepakValue::Text("registry_val".to_string())),
     );
 
-    let expected_map = hashmap! {
+    let expected_map = indexmap! {
         "host".to_string() => XepakValue::Text("localhost".to_string()),
         "weird.key".to_string() => XepakValue::Text("some_value".to_string()),
     };

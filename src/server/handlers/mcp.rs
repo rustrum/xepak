@@ -6,6 +6,7 @@ use actix_web::{
     web::{self, Bytes, Data},
 };
 use base64::Engine as _;
+use indexmap::IndexMap;
 use serde::Deserialize;
 
 use super::rpc::{JSON_RPC_VERSION, JsonRpcRequest, RPC_ERROR_INVALID_REQUEST, RPC_ERROR_PARSE};
@@ -20,6 +21,7 @@ use crate::{
             rpc_error_response, rpc_success_response, validate_resource,
             validate_rpc_request_method,
         },
+        input::{ARG_NAME_LIMIT, ARG_NAME_OFFSET},
         processor::PreProcessorHandler,
         to_error_object,
     },
@@ -162,7 +164,7 @@ impl McpHandler {
 
     fn mcp_initialize(&self) -> XepakValue {
         tracing::debug!("MCP intialize called");
-        XepakValue::from(HashMap::from([
+        XepakValue::from(IndexMap::from([
             (
                 "protocolVersion".to_string(),
                 XepakValue::from(PROTOCOL_VERSION),
@@ -173,7 +175,7 @@ impl McpHandler {
             ),
             (
                 "serverInfo".to_string(),
-                XepakValue::from(HashMap::from([
+                XepakValue::from(IndexMap::from([
                     ("name".to_string(), XepakValue::from(self.ep.name.as_str())),
                     (
                         "version".to_string(),
@@ -183,10 +185,10 @@ impl McpHandler {
             ),
             (
                 "capabilities".to_string(),
-                XepakValue::from(HashMap::from([(
+                XepakValue::from(IndexMap::from([(
                     "tools".to_string(),
                     // MCP methods list is static thus -> listChanged = false
-                    XepakValue::from(HashMap::from([(
+                    XepakValue::from(IndexMap::from([(
                         "listChanged".to_string(),
                         XepakValue::from(false),
                     )])),
@@ -199,7 +201,7 @@ impl McpHandler {
         tracing::debug!("MCP tools/list called");
         let mut tools = Vec::new();
         for (name, specs) in &self.ep.tools {
-            let mut tool_dict = HashMap::new();
+            let mut tool_dict = IndexMap::new();
             tool_dict.insert("name".to_string(), XepakValue::Text(name.clone()));
             if !specs.title.is_empty() {
                 tool_dict.insert("title".to_string(), XepakValue::Text(specs.title.clone()));
@@ -213,7 +215,7 @@ impl McpHandler {
             tool_dict.insert("inputSchema".to_string(), input_schema);
 
             if let Some(annotations) = &specs.annotations {
-                let mut anno_dict = HashMap::new();
+                let mut anno_dict = IndexMap::new();
                 if let Some(v) = annotations.read_only {
                     anno_dict.insert("readOnlyHint".to_string(), XepakValue::from(v));
                 }
@@ -235,7 +237,7 @@ impl McpHandler {
             tools.push(XepakValue::Dict(tool_dict));
         }
 
-        XepakValue::Dict(HashMap::from([(
+        XepakValue::Dict(IndexMap::from([(
             "tools".to_string(),
             XepakValue::Tuple(tools),
         )]))
@@ -306,10 +308,21 @@ impl McpHandler {
             } else {
                 XepakValue::from(self.ep.empty_response_text.as_str())
             };
-            return mcp_tool_success_content(msg);
+            return mcp_tool_success_content(msg, (None, None));
         }
 
-        mcp_tool_success_content(response)
+        mcp_tool_success_content(response, self.extract_limit_offset(&input))
+    }
+
+    fn extract_limit_offset(&self, input: &RequestInput) -> (Option<usize>, Option<usize>) {
+        (
+            input
+                .get_arg(ARG_NAME_LIMIT)
+                .map(|v| v.as_int().unwrap_or_default() as usize),
+            input
+                .get_arg(ARG_NAME_OFFSET)
+                .map(|v| v.as_int().unwrap_or_default() as usize),
+        )
     }
 
     async fn pre_process_request(
@@ -374,7 +387,7 @@ fn bind_mcp_params<T: serde::de::DeserializeOwned>(
 }
 
 fn mcp_tool_error(message: &str) -> Result<XepakValue, XepakError> {
-    Ok(XepakValue::Dict(HashMap::from([
+    Ok(XepakValue::Dict(IndexMap::from([
         ("isError".to_string(), XepakValue::from(true)),
         (
             "content".to_string(),
@@ -387,27 +400,58 @@ fn mcp_tool_error(message: &str) -> Result<XepakValue, XepakError> {
 }
 
 /// Builds MCP tool success response with `value` serialized into single text element.
-fn mcp_tool_success_content(value: XepakValue) -> Result<XepakValue, XepakError> {
-    Ok(XepakValue::Dict(HashMap::from([
+fn mcp_tool_success_content(
+    value: XepakValue,
+    limit_offset: (Option<usize>, Option<usize>),
+) -> Result<XepakValue, XepakError> {
+    Ok(XepakValue::Dict(IndexMap::from([
         ("isError".to_string(), XepakValue::from(false)),
-        ("content".to_string(), xepak_to_content_elements(value)?),
+        (
+            "content".to_string(),
+            xepak_to_content_elements(value, limit_offset)?,
+        ),
     ])))
 }
 
 /// Wraps value in to array for MCP content elements for tuples
 /// or single row tuple if not
-fn xepak_to_content_elements(value: XepakValue) -> Result<XepakValue, XepakError> {
+fn xepak_to_content_elements(
+    value: XepakValue,
+    limit_offset: (Option<usize>, Option<usize>),
+) -> Result<XepakValue, XepakError> {
     let mut result = Vec::new();
     match value {
         XepakValue::Tuple(items) => {
             let mut markdown = String::new();
+            markdown.push_str("# Result details\n");
+            markdown.push_str("total-records-fetched: ");
+            markdown.push_str(&items.len().to_string());
+            markdown.push('\n');
+
+            let (limit, offset) = limit_offset;
+            if let Some(o) = offset {
+                markdown.push_str("with-offset: ");
+                markdown.push_str(&o.to_string());
+                markdown.push('\n');
+            }
+            if let Some(l) = limit {
+                markdown.push_str("with-limit: ");
+                markdown.push_str(&l.to_string());
+                markdown.push('\n');
+                if l == items.len() {
+                    markdown.push_str("note: Records count equals to limit. More data could be available to retreive.");
+                    markdown.push('\n');
+                }
+            }
+            markdown.push('\n');
+
             for (idx, xv) in items.into_iter().enumerate() {
                 let record = xepak_to_markdown_kv(xv, Some(idx + 1));
 
                 markdown.push_str(&record);
                 markdown.push('\n');
             }
-            result.push(XepakValue::Dict(HashMap::from([
+            result.push(XepakValue::Dict(IndexMap::from([
                 ("type".to_string(), XepakValue::from("text")),
                 ("text".to_string(), XepakValue::from(markdown)),
             ])));
@@ -435,7 +479,7 @@ fn xepak_to_text_content(value: XepakValue, markdown_kv: bool) -> Result<XepakVa
             }
         }
     };
-    Ok(XepakValue::Dict(HashMap::from([
+    Ok(XepakValue::Dict(IndexMap::from([
         ("type".to_string(), XepakValue::from("text")),
         ("text".to_string(), XepakValue::from(text_value)),
     ])))
@@ -447,7 +491,7 @@ fn xepak_to_markdown_kv(value: XepakValue, seq_number: Option<usize>) -> String 
     let mut result = "# Record".to_string();
 
     if let Some(seq) = seq_number {
-        result.push_str(&format!(" number: {seq}"));
+        result.push_str(&format!(" {seq}"));
     }
     result.push('\n');
 
@@ -487,7 +531,7 @@ fn xepak_to_markdown_kv(value: XepakValue, seq_number: Option<usize>) -> String 
 }
 
 pub mod schema {
-    use std::collections::HashMap;
+    use indexmap::IndexMap;
 
     use crate::{schema::Schema, xepak_data::XepakValue};
 
@@ -495,7 +539,7 @@ pub mod schema {
     pub fn xepak_schema_to_mcp(schema: &Schema) -> XepakValue {
         match schema {
             Schema::Dict { items, .. } => {
-                let mut properties = HashMap::new();
+                let mut properties = IndexMap::new();
                 for (name, sub_schema) in items {
                     properties.insert(name.clone(), build_property(sub_schema));
                 }
@@ -507,7 +551,7 @@ pub mod schema {
                     .collect();
 
                 XepakValue::Dict({
-                    let mut result = HashMap::from([
+                    let mut result = IndexMap::from([
                         ("type".to_string(), XepakValue::Text("object".to_string())),
                         ("properties".to_string(), XepakValue::Dict(properties)),
                     ]);
@@ -528,7 +572,7 @@ pub mod schema {
                 }
 
                 XepakValue::Dict({
-                    HashMap::from([
+                    IndexMap::from([
                         ("type".to_string(), XepakValue::Text("array".to_string())),
                         (
                             "items".to_string(),
@@ -550,7 +594,7 @@ pub mod schema {
     }
 
     fn build_base_schema(typ: &str, schema: &Schema) -> XepakValue {
-        let mut result = HashMap::from([("type".to_string(), XepakValue::Text(typ.to_string()))]);
+        let mut result = IndexMap::from([("type".to_string(), XepakValue::Text(typ.to_string()))]);
 
         if schema.required() {
             result.insert("required".to_string(), XepakValue::Boolean(true));
@@ -576,7 +620,7 @@ pub mod schema {
     fn build_property(schema: &Schema) -> XepakValue {
         match schema {
             Schema::Dict { items, .. } => {
-                let mut properties = HashMap::new();
+                let mut properties = IndexMap::new();
 
                 for (name, sub_schema) in items {
                     properties.insert(name.clone(), build_property(sub_schema));
@@ -589,7 +633,7 @@ pub mod schema {
                     .collect();
 
                 XepakValue::Dict({
-                    let result = HashMap::from([
+                    let result = IndexMap::from([
                         ("type".to_string(), XepakValue::Text("object".to_string())),
                         ("properties".to_string(), XepakValue::Dict(properties)),
                     ]);
@@ -613,7 +657,7 @@ pub mod schema {
                 }
 
                 XepakValue::Dict({
-                    HashMap::from([
+                    IndexMap::from([
                         ("type".to_string(), XepakValue::Text("array".to_string())),
                         (
                             "items".to_string(),
@@ -636,6 +680,8 @@ pub mod schema {
 
     #[cfg(test)]
     mod tests {
+        use std::collections::HashMap;
+
         use serde_json::json;
 
         use crate::schema::SchemaValidator;

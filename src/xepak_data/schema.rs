@@ -229,7 +229,12 @@ pub fn apply_schema(
 
             for (k, v) in items {
                 let key_ref = format!("{key}.{k}");
-                if let Some(value) = value_dict.remove(k) {
+                if value_dict.contains_key(k) {
+                    // Need to extract old value without affecting ordering
+                    // Do not know how to swap value in place in better way
+                    let value = value_dict
+                        .insert(k.to_string(), XepakValue::Null)
+                        .expect("Just checked existence");
                     value_dict.insert(
                         k.to_string(),
                         apply_schema(v, value, &key_ref, strict, validate)?,

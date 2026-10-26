@@ -17,6 +17,7 @@ use actix_web::middleware::Logger;
 use actix_web::web::ServiceConfig;
 use actix_web::{App, HttpRequest};
 use actix_web::{HttpServer, web::Data};
+use indexmap::IndexMap;
 
 use crate::XepakError;
 use crate::cfg::{ResourceRef, XepakConf, XepakSpecs};
@@ -208,7 +209,7 @@ pub fn is_req_body_allowed(req: &HttpRequest) -> bool {
 }
 
 pub fn to_error_object(err: XepakError) -> (StatusCode, XepakValue) {
-    let mut result = HashMap::<String, XepakValue>::with_capacity(2);
+    let mut result = IndexMap::<String, XepakValue>::with_capacity(2);
     let mut code = StatusCode::from_u16(520).expect("Must not fail (^_^)");
     match err {
         XepakError::NotFound(msg) => {

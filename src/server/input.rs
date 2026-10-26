@@ -4,6 +4,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use indexmap::IndexMap;
+
 use crate::{
     XepakError,
     schema::{Schema, apply_schema, convert_with_schema},
@@ -11,8 +13,10 @@ use crate::{
     xepak_data::{XepakDataError, XepakValue, sql::SqlxBindable},
 };
 
+/// Arg name to hold already validated limit value
 pub const ARG_NAME_LIMIT: &str = "-limit-";
 
+/// Arg name to hold already validated offset value
 pub const ARG_NAME_OFFSET: &str = "-offset-";
 
 /// Contains aggregated/formatted input from request that will be used to query resource.
@@ -64,7 +68,7 @@ impl RequestInput {
         let resource = actix_router::ResourceDef::new(uri_pattern);
         resource.capture_match_info(&mut path);
 
-        let path_args: HashMap<String, XepakValue> = path
+        let path_args: IndexMap<String, XepakValue> = path
             .iter()
             .map(|(k, v)| (k.to_string(), XepakValue::Text(v.to_string())))
             .collect();

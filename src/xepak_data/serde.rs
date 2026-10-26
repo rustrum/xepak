@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-
-use base64::Engine as _i;
+use base64::Engine as _;
+use indexmap::IndexMap;
 use serde::de::Visitor;
 use serde::ser::{SerializeMap as _, SerializeSeq as _};
 
@@ -215,7 +214,7 @@ impl<'de> Visitor<'de> for DeserializeVisitor {
     where
         A: serde::de::MapAccess<'de>,
     {
-        let mut values = HashMap::with_capacity(map.size_hint().unwrap_or(0));
+        let mut values = IndexMap::with_capacity(map.size_hint().unwrap_or(0));
         while let Some((key, value)) = map.next_entry()? {
             values.insert(key, value);
         }
@@ -234,13 +233,14 @@ impl<'de> serde::Deserialize<'de> for XepakValue {
 
 #[cfg(test)]
 mod tests {
+
     use crate::xepak_data::XepakType;
 
     use super::*;
-    use maplit::hashmap;
+    use indexmap::indexmap;
 
     fn dict_all_types() -> XepakValue {
-        XepakValue::Dict(hashmap! {
+        XepakValue::Dict(indexmap! {
             "null".to_string() => XepakValue::Null,
             "bool".to_string() => XepakValue::Boolean(true),
             "int".to_string() => XepakValue::Integer(42),
@@ -252,7 +252,7 @@ mod tests {
                 XepakValue::Integer(2),
             ]),
             "map".to_string() => XepakValue::Dict(
-                hashmap! {
+                indexmap! {
                     "a".to_string() => XepakValue::Integer(1),
                     "b".to_string() => XepakValue::Float(1.12),
                     "c".to_string() => XepakValue::Boolean(true),

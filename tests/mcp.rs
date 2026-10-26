@@ -1,7 +1,6 @@
 mod common;
 
-use std::collections::HashMap;
-
+use indexmap::IndexMap;
 use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClientBuilder};
 use jsonrpsee::proc_macros::rpc;
 use serde::Deserialize;
@@ -45,7 +44,7 @@ pub trait TestMcp {
 
 /// Build a dict [`XepakValue`] for MCP tool arguments.
 fn args(pairs: &[(&str, XepakValue)]) -> XepakValue {
-    let map: HashMap<String, XepakValue> = pairs
+    let map: IndexMap<String, XepakValue> = pairs
         .iter()
         .map(|(k, v)| (k.to_string(), v.clone()))
         .collect();
@@ -120,7 +119,7 @@ async fn mcp_initialize_tools_and_call() {
     assert_eq!(call.content.len(), 1, "{call:?}");
     assert_eq!(call.content[0].content_type, "text", "{call:?}");
     assert!(
-        &call.content[0].text.contains("ecord number: 4"),
+        &call.content[0].text.contains("total-records-fetched: 4"),
         "{:?}",
         call.content[0].text
     );

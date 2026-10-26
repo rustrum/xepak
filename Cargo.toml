@@ -63,6 +63,7 @@ futures-util = "0.3.34"
 getopt3 = { version = "2.5.0", optional = true }
 mlua = { version = "0.12.2", features = ["lua55", "vendored", "async"] }
 moka = { version = "0.12.16", features = ["future"] }
+indexmap = { version="2.14.2", features = ["serde"] }
 reqwest = { version = "0.13.5", features = ["json"] }
 sqlx = { version = "0.9", features = ["runtime-tokio", "sqlite"] }
 sqlx-core = "0.9"

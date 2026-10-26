@@ -6,6 +6,7 @@ use actix_web::{
     web::{Bytes, Data},
 };
 use async_trait::async_trait;
+use indexmap::IndexMap;
 use serde::Deserialize;
 
 use crate::{
@@ -196,7 +197,7 @@ impl PreProcessorHandler for QueryArgsProcessor {
         }
         let qstring = req.uri().query().unwrap_or_default();
         let query_args =
-            if let Ok(qa) = serde_urlencoded::from_str::<HashMap<String, XepakValue>>(qstring) {
+            if let Ok(qa) = serde_urlencoded::from_str::<IndexMap<String, XepakValue>>(qstring) {
                 qa
             } else {
                 tracing::warn!("Can't decode query string from URL");

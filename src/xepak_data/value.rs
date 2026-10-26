@@ -1,5 +1,5 @@
 use base64::Engine;
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 use super::XepakDataError;
 use super::XepakType;
@@ -27,7 +27,7 @@ pub enum XepakValue {
 
     Tuple(Vec<XepakValue>),
 
-    Dict(HashMap<String, XepakValue>),
+    Dict(IndexMap<String, XepakValue>),
 }
 
 impl XepakValue {
@@ -295,10 +295,10 @@ impl XepakValue {
         })
     }
 
-    pub fn as_map(&self) -> Result<HashMap<String, XepakValue>, XepakDataError> {
+    pub fn as_map(&self) -> Result<IndexMap<String, XepakValue>, XepakDataError> {
         const TO_TYPE: XepakType = XepakType::Dict;
         Ok(match self {
-            XepakValue::Null => HashMap::new(),
+            XepakValue::Null => Default::default(),
             XepakValue::Dict(v) => v.clone(),
             _ => {
                 return Err(XepakDataError::ConvertValue(
@@ -400,11 +400,17 @@ impl From<i128> for XepakValue {
     }
 }
 
-impl From<HashMap<String, XepakValue>> for XepakValue {
-    fn from(value: HashMap<String, XepakValue>) -> Self {
+impl From<IndexMap<String, XepakValue>> for XepakValue {
+    fn from(value: IndexMap<String, XepakValue>) -> Self {
         Self::Dict(value)
     }
 }
+
+// impl From<HashMap<String, XepakValue>> for XepakValue {
+//     fn from(value: HashMap<String, XepakValue>) -> Self {
+//         Self::Dict(value)
+//     }
+// }
 
 impl From<Vec<XepakValue>> for XepakValue {
     fn from(value: Vec<XepakValue>) -> Self {

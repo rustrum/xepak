@@ -2,6 +2,7 @@ use std::{cell::RefCell, collections::HashMap, str::FromStr as _, sync::Arc};
 
 use actix_web::web::Data;
 use async_trait::async_trait;
+use indexmap::IndexMap;
 use mlua::{
     Error as LuaError, ExternalError, FromLua, FromLuaMulti, Function, IntoLua, Lua, LuaOptions,
     Table, UserData, UserDataMethods, Value,
@@ -347,7 +348,7 @@ impl FromLua for XepakValue {
             }
             // Map must have at least one key or we will handle it as a tuple
             Value::Table(t) if quick_table_is_map(&t) => {
-                let mut map = HashMap::new();
+                let mut map = IndexMap::new();
                 for pairs in t.pairs::<Value, Value>() {
                     let (k, v) = pairs?;
                     let key = match k {

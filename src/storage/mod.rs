@@ -9,6 +9,7 @@ use crate::XepakError;
 use crate::sql_key_args::ParametrizedQuery;
 use crate::xepak_data::XepakValue;
 use crate::xepak_data::sql::{SqlxBindable, SqlxValue};
+use indexmap::IndexMap;
 use serde::Deserialize;
 use sqlx::migrate::Migrate;
 use sqlx::query::Query;
@@ -333,7 +334,7 @@ impl Storage {
     fn map_row<DB>(
         &self,
         row: <DB as Database>::Row,
-    ) -> Result<HashMap<String, XepakValue>, XepakError>
+    ) -> Result<IndexMap<String, XepakValue>, XepakError>
     where
         DB: Database,
         usize: ColumnIndex<<DB as Database>::Row>,
@@ -342,7 +343,7 @@ impl Storage {
     {
         // fn map_row(&self, row: AnyRow) -> HashMap<String, XepakValue> {
         let cols = row.columns();
-        let mut out_row = HashMap::new();
+        let mut out_row = IndexMap::new();
         for (idx, c) in cols.iter().enumerate() {
             let col = row
                 .try_get_raw(idx)
