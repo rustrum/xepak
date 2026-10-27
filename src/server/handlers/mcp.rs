@@ -822,8 +822,8 @@ pub mod schema {
             let result = xepak_schema_to_mcp(&schema);
             let expected = json!({
                 "type": "string",
-                "minLength": 1,
-                "maxLength": 100
+                "minimum": 1,
+                "maximum": 100
             });
 
             assert_json_equal(result, &expected);
