@@ -162,6 +162,10 @@ pub trait PreProcessorHandler: Send + Sync {
         body: &Bytes,
         input: &mut RequestInput,
     ) -> Result<(), XepakError>;
+
+    // Run some async validation logic.
+    // Considering this will be called only once on app init.
+    // async fn validate(&self, app: &XepakAppData) -> Result<(), XepakError>;
 }
 
 /// Adjust processor priority related to its position in the ordered list.

@@ -53,16 +53,21 @@ struct McpToolHandler {
 #[derive(Clone)]
 pub struct McpHandler {
     _rref: ResourceRef,
-    ep: Arc<McpEpSpecs>,
+    specs: Arc<McpEpSpecs>,
     tools: HashMap<String, McpToolHandler>,
 }
 
 impl McpHandler {
-    pub fn new(rref: ResourceRef, ep: McpEpSpecs, app: &XepakAppData) -> Result<Self, XepakError> {
-        let tools = Self::init_tools(app, rref.clone(), &ep.tools)?;
+    pub fn new(
+        rref: ResourceRef,
+        specs: McpEpSpecs,
+        app: &XepakAppData,
+    ) -> Result<Self, XepakError> {
+        let sref = rref.nested(&specs.uri);
+        let tools = Self::init_tools(app, sref.clone(), &specs.tools)?;
         Ok(Self {
-            _rref: rref,
-            ep: Arc::new(ep),
+            _rref: sref,
+            specs: Arc::new(specs),
             tools,
         })
     }
@@ -79,14 +84,14 @@ impl McpHandler {
             let mref = rref.nested(key);
             let pre_processors = build_pre_processors(
                 app,
-                rref.nested(key),
+                mref.nested("pp").nested(key),
                 &specs.pre_processors,
                 specs.pre_processors_ignore_default,
             )?;
 
             let m_handler = McpToolHandler {
-                _rref: mref,
-                script_cache_key: rref.nested("lua-fn").to_string(),
+                _rref: mref.clone(),
+                script_cache_key: mref.nested("lua-fn").to_string(),
                 pre_processors: Arc::new(pre_processors),
             };
             result.insert(key.clone(), m_handler);
@@ -171,15 +176,18 @@ impl McpHandler {
             ),
             (
                 "instructions".to_string(),
-                XepakValue::from(self.ep.instructions.as_str()),
+                XepakValue::from(self.specs.instructions.as_str()),
             ),
             (
                 "serverInfo".to_string(),
                 XepakValue::from(IndexMap::from([
-                    ("name".to_string(), XepakValue::from(self.ep.name.as_str())),
+                    (
+                        "name".to_string(),
+                        XepakValue::from(self.specs.name.as_str()),
+                    ),
                     (
                         "version".to_string(),
-                        XepakValue::from(self.ep.server_version.as_str()),
+                        XepakValue::from(self.specs.server_version.as_str()),
                     ),
                 ])),
             ),
@@ -200,7 +208,7 @@ impl McpHandler {
     fn mcp_tools_list(&self) -> XepakValue {
         tracing::debug!("MCP tools/list called");
         let mut tools = Vec::new();
-        for (name, specs) in &self.ep.tools {
+        for (name, specs) in &self.specs.tools {
             let mut tool_dict = IndexMap::new();
             tool_dict.insert("name".to_string(), XepakValue::Text(name.clone()));
             if !specs.title.is_empty() {
@@ -258,7 +266,7 @@ impl McpHandler {
                 request.method
             )));
         };
-        let Some(tool_specs) = self.ep.tools.get(tool_name) else {
+        let Some(tool_specs) = self.specs.tools.get(tool_name) else {
             // This must not happen
             return Err(XepakError::Input(format!(
                 "MCP tool specs not found: {}",
@@ -303,10 +311,10 @@ impl McpHandler {
 
         // Returns meaningfull MCP response if no data available
         if response.is_empty() {
-            let msg = if self.ep.empty_response_text.is_empty() {
+            let msg = if self.specs.empty_response_text.is_empty() {
                 XepakValue::from(NO_DATA_RESPONSE)
             } else {
-                XepakValue::from(self.ep.empty_response_text.as_str())
+                XepakValue::from(self.specs.empty_response_text.as_str())
             };
             return mcp_tool_success_content(msg, (None, None));
         }
@@ -337,7 +345,7 @@ impl McpHandler {
             specs.schema.input.clone(),
             true,
             req.method().to_string(),
-            &self.ep.uri,
+            &self.specs.uri,
             req.path(),
         );
         let body = Bytes::new();
@@ -357,7 +365,7 @@ impl Handler<EndpointHandlerArgs> for McpHandler {
     type Future = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn call(&self, (req, state, body): EndpointHandlerArgs) -> Self::Future {
-        tracing::trace!("Calling MCP endpoint CALL function with {:?}", self.ep);
+        tracing::trace!("Calling MCP endpoint CALL function with {:?}", self.specs);
         let this = self.clone();
         Box::pin(async move { this.handle_request(req, state, body).await })
     }
@@ -365,10 +373,10 @@ impl Handler<EndpointHandlerArgs> for McpHandler {
 
 impl HttpServiceFactory for McpHandler {
     fn register(self, config: &mut actix_web::dev::AppService) {
-        let name = format!("MCP Entrypoint: {}", self.ep.uri);
+        let name = format!("MCP Entrypoint: {}", self.specs.uri);
         tracing::debug!("Registering [{:?}]: {name}", std::thread::current().id());
 
-        web::resource(self.ep.uri.clone())
+        web::resource(self.specs.uri.clone())
             .route(web::route().to(self))
             .register(config);
     }

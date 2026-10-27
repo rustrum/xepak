@@ -44,16 +44,21 @@ struct RpcMethodHandler {
 #[derive(Clone)]
 pub struct RpcHandler {
     _rref: ResourceRef,
-    ep: Arc<RpcEpSpecs>,
+    specs: Arc<RpcEpSpecs>,
     methods: HashMap<String, RpcMethodHandler>,
 }
 
 impl RpcHandler {
-    pub fn new(rref: ResourceRef, ep: RpcEpSpecs, app: &XepakAppData) -> Result<Self, XepakError> {
-        let methods = Self::init_methods(app, rref.clone(), &ep.methods)?;
+    pub fn new(
+        rref: ResourceRef,
+        specs: RpcEpSpecs,
+        app: &XepakAppData,
+    ) -> Result<Self, XepakError> {
+        let sref = rref.nested(&specs.uri);
+        let methods = Self::init_methods(app, sref.clone(), &specs.methods)?;
         Ok(Self {
-            _rref: rref,
-            ep: Arc::new(ep),
+            _rref: sref,
+            specs: Arc::new(specs),
             methods,
         })
     }
@@ -70,14 +75,14 @@ impl RpcHandler {
             let mref = rref.nested(key);
             let pre_processors = build_pre_processors(
                 app,
-                rref.nested(key),
+                mref.nested(key),
                 &specs.pre_processors,
                 specs.pre_processors_ignore_default,
             )?;
 
             let m_handler = RpcMethodHandler {
-                _rref: mref,
-                script_cache_key: rref.nested("lua-fn").to_string(),
+                _rref: mref.clone(),
+                script_cache_key: mref.nested("lua-fn").to_string(),
                 pre_processors: Arc::new(pre_processors),
             };
             result.insert(key.clone(), m_handler);
@@ -136,7 +141,7 @@ impl RpcHandler {
         state: Data<XepakAppData>,
         request: JsonRpcRequest<Option<XepakValue>>,
     ) -> Result<XepakValue, XepakError> {
-        let Some(specs) = self.ep.methods.get(&request.method) else {
+        let Some(specs) = self.specs.methods.get(&request.method) else {
             return Err(XepakError::Input(format!(
                 "method not found: {}",
                 request.method
@@ -177,7 +182,7 @@ impl RpcHandler {
             specs.schema.input.clone(),
             true,
             req.method().to_string(),
-            &self.ep.uri,
+            &self.specs.uri,
             req.path(),
         );
         let body = Bytes::new();
@@ -197,7 +202,7 @@ impl Handler<EndpointHandlerArgs> for RpcHandler {
     type Future = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn call(&self, (req, state, body): EndpointHandlerArgs) -> Self::Future {
-        tracing::trace!("Calling RPC endpoint CALL function with {:?}", self.ep);
+        tracing::trace!("Calling RPC endpoint CALL function with {:?}", self.specs);
         let this = self.clone();
         Box::pin(async move { this.handle_request(req, state, body).await })
     }
@@ -205,10 +210,10 @@ impl Handler<EndpointHandlerArgs> for RpcHandler {
 
 impl HttpServiceFactory for RpcHandler {
     fn register(self, config: &mut actix_web::dev::AppService) {
-        let name = format!("RPC Entrypoint: {}", self.ep.uri);
+        let name = format!("RPC Entrypoint: {}", self.specs.uri);
         tracing::debug!("Registering [{:?}]: {name}", std::thread::current().id());
 
-        web::resource(self.ep.uri.clone())
+        web::resource(self.specs.uri.clone())
             .route(web::route().to(self))
             .register(config);
     }

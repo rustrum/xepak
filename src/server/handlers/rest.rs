@@ -24,25 +24,30 @@ use crate::{
 #[derive(Clone)]
 pub struct EndpointHandler {
     _rref: ResourceRef,
-    ep: Arc<RestEpSpecs>,
+    specs: Arc<RestEpSpecs>,
     script_cache_key: String,
     processors: Arc<Vec<Box<dyn PreProcessorHandler>>>,
 }
 
 impl EndpointHandler {
-    pub fn new(rref: ResourceRef, ep: RestEpSpecs, app: &XepakAppData) -> Result<Self, XepakError> {
-        validate_resource(app, &ep.resource)?;
+    pub fn new(
+        rref: ResourceRef,
+        specs: RestEpSpecs,
+        app: &XepakAppData,
+    ) -> Result<Self, XepakError> {
+        let sref = rref.nested(&specs.uri);
+        validate_resource(app, &specs.resource)?;
 
         let pre_processors = build_pre_processors(
             app,
-            rref.nested("pp"),
-            &ep.pre_processors,
-            ep.pre_processors_ignore_default,
+            sref.nested("pp"),
+            &specs.pre_processors,
+            specs.pre_processors_ignore_default,
         )?;
         Ok(Self {
             script_cache_key: rref.nested("resource-fn").to_string(),
-            _rref: rref,
-            ep: Arc::new(ep),
+            _rref: sref,
+            specs: Arc::new(specs),
 
             // handler_lua: Arc::new(handler_lua),
             processors: Arc::new(pre_processors),
@@ -50,7 +55,7 @@ impl EndpointHandler {
     }
 
     fn validate_method_allowed(&self, req: &HttpRequest) -> Result<(), XepakError> {
-        let am = &self.ep.allow_methods;
+        let am = &self.specs.allow_methods;
         if am.is_empty() && req.method() == Method::GET {
             return Ok(());
         }
@@ -70,7 +75,7 @@ impl EndpointHandler {
         state: Data<XepakAppData>,
         body: Bytes,
     ) -> HttpResponse {
-        tracing::debug!("Handler called for {:?}", self.ep.uri);
+        tracing::debug!("Handler called for {:?}", self.specs.uri);
 
         let ri = match self.pre_process_request(&req, &state, &body).await {
             Ok(result) => result,
@@ -84,8 +89,8 @@ impl EndpointHandler {
             &ri,
             &state,
             &self.script_cache_key,
-            &self.ep.resource,
-            self.ep.single_record_response,
+            &self.specs.resource,
+            self.specs.single_record_response,
         )
         .await;
 
@@ -110,10 +115,10 @@ impl EndpointHandler {
     }
 
     fn apply_output_schema(&self, data: XepakValue) -> Result<XepakValue, XepakError> {
-        if self.ep.schema.output.is_empty() {
+        if self.specs.schema.output.is_empty() {
             return Ok(data);
         }
-        let schema = &self.ep.schema.output;
+        let schema = &self.specs.schema.output;
         crate::schema::apply_schema(schema, data, "output", false, true).map_err(Into::into)
     }
 
@@ -126,10 +131,10 @@ impl EndpointHandler {
         self.validate_method_allowed(req)?;
 
         let mut input = RequestInput::new(
-            self.ep.schema.input.clone(),
-            self.ep.strict_schema,
+            self.specs.schema.input.clone(),
+            self.specs.strict_schema,
             req.method().to_string(),
-            &self.ep.uri,
+            &self.specs.uri,
             req.path(),
         );
 
@@ -208,7 +213,7 @@ impl Handler<EndpointHandlerArgs> for EndpointHandler {
     type Future = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn call(&self, (req, state, body): EndpointHandlerArgs) -> Self::Future {
-        tracing::debug!("Calling REST endpoint CALL function with {:?}", self.ep);
+        tracing::debug!("Calling REST endpoint CALL function with {:?}", self.specs);
         let this = self.clone();
         Box::pin(async move { this.handle_request(req, state, body).await })
     }
@@ -216,10 +221,10 @@ impl Handler<EndpointHandlerArgs> for EndpointHandler {
 
 impl HttpServiceFactory for EndpointHandler {
     fn register(self, config: &mut actix_web::dev::AppService) {
-        let name = format!("Entrypoint: {}", self.ep.uri);
+        let name = format!("Entrypoint: {}", self.specs.uri);
         tracing::debug!("Registering [{:?}]: {name}", std::thread::current().id());
 
-        web::resource(self.ep.uri.clone())
+        web::resource(self.specs.uri.clone())
             .route(web::route().to(self))
             .register(config);
     }

@@ -1,3 +1,4 @@
+// pub(crate) mod lua_pool;
 pub mod auth;
 pub mod cfg;
 pub mod script_lua;

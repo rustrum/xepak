@@ -65,7 +65,6 @@ pub fn lua_load_function(
     if let Some(fn_bytes) = cached {
         return Ok(fn_bytes);
     }
-
     let lua_fn = lua.load(script).into_function()?;
 
     // TODO: dump(true) will strip debug info thus it may load faster
@@ -81,6 +80,7 @@ pub fn lua_load_function(
 /// Build & cache Lua environment and try to build `script` against it.
 /// This is needed just to validate if all compiles correctly.
 pub fn init_lua_env_fn(app: &XepakAppData, script: &str) -> Result<(), XepakError> {
+    // let lua = pool_lua_engine(app).await?;
     let lua = lua_load_engine(app)?;
     lua.load(script).into_function()?;
     Ok(())
@@ -556,6 +556,7 @@ pub async fn execute_lua_script<R>(
 where
     R: FromLuaMulti + 'static,
 {
+    // let lua = pool_lua_engine(state).await?;
     let lua = lua_load_engine(state)?;
     let lua_fn = lua_load_function(&lua, lua_fn_cache_key, lua_fn_body)?;
 

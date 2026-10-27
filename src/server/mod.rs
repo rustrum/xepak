@@ -36,7 +36,7 @@ pub const CONTENT_TYPE_CBOR: &str = "application/cbor";
 pub const CONTENT_TYPE_JSON: &str = "application/json";
 
 // Keep alive timout in seconds (TODO should make it configurable).
-// const KEEP_ALIVE_TIMEOUT: u64 = 15;
+const KEEP_ALIVE_TIMEOUT: u64 = 15;
 
 #[derive(Clone)]
 pub struct XepakAppData {
@@ -114,12 +114,14 @@ pub async fn init_server(
     }
 
     // JSON-RPC endpoints
+    let rref = ResourceRef::new("rest");
     let mut rpc_handlers = Vec::new();
     for (idx, espec) in specs.rpc.iter().enumerate() {
         rpc_handlers.push(RpcHandler::new(rref.nested(idx), espec.clone(), &app_data)?);
     }
 
     // MCP endpoints
+    let rref = ResourceRef::new("mcp");
     let mut mcp_handlers = Vec::new();
     for (idx, mspecs) in specs.mcp.iter().enumerate() {
         mcp_handlers.push(McpHandler::new(
@@ -154,11 +156,11 @@ pub async fn init_server(
     })
     .bind((Ipv4Addr::UNSPECIFIED, port))
     .map_err(Arc::new)?
-    .keep_alive(actix_web::http::KeepAlive::Disabled)
+    // .keep_alive(actix_web::http::KeepAlive::Disabled)
     // TODO: weird with timeout lua script starting to fail in tests. Why?
-    // .keep_alive(actix_web::http::KeepAlive::Timeout(Duration::from_secs(
-    //     KEEP_ALIVE_TIMEOUT,
-    // )))
+    .keep_alive(actix_web::http::KeepAlive::Timeout(Duration::from_secs(
+        KEEP_ALIVE_TIMEOUT,
+    )))
     .run();
 
     Ok(server)
