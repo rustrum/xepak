@@ -52,6 +52,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
 CREATE VIRTUAL TABLE IF NOT EXISTS actions_fts USING fts5(
     project_name UNINDEXED,
     milestone,
+    status,
     details,
     content='actions',
     content_rowid='id',

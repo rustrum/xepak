@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use actix_web::dev::Server;
-use actix_web::http::{Method, StatusCode};
+use actix_web::http::{KeepAlive, Method, StatusCode};
 use actix_web::middleware::Logger;
 use actix_web::web::ServiceConfig;
 use actix_web::{App, HttpRequest};
@@ -155,49 +155,22 @@ pub async fn init_server(
             .wrap(Logger::default())
     })
     .bind((Ipv4Addr::UNSPECIFIED, port))
-    .map_err(Arc::new)?
-    // .keep_alive(actix_web::http::KeepAlive::Disabled)
-    // TODO: weird with timeout lua script starting to fail in tests. Why?
-    .keep_alive(actix_web::http::KeepAlive::Timeout(Duration::from_secs(
-        KEEP_ALIVE_TIMEOUT,
-    )))
-    .run();
+    .map_err(Arc::new)?;
 
+    let keep_alive = if config.server_keep_alive == 0 {
+        KeepAlive::Disabled
+    } else {
+        KeepAlive::Timeout(Duration::from_secs(KEEP_ALIVE_TIMEOUT))
+    };
+    let server = server.keep_alive(keep_alive);
+
+    let server = if let Some(workers) = config.server_workers {
+        server.workers(workers.get() as usize).run()
+    } else {
+        server.run()
+    };
     Ok(server)
 }
-
-// attempt to avoid Send+Sync usage but not a successfull one
-// fn app_factory<F, I, S, B>(app_data: &XepakAppData, especs: Vec<EndpointSpecs>) -> Result<F, XepakError>
-// where
-//     F: Fn() -> I + Send + Clone + 'static,
-//     I: IntoServiceFactory<S, Request>,
-//
-//     S: ServiceFactory<Request, Config = AppConfig> + 'static,
-//     S::Error: Into<Error> + 'static,
-//     S::InitError: fmt::Debug,
-//     S::Response: Into<Response<B>> + 'static,
-//     <S::Service as Service<Request>>::Future: 'static,
-//     S::Service: 'static,
-//
-//     B: MessageBody + 'static,
-// {
-// Ok(    || {
-//     let mut endpoints = Vec::new();
-//     for espec in especs{
-//         endpoints.push(EndpointHandler::new(espec, &app_data)?);
-//     }
-//     // let ep_config = endpoints.clone();
-//     let app = App::new()
-//         .app_data(Data::new(app_data.clone()))
-//         // .service(web::scope("/") ...
-//         .configure(|cfg: &mut ServiceConfig| {
-//             // for eh in ep_config {
-//             for eh in endpoints {
-//                 cfg.service(eh);
-//             }
-//         })
-//         .wrap(Logger::default())})
-// }
 
 fn init_cache_cleanup(cache: AppCache) {
     tokio::spawn(async move {

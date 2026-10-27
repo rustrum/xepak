@@ -30,6 +30,8 @@ The RAG example provides a project-scoped knowledge base with the following capa
 4. **Search stored knowledge**
 
    Agents can perform full-text search across note titles and contents.
+   But here is the issue, `query` is not a regular string but FTS5 expression.
+   So LLMs are struggle to provide queries in the proper format.
 
 5. **Isolate data per project**
 

@@ -1,23 +1,6 @@
 # Next things to do
 
-Error while activating KEEP_ALIVE_TIMEOUT in LUa scrips on RPC tests.
-WEIRD must be checked
-
-```
- INFO actix_web::middleware::logger: 127.0.0.1 "POST /rpc HTTP/1.1" 200 69 "-" "-" 0.000385
-DEBUG hyper_util::client::legacy::pool: pooling idle connection for ("http", localhost:4321)
-DEBUG hyper_util::client::legacy::pool: reuse idle connection for ("http", localhost:4321)
-DEBUG xepak::server::handlers::rpc: Calling RPC method: script
-ERROR xepak::script_lua: Lua script error: runtime error: attempt to index a nil value
-stack traceback:
-        [C]: in for iterator 'for iterator'
-        src/script_lua.rs:69:12: in main chunk
-ERROR xepak::server::handlers::rpc: (O_o) error happened! LuaScript("runtime error: attempt to index a nil value\nstack traceback:\n\t[C]: in for iterator 'for iterator'\n\tsrc/script_lua.rs:69:12: in main chunk")
- INFO actix_web::middleware::logger: 127.0.0.1 "POST /rpc HTTP/1.1" 200 87 "-" "-" 0.000218
-DEBUG hyper_util::client::legacy::pool: pooling idle connection for ("http", localhost:4321)
-thread 'rpc_resources' (236117) panicked at tests/rpc.rs:108:5:
-Err(Call(ErrorObject { code: InternalError, message: "unknown_error", data: None }))
-```
+Make serde to fail in non existing keys appear in DSL.
 
 # In General
 
@@ -55,7 +38,7 @@ Idea! Wrap input reader (to do not read all) instead of using blob.
 
 # DB named arg improvements (next release)
 
-Should add support for nested fields and array indexes like `{{[0].name}}` if top level input is array.
+Add support for nested fields and array indexes like `{{[0].name}}` if top level input is array.
 
 
 # Sqlite Vector support (later)
@@ -65,14 +48,12 @@ library and it does not support indexing.
 It is more reasonable to support PostgreSQL first.
 
 
-# Optimization
+# Optimizations
 
 ## Request input
 
 RequestInput is cloned into Lua so custom arguments now inside Arch<Mutex<Map>>.
-
 Access to RequestInput should be sequential, read only for most cases.
-
 So it is not clear should I optimize something here or not.
 
 I was thinking about using ArcSwap instead but it could be overkill.
@@ -81,10 +62,11 @@ MutexGuard also does not look as a reasonable solution.
 
 ## CORS processing
 
-Not implemented right now.
-**Do not want to do it right now** - proxy server or API gateway that handle HTTPS should be responsible for it.
-!!! TODO: Add documentation to emphasize this.
+Not implemented.
+**Do not want to do it right now** 
+proxy server or API gateway that handle HTTPS should be responsible for this.
 
+### CORS triggers on
 
 The "Preflight" Difference (CORS)
 When you make a request from a browser to a different domain (your API):

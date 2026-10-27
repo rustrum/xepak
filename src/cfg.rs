@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     fmt::Display,
     fs,
+    num::NonZeroU16,
     path::PathBuf,
     sync::Arc,
 };
@@ -24,6 +25,16 @@ pub struct XepakConf {
     /// Port to listen on.
     #[serde(default = "default_port")]
     pub port: u16,
+
+    /// Amount of actix web workers to spawn.
+    /// Use if only you know what you are doing.
+    #[serde(default)]
+    pub server_workers: Option<NonZeroU16>,
+
+    /// Keep alive timeout in seconds for server requests.
+    /// Disabled if zero (default value).
+    #[serde(default)]
+    pub server_keep_alive: u16,
 
     /// Path to the directory with specs.
     #[serde(default = "default_specs_dir")]

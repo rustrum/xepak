@@ -262,8 +262,7 @@ impl McpHandler {
         let tool_name = &tool_params.name;
         let Some(tool_handler) = self.tools.get(tool_name) else {
             return Err(XepakError::Input(format!(
-                "MCP tool not found: {}",
-                request.method
+                "MCP tool not found: {tool_name}"
             )));
         };
         let Some(tool_specs) = self.specs.tools.get(tool_name) else {
@@ -299,12 +298,13 @@ impl McpHandler {
         let response = match resource_response {
             Ok(r) => r,
             Err(e) => {
+                tracing::error!("{e}");
                 // I do not want to create new function for MCP only
                 let (_, error_obj) = to_error_object(e);
                 let msg = error_obj
                     .dict_get("message")
                     .cloned()
-                    .unwrap_or(XepakValue::from("Unexpected"));
+                    .unwrap_or(XepakValue::from("Invalid request or server error"));
                 return mcp_tool_error(msg.to_string().as_str());
             }
         };
@@ -611,8 +611,8 @@ pub mod schema {
         match schema.get_validator() {
             crate::schema::SchemaValidator::NotNull => {}
             crate::schema::SchemaValidator::Range { from, to } => {
-                result.insert("minLength".to_string(), XepakValue::Integer(*from as i128));
-                result.insert("maxLength".to_string(), XepakValue::Integer(*to as i128));
+                result.insert("minimum".to_string(), XepakValue::Integer(*from as i128));
+                result.insert("maximum".to_string(), XepakValue::Integer(*to as i128));
             }
             crate::schema::SchemaValidator::RangeFloat { from, to } => {
                 result.insert("minimum".to_string(), XepakValue::Float(*from));

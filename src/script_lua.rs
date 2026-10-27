@@ -578,6 +578,8 @@ where
     request_env.set("ctx", LuaRequestContext::from(input))?;
 
     // Adding globals to current context
+    // This should allow to run mutliple calls to the same
+    // Lua instance without errors
     let globals = lua.globals();
     let meta = lua.create_table()?;
     meta.set("__index", globals)?;

@@ -11,6 +11,17 @@ update actions status, and delete notes or actions entries when explicitly reque
 
 Destructive operations require an exact id.
 Use list or search tools first to find the id.ck actions, and retrieve project-specific context via full-text search.
+
+Important! Full-text search requires specific query syntax.
+FTS5 MATCH queries treat bare terms as implicitly ANDed, so `foo bar` is the same as `foo AND bar`.
+Use `"exact phrase"` in double quotes for ordered phrases, `prefix*` for prefix matching only (no suffix or substring wildcards), and uppercase `AND`,`OR`,`NOT` for boolean logic.
+`NOT` is binary: `a NOT b` implicilty converts to `a AND NOT b`.
+`NEAR(a b, N)` finds terms within N tokens of each other.
+Parentheses are grouping subqueries.
+Valid syntax `a NOT b AND c`. Invalid syntax `NOT a AND b`, `a AND NOT b`.
+Restrict searches with `column: term`, exclude with `-column: term`, or target multiple columns with `{col1 col2}: term`.
+Quote any term containing `.`, `-`, or `:` to avoid syntax errors (`"a:b-c.d"` instead of `a:b-c.d`). Escape an embedded double quote as `""`.
+Full docs: https://sqlite.org/fts5.html
 """
 
 
@@ -242,11 +253,16 @@ RETURNING id, milestone, status, updated_at
 # SEMANTIC / FULL-TEXT SEARCH (FTS5)
 [mcp.tools.search_notes]
 title = "Search Knowledge Base"
-description = "Performs a full-text search across all note titles and contents using SQLite FTS5 BM25 ranking."
+description = """
+Performs a full-text search across notes content.
+Return partial text where matches are wrapped in <match> tags.
+Require to use FTS5 syntax.
+FTS5 docs: https://sqlite.org/fts5.html
+"""
 annotations = { read_only = true, open_world = true }
 pre_processors = [{
     type = "limit_offset",
-    limit_max_value = 42
+    limit_max_value = 5
 }]
 [mcp.tools.search_notes.schema.input]
 type = "dict"
@@ -258,9 +274,9 @@ items = {
 [mcp.tools.search_notes.resource]
 type = "query_script_lua"
 script = """
-local q = query_builder("SELECT n.id, n.title, snippet(notes_fts, 2, '<b>', '</b>', '...', 64) as snippet, rank FROM notes_fts JOIN notes n ON n.id = notes_fts.rowid")
-local where_parts = {"notes_fts.project_name = {{project_name}}", "notes_fts MATCH {{query}}"}
-q:add_joined_parts("WHERE", where_parts, "AND", "")
+local q = query_builder("SELECT n.id, n.title, snippet(notes_fts, -1, '<mark>', '</mark>', '...', 64) as snippet, rank")
+q:add("FROM notes_fts JOIN notes n ON n.id = notes_fts.rowid")
+q:add("WHERE notes_fts.project_name = {{project_name}} AND notes_fts MATCH {{query}}")
 q:add("ORDER BY rank LIMIT {{-limit-}} OFFSET {{-offset-}}")
 return q:build()
 """
@@ -268,11 +284,16 @@ return q:build()
 # SEARCH ACTIONS VIA FTS5
 [mcp.tools.search_actions]
 title = "Search Actions"
-description = "Performs full-text search across action milestones and details."
+description = """
+Performs full-text search across action milestones and details.
+Return partial text where matches are wrapped in <match> tags.
+Require to use FTS5 syntax.
+FTS5 docs: https://sqlite.org/fts5.html
+"""
 annotations = { read_only = true }
 pre_processors = [{
     type = "limit_offset",
-    limit_max_value = 42
+    limit_max_value = 10 
 }]
 [mcp.tools.search_actions.schema.input]
 type = "dict"
@@ -285,12 +306,9 @@ items = {
 [mcp.tools.search_actions.resource]
 type = "query_script_lua"
 script = """
-local q = query_builder("SELECT a.id, a.milestone, a.details, a.status, RANK() as rank FROM actions_fts f JOIN actions a ON a.id = f.rowid")
-
--- Enforce tenant isolation via {{project_name}} from URI path automatically
-local where_parts = {"f.project_name = {{project_name}}", "actions_fts MATCH {{query}}"}
-q:add_joined_parts("WHERE", where_parts, "AND", "")
-
+local q = query_builder("SELECT a.id, a.milestone, snippet(actions_fts, -1, '<mark>', '</mark>', '...', 64) as snippet, rank")
+q:add("FROM actions_fts JOIN actions a ON a.id = actions_fts.rowid")
+q:add("WHERE actions_fts.project_name = {{project_name}} AND actions_fts MATCH {{query}}")
 q:add("ORDER BY rank LIMIT {{-limit-}} OFFSET {{-offset-}}")
 return q:build()
 """
