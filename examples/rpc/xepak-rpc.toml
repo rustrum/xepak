@@ -1,0 +1,8 @@
+# Root configuration for the JSON-RPC todo example.
+
+[[storage]]
+type = "sqlite"
+file = "db/xepak-rpc.sqlite3"
+create_db = true
+wal = true
+migrations_dir = "migrations"

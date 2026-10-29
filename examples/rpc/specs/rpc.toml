@@ -1,0 +1,177 @@
+# JSON-RPC 2.0 API for a small todo app.
+# All methods are served by one endpoint: POST /rpc
+
+# Shared status validation reused by create/update/list/search methods.
+[shared_pre_processors.validate_status]
+type = "lua_script"
+script = """
+local status = ctx:get_arg("status")
+if status ~= nil and status ~= "open" and status ~= "in_progress" and status ~= "done" then
+    error_input("status must be one of: open, in_progress, done")
+end
+"""
+
+[[rpc]]
+uri = "/rpc"
+
+# LIST TODOS
+# Optional status filter, pagination is handled by the limit_offset pre-processor.
+[rpc.methods.list_todos]
+pre_processors = [
+    { type = "ref", id = "validate_status" },
+    { type = "limit_offset", limit_max_value = 50 },
+]
+schema.input = { type = "dict", items = {
+    status = { type = "text" },
+    limit = { type = "int" },
+    offset = { type = "int" },
+} }
+resource = { type = "query_script_lua", script = """
+local q = query_builder("SELECT id, title, body, status, created_at, updated_at FROM todos")
+local where_parts = {}
+
+if ctx:get_arg("status") ~= nil then
+    table.insert(where_parts, "status = {{status}}")
+end
+
+q:add_joined_parts("WHERE", where_parts, "AND", "")
+q:add("ORDER BY updated_at DESC, id DESC LIMIT {{-limit-}} OFFSET {{-offset-}}")
+return q:build()
+""" }
+
+
+# GET TODO
+[rpc.methods.get_todo]
+single_record_response = true
+schema.input = { type = "dict", items = {
+    id = { type = "int", required = true },
+} }
+resource = { type = "query", query = """
+SELECT id, title, body, status, created_at, updated_at
+FROM todos
+WHERE id = {{id}}
+""" }
+
+
+# CREATE TODO
+[rpc.methods.create_todo]
+single_record_response = true
+pre_processors = [
+    { type = "ref", id = "validate_status" },
+]
+schema.input = { type = "dict", items = {
+    title = { type = "text", required = true, validate = { kind = "and", nested = [
+        { kind = "not_null" },
+        { kind = "range", from = 1, to = 200 },
+    ] } },
+    body = { type = "text" },
+    status = { type = "text" },
+} }
+resource = { type = "query_script_lua", script = """
+local cols = { "title" }
+local vals = { "{{title}}" }
+
+if ctx:get_arg("body") ~= nil then
+    table.insert(cols, "body")
+    table.insert(vals, "{{body}}")
+end
+if ctx:get_arg("status") ~= nil then
+    table.insert(cols, "status")
+    table.insert(vals, "{{status}}")
+end
+
+return "INSERT INTO todos (" .. table.concat(cols, ", ") .. ") VALUES (" .. table.concat(vals, ", ") .. ") RETURNING id, title, body, status, created_at, updated_at"
+""" }
+
+
+# UPDATE TODO
+# Only provided fields are changed. The response contains the updated record.
+[rpc.methods.update_todo]
+single_record_response = true
+pre_processors = [
+    { type = "ref", id = "validate_status" },
+]
+schema.input = { type = "dict", items = {
+    id = { type = "int", required = true },
+    title = { type = "text", validate = { kind = "and", nested = [
+        { kind = "not_null" },
+        { kind = "range", from = 1, to = 200 },
+    ] } },
+    body = { type = "text" },
+    status = { type = "text" },
+} }
+resource = { type = "query_script_lua", script = """
+local sets = {}
+
+if ctx:get_arg("title") ~= nil then
+    table.insert(sets, "title = {{title}}")
+end
+if ctx:get_arg("body") ~= nil then
+    table.insert(sets, "body = {{body}}")
+end
+if ctx:get_arg("status") ~= nil then
+    table.insert(sets, "status = {{status}}")
+end
+
+if #sets == 0 then
+    error_input("provide at least one of: title, body, status")
+end
+
+table.insert(sets, "updated_at = unixepoch()")
+
+return "UPDATE todos SET " .. table.concat(sets, ", ") .. " WHERE id = {{id}} RETURNING id, title, body, status, created_at, updated_at"
+""" }
+
+
+# DELETE TODO
+[rpc.methods.delete_todo]
+single_record_response = true
+schema.input = { type = "dict", items = {
+    id = { type = "int", required = true },
+} }
+resource = { type = "query", query = """
+DELETE FROM todos
+WHERE id = {{id}}
+RETURNING id, title, body, status, created_at, updated_at
+""" }
+
+
+# SEARCH TODOS
+# FTS5 exact-phrase search across title and body.
+# The input is plain text; it is trimmed and wrapped in double quotes before MATCH.
+[rpc.methods.search_todos]
+pre_processors = [
+    { type = "ref", id = "validate_status" },
+    { type = "limit_offset", limit_max_value = 50 },
+]
+schema.input = { type = "dict", items = {
+    query = { type = "text", required = true, validate = { kind = "and", nested = [
+        { kind = "not_null" },
+        { kind = "range", from = 1, to = 200 },
+    ] } },
+    status = { type = "text" },
+    limit = { type = "int" },
+    offset = { type = "int" },
+} }
+resource = { type = "query_script_lua", script = """
+local query = tostring(ctx:get_arg("query") or ""):match("^%s*(.-)%s*$")
+if query == "" then
+    error_input("query must not be empty")
+end
+
+-- Escape embedded quotes and wrap the value as one FTS5 phrase.
+query = string.gsub(query, '"', '""')
+ctx:set_arg("query", '"' .. query .. '"')
+
+local q = query_builder("SELECT t.id, t.title, t.body, t.status, t.created_at, t.updated_at")
+q:add("FROM todos_fts JOIN todos t ON t.id = todos_fts.rowid")
+
+local where_parts = { "todos_fts MATCH {{query}}" }
+if ctx:get_arg("status") ~= nil then
+    table.insert(where_parts, "t.status = {{status}}")
+end
+
+q:add_joined_parts("WHERE", where_parts, "AND", "")
+q:add("ORDER BY todos_fts.rank LIMIT {{-limit-}} OFFSET {{-offset-}}")
+return q:build()
+""" }

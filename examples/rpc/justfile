@@ -1,0 +1,118 @@
+# Xepak JSON-RPC Todo Example
+#
+# Override the server URL:
+#   just server=http://localhost:9090 list_todos
+
+server := env_var_or_default("RPC_SERVER", "http://localhost:8080")
+
+# Run the Xepak server with this example.
+run:
+    cargo run --bin xepak -- ./xepak-rpc.toml
+
+# List todos. Optional status: open, in_progress, done.
+list_todos status="" limit="50" offset="0":
+    #!/usr/bin/env sh
+    params=$(jq -n \
+      --arg status {{quote(status)}} \
+      --argjson limit {{limit}} \
+      --argjson offset {{offset}} \
+      '{limit: $limit, offset: $offset} + (if $status != "" then {status: $status} else {} end)')
+
+    payload=$(jq -n \
+      --arg method "list_todos" \
+      --argjson params "$params" \
+      '{jsonrpc: "2.0", id: 1, method: $method, params: $params}')
+
+    curl -sS -X POST "{{server}}/rpc" \
+      -H "Content-Type: application/json" \
+      -d "$payload" | jq
+
+# Get one todo by id.
+get_todo id:
+    #!/usr/bin/env sh
+    params=$(jq -n --argjson id {{id}} '{id: $id}')
+
+    payload=$(jq -n \
+      --arg method "get_todo" \
+      --argjson params "$params" \
+      '{jsonrpc: "2.0", id: 1, method: $method, params: $params}')
+
+    curl -sS -X POST "{{server}}/rpc" \
+      -H "Content-Type: application/json" \
+      -d "$payload" | jq
+
+# Create a todo. Body and status are optional.
+create_todo title body="" status="":
+    #!/usr/bin/env sh
+    params=$(jq -n \
+      --arg title {{quote(title)}} \
+      --arg body {{quote(body)}} \
+      --arg status {{quote(status)}} \
+      '{title: $title} + (if $body != "" then {body: $body} else {} end) + (if $status != "" then {status: $status} else {} end)')
+
+    payload=$(jq -n \
+      --arg method "create_todo" \
+      --argjson params "$params" \
+      '{jsonrpc: "2.0", id: 1, method: $method, params: $params}')
+
+    curl -sS -X POST "{{server}}/rpc" \
+      -H "Content-Type: application/json" \
+      -d "$payload" | jq
+
+# Update a todo. Only provided fields are changed.
+update_todo id title="" body="" status="":
+    #!/usr/bin/env sh
+    params=$(jq -n \
+      --argjson id {{id}} \
+      --arg title {{quote(title)}} \
+      --arg body {{quote(body)}} \
+      --arg status {{quote(status)}} \
+      '{id: $id} + (if $title != "" then {title: $title} else {} end) + (if $body != "" then {body: $body} else {} end) + (if $status != "" then {status: $status} else {} end)')
+
+    payload=$(jq -n \
+      --arg method "update_todo" \
+      --argjson params "$params" \
+      '{jsonrpc: "2.0", id: 1, method: $method, params: $params}')
+
+    curl -sS -X POST "{{server}}/rpc" \
+      -H "Content-Type: application/json" \
+      -d "$payload" | jq
+
+# Delete a todo by id.
+delete_todo id:
+    #!/usr/bin/env sh
+    params=$(jq -n --argjson id {{id}} '{id: $id}')
+
+    payload=$(jq -n \
+      --arg method "delete_todo" \
+      --argjson params "$params" \
+      '{jsonrpc: "2.0", id: 1, method: $method, params: $params}')
+
+    curl -sS -X POST "{{server}}/rpc" \
+      -H "Content-Type: application/json" \
+      -d "$payload" | jq
+
+# Search todos by an exact phrase (case-insensitive, plain text; FTS5-backed).
+search_todos query status="" limit="50" offset="0":
+    #!/usr/bin/env sh
+    params=$(jq -n \
+      --arg query {{quote(query)}} \
+      --arg status {{quote(status)}} \
+      --argjson limit {{limit}} \
+      --argjson offset {{offset}} \
+      '{query: $query, limit: $limit, offset: $offset} + (if $status != "" then {status: $status} else {} end)')
+
+    payload=$(jq -n \
+      --arg method "search_todos" \
+      --argjson params "$params" \
+      '{jsonrpc: "2.0", id: 1, method: $method, params: $params}')
+
+    curl -sS -X POST "{{server}}/rpc" \
+      -H "Content-Type: application/json" \
+      -d "$payload" | jq
+
+# Remove the local example database.
+clean:
+    #!/usr/bin/env sh
+    rm -rf ./db/*
+    echo "Cleaned up local database directory."

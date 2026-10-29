@@ -7,12 +7,13 @@ Make serde to fail in non existing keys appear in DSL.
 - Should I rename endpoint "resource"?
 - Should add more input validators
 - Multiple data sources (this could be a killer feature)
+- Can I map SQL error about invalid input to checks to XepakError::Input ?
 
 ## Scheduled jobs
 
 This is important because it would allow to do:
 
-- embedings indexing for vector search
+- embeddings indexing for vector search
 - offload long executions that require external services calls
 
 # Blob type updates (later)
