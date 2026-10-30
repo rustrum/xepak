@@ -158,13 +158,20 @@ impl XepakValue {
             XepakValue::Boolean(v) => Ok(if *v { 1 } else { 0 }),
             XepakValue::Integer(v) => Ok(*v),
             XepakValue::Float(v) => {
-                if v.fract().abs() > f64::EPSILON {
+                if v.is_nan() || v.is_infinite() {
+                    return Err(XepakDataError::ConvertValue(
+                        self.get_type(),
+                        TO_TYPE,
+                        format!("Float value is not supported {v}"),
+                    ));
+                }
+                if v.fract() != 0.0 {
                     Err(XepakDataError::ConvertValue(
                         self.get_type(),
                         TO_TYPE,
                         format!("Has fractional part {v}"),
                     ))
-                } else if *v > (i64::MAX - 1) as f64 || *v < (i64::MIN + 1) as f64 {
+                } else if *v > i64::MAX as f64 || *v < i64::MIN as f64 {
                     Err(XepakDataError::ConvertValue(
                         self.get_type(),
                         TO_TYPE,
@@ -428,5 +435,104 @@ impl From<IndexMap<String, XepakValue>> for XepakValue {
 impl From<Vec<XepakValue>> for XepakValue {
     fn from(value: Vec<XepakValue>) -> Self {
         Self::Tuple(value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn as_int_from_f64_error() {
+        let value = XepakValue::Float(f64::NAN);
+        let result = value.as_int();
+        assert!(
+            result.is_err(),
+            "NaN should not convert to int, got {result:?}"
+        );
+
+        let inf = XepakValue::Float(f64::INFINITY);
+        let result_inf = inf.as_int();
+        assert!(
+            result_inf.is_err(),
+            "Infinity should not convert to int, got {result_inf:?}"
+        );
+
+        let ninf = XepakValue::Float(f64::NEG_INFINITY);
+        let result_ninf = ninf.as_int();
+        assert!(
+            result_ninf.is_err(),
+            "Negative Infinity should not convert to int, got {result_ninf:?}"
+        );
+
+        // Test various fractional values
+        let pi = XepakValue::Float(std::f64::consts::PI);
+        let result_pi = pi.as_int();
+        assert!(
+            result_pi.is_err(),
+            "PI should not convert (has fractional part), got {result_pi:?}"
+        );
+
+        let zero_point_5 = XepakValue::Float(0.5);
+        let result_half = zero_point_5.as_int();
+        assert!(
+            result_half.is_err(),
+            "0.5 should not convert (has fractional part), got {result_half:?}"
+        );
+
+        let negative_fractional = XepakValue::Float(-123.456);
+        let result_neg = negative_fractional.as_int();
+        assert!(
+            result_neg.is_err(),
+            "-123.456 should not convert (has fractional part), got {result_neg:?}"
+        );
+    }
+
+    #[test]
+    fn as_int_max_min_f64() {
+        // Test f64::MAX and f64::MIN (negative) — both should be rejected:
+        // 1. Beyond i64 range check
+        // 2. They are not exact integers in integer representation sense
+
+        let max_val = XepakValue::Float(f64::MAX);
+        let result_max = max_val.as_int();
+        assert!(
+            result_max.is_err(),
+            "f64::MAX should not convert to int, got {result_max:?}"
+        );
+
+        let min_val = XepakValue::Float(f64::MIN_POSITIVE); // most negative finite float (~-1.79e308)
+        let result_min = min_val.as_int();
+        assert!(
+            result_min.is_err(),
+            "f64 minimum should not convert to int, got {result_min:?}"
+        );
+
+        let near_max = XepakValue::Float((i64::MAX as i128) as f64);
+        let result_near_max = near_max.as_int();
+        assert!(
+            result_near_max.is_ok(),
+            "f64 within int range should convert, got {result_near_max:?}"
+        );
+
+        let near_min = XepakValue::Float((i64::MIN as i128) as f64);
+        let result_near_min = near_min.as_int();
+        assert!(
+            result_near_min.is_ok(),
+            "f64 within int range should convert, got {result_near_min:?}"
+        );
+
+        // Zero is a valid integer float
+        let zero_val = XepakValue::Float(0.0);
+        let result_zero = zero_val.as_int();
+        assert_eq!(result_zero.unwrap(), 0);
+
+        // Negative zero must be zero in int
+        let neg_zero = XepakValue::Float(-0.0_f64);
+        let result_zero = neg_zero.as_int();
+        assert!(
+            matches!(result_zero, Ok(value) if value == 0),
+            "Negative zero must convert to zero"
+        );
     }
 }

@@ -2,13 +2,13 @@ use std::{io, path::PathBuf, sync::Arc};
 
 use xepak::{
     XepakError,
-    cfg::{load_conf_file, load_specs_from_dir},
+    cfg::{XepakConf, load_conf_file, load_specs_from_dir},
     server::init_server,
 };
 
 const ENV_PORT: &str = "XEPAK_PORT";
 
-const ENV_PATH: &str = "XEPAK_CONFIG";
+const ENV_CONFIG_PATH: &str = "XEPAK_CONFIG";
 
 #[actix_web::main]
 #[allow(clippy::expect_fun_call)]
@@ -17,7 +17,7 @@ async fn main() -> Result<(), XepakError> {
 
     let args = update_from_env(args);
 
-    let filter = if let Some(log_level) = args.log {
+    let filter = if let Some(log_level) = &args.log {
         tracing_subscriber::EnvFilter::builder()
             .with_default_directive(tracing::level_filters::LevelFilter::ERROR.into())
             .parse(log_level)
@@ -28,14 +28,16 @@ async fn main() -> Result<(), XepakError> {
 
     tracing_subscriber::fmt().with_env_filter(filter).init();
 
-    let Some(file_path) = args.config_file else {
+    let Some(file_path) = &args.config_file else {
         return Err(XepakError::Cfg(
             "Configuration file was not provided".to_string(),
         ));
     };
     tracing::debug!("Configuration file: {file_path}");
 
-    let xepak_conf = load_conf_file(&file_path)?;
+    let xepak_conf = load_conf_file(file_path)?;
+    let xepak_conf = args.apply_to_config(xepak_conf);
+
     tracing::debug!("Conf: {xepak_conf:?}");
 
     let conf_dir = PathBuf::from(&file_path)
@@ -62,10 +64,19 @@ async fn main() -> Result<(), XepakError> {
 
 #[derive(Default)]
 struct AppArgs {
-    /// TODO: maybe port is not required here
     port: Option<u16>,
     log: Option<String>,
     config_file: Option<String>,
+}
+
+impl AppArgs {
+    fn apply_to_config(&self, mut config: XepakConf) -> XepakConf {
+        if let Some(port) = self.port {
+            config.port = port
+        }
+
+        config
+    }
 }
 
 fn parse_cli_args() -> io::Result<AppArgs> {
@@ -103,7 +114,7 @@ fn update_from_env(mut args: AppArgs) -> AppArgs {
     }
 
     if args.config_file.is_none() {
-        args.config_file = std::env::var(ENV_PATH).ok();
+        args.config_file = std::env::var(ENV_CONFIG_PATH).ok();
     }
     args
 }

@@ -174,7 +174,12 @@ impl<'a> SqlLexer<'a> {
                     LexerState::CurlClose(1, offset) => {
                         let from = offset;
                         let to = self.offset;
-                        let key = &self.sql[(from + 2)..=(to - 2)];
+                        let range = (from + 2)..=(to - 2);
+                        if range.is_empty() {
+                            return None;
+                        }
+                        let key = &self.sql[range];
+
                         return Some((key, from..=to));
                     }
                     LexerState::CurlClose(c, _) if c != 1 => {
@@ -253,6 +258,14 @@ mod tests {
         let mut lexer = SqlLexer::new("{{notkey1},{notkey2}} {{notkey3} {{notkey4} {notkey5}");
         let karg = lexer.next_key_arg();
         assert!(karg.is_none(), "{karg:?}");
+
+        // Empty {{}} is omitted
+        let mut lexer = SqlLexer::new("SELECT {{}} FROM table");
+        let karg = lexer.next_key_arg();
+        assert!(
+            karg.is_none(),
+            "empty key arg {{}} should be rejected, got {karg:?}"
+        );
     }
 
     #[test]

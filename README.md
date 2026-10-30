@@ -35,6 +35,12 @@ Given its current SQLite support, Xepak is ideal for:
 - 💻 **local-first applications:** serving as a sync layer or API for desktop applications that store data locally
 - 🤖 **[local RAG for AI/LLM sandboxes](./examples/rag/README.md):** keeping AI agent knowledge local to prioritize data privacy and ownership
 
+See Xepak examples:
+
+- [REST API server](./examples/rest/README.md) with authentication and authorization
+- [RPC service](./examples/rpc/README.md) with fine grained access conrol
+- [MCP/RAG service](./examples/rag/README.md) with full text search
+
 
 ## Current project status
 

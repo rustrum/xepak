@@ -255,6 +255,9 @@ pub fn apply_schema(
             ..
         } => {
             let mut value_tuple = value.as_tuple()?;
+            if items.is_empty() {
+                return Ok(value_tuple.into());
+            }
             let mut idx = 0;
             let mut iteration = 0;
             'schema_repeat: loop {
@@ -869,5 +872,33 @@ mod tests {
                 "{result:?}"
             );
         }
+    }
+
+    #[test]
+    fn schema_empty_repeatable_tuple_should_not_hang() {
+        // We use a separate thread with timeout to avoid hanging the test suite
+        let (tx, rx) = std::sync::mpsc::channel::<Result<XepakValue, XepakDataError>>();
+
+        let schema = Schema::Tuple {
+            items: vec![],
+            items_repeat: true,
+            required: Default::default(),
+            validate: Default::default(),
+        };
+        let value = XepakValue::from(vec![XepakValue::from(1)]);
+
+        std::thread::scope(|scope| {
+            scope.spawn(move || {
+                let result = apply_schema(&schema, value, "test", false, false);
+                let _ = tx.send(result);
+            });
+
+            // If the bug is present, this will timeout (thread never sends)
+            let received = rx.recv_timeout(std::time::Duration::from_secs(2));
+            assert!(
+                received.is_ok(),
+                "apply_schema hung (infinite loop) on empty items_repeat=true schema"
+            );
+        });
     }
 }

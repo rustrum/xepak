@@ -2,6 +2,7 @@
 
 Auth data should be binded into Input context arguments like `-auth-id-` and `-auth-roles-`.
 Not sure about auth roles how to represent them, but auth id must be.
+Figure out can I get rid of multiple priorities for a pre-processors. Add docs to default pre-processors that always added.
 
 Make serde to fail in non existing keys appear in DSL.
 
