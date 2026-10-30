@@ -1,0 +1,144 @@
+# Xepak REST Example
+#
+# Override the server URL or demo API keys:
+#   just server=http://localhost:9090 list_posts
+#   just key=alice-key-demo me
+
+server := env_var_or_default("REST_SERVER", "http://localhost:8080")
+
+admin_key := env_var_or_default("ADMIN_KEY", "admin-key-demo")
+manager_key := env_var_or_default("MANAGER_KEY", "manager-key-demo")
+alice_key := env_var_or_default("ALICE_KEY", "alice-key-demo")
+bob_key := env_var_or_default("BOB_KEY", "bob-key-demo")
+carol_key := env_var_or_default("CAROL_KEY", "carol-key-demo")
+revoked_key := env_var_or_default("REVOKED_KEY", "revoked-key-demo")
+
+# Run the Xepak server with this example.
+run:
+    cargo run --bin xepak -- ./xepak-rest.toml
+
+# Remove the local example database.
+clean:
+    #!/usr/bin/env sh
+    rm -rf ./db/*
+    echo "Cleaned up local database directory."
+
+
+# List posts (public).
+list_posts limit="20" offset="0":
+    @curl -sS "{{server}}/posts?limit={{limit}}&offset={{offset}}" | jq
+
+# Get one post (public).
+get_post id:
+    @curl -sS "{{server}}/posts/{{id}}" | jq
+
+# Search posts with case-insensitive LIKE (public).
+search_posts q limit="10":
+    @curl -sS --get "{{server}}/posts/search" \
+      --data-urlencode "q={{q}}" \
+      --data-urlencode "limit={{limit}}" | jq
+
+# Show the current user (authenticated).
+me key=alice_key:
+    @curl -sS "{{server}}/me" -H "x-api-key: {{key}}" | jq
+
+# Create a post (authenticated).
+create_post title content key=alice_key:
+    #!/usr/bin/env sh
+    payload=$(jq -n \
+      --arg title {{quote(title)}} \
+      --arg content {{quote(content)}} \
+      '{title: $title, content: $content}')
+
+    curl -sS -X POST "{{server}}/posts/create" \
+      -H "Content-Type: application/json" \
+      -H "x-api-key: {{key}}" \
+      -d "$payload" | jq
+
+# Update a post. Only provided fields change; the server enforces the 30s limit.
+update_post id title="" content="" key=alice_key:
+    #!/usr/bin/env sh
+    payload=$(jq -n \
+      --arg title {{quote(title)}} \
+      --arg content {{quote(content)}} \
+      '{} + (if $title != "" then {title: $title} else {} end) + (if $content != "" then {content: $content} else {} end)')
+
+    curl -sS -X PUT "{{server}}/posts/{{id}}/update" \
+      -H "Content-Type: application/json" \
+      -H "x-api-key: {{key}}" \
+      -d "$payload" | jq
+
+# Delete a post. Requires MANAGER or ADMIN role.
+delete_post id key=manager_key:
+    @curl -sS -X DELETE "{{server}}/posts/{{id}}/delete" \
+      -H "x-api-key: {{key}}" | jq
+
+# Public user profile.
+user_profile id:
+    @curl -sS "{{server}}/users/{{id}}" | jq
+
+# Public posts by a user.
+user_posts id limit="20" offset="0":
+    @curl -sS "{{server}}/users/{{id}}/posts?limit={{limit}}&offset={{offset}}" | jq
+
+
+# List payments. Managers see all; posters see only their own.
+list_payments key=alice_key status="" limit="50" offset="0":
+    #!/usr/bin/env sh
+    url="{{server}}/payments?limit={{limit}}&offset={{offset}}"
+    if [ -n {{quote(status)}} ]; then
+      url="$url&status={{status}}"
+    fi
+    curl -sS "$url" -H "x-api-key: {{key}}" | jq
+
+# Get one payment. Managers can read any; users only their own.
+get_payment id key=alice_key:
+    @curl -sS "{{server}}/payments/{{id}}" \
+      -H "x-api-key: {{key}}" | jq
+
+# Create a payment. Requires MANAGER or ADMIN role.
+create_payment user_id amount_cents key=manager_key currency="" status="" description="":
+    #!/usr/bin/env sh
+    payload=$(jq -n \
+      --argjson user_id {{user_id}} \
+      --argjson amount_cents {{amount_cents}} \
+      --arg currency {{quote(currency)}} \
+      --arg status {{quote(status)}} \
+      --arg description {{quote(description)}} \
+      '{user_id: $user_id, amount_cents: $amount_cents} + (if $currency != "" then {currency: $currency} else {} end) + (if $status != "" then {status: $status} else {} end) + (if $description != "" then {description: $description} else {} end)')
+
+    curl -sS -X POST "{{server}}/payments/create" \
+      -H "Content-Type: application/json" \
+      -H "x-api-key: {{key}}" \
+      -d "$payload" | jq
+
+# Aggregate payments for the current user (or all payments for managers).
+payment_summary key=alice_key:
+    @curl -sS "{{server}}/payments/summary" \
+      -H "x-api-key: {{key}}" | jq
+
+# Admin-only user list.
+admin_users key=admin_key:
+    @curl -sS "{{server}}/admin/users" \
+      -H "x-api-key: {{key}}" | jq
+
+
+# Show every supported value type (public).
+demo_types:
+    @curl -sS "{{server}}/demo/types" | jq
+
+# Echo query arguments with schema coercion (public).
+demo_echo name count="1":
+    @curl -sS --get "{{server}}/demo/echo" \
+      --data-urlencode "name={{name}}" \
+      --data-urlencode "count={{count}}" | jq
+
+# Read custom registry values and secret availability (authenticated).
+demo_runtime key=alice_key:
+    @curl -sS "{{server}}/demo/runtime" \
+      -H "x-api-key: {{key}}" | jq
+
+# Show that a revoked API key is rejected.
+revoked_key_check:
+    @curl -sS "{{server}}/me" \
+      -H "x-api-key: {{revoked_key}}" | jq

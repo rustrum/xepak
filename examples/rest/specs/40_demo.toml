@@ -1,0 +1,73 @@
+# Small demonstration endpoints for data_script, schemas, and registry access.
+
+# TYPE SHOWCASE (public)
+# Returns every XepakValue shape. Blobs become base64 strings in JSON.
+[[endpoint]]
+uri = "/demo/types"
+pre_processors_ignore_default = true
+
+[endpoint.resource]
+type = "data_script"
+script = """
+return {
+    text = "hello from Xepak",
+    int = 42,
+    float = 3.5,
+    boolean = true,
+    tuple = { 1, "two", false },
+    dict = { nested = { ok = true } },
+    blob = blob_type("xepak"),
+}
+"""
+
+
+# ECHO (public)
+# strict_schema rejects unknown query arguments. Query-string values are
+# coerced to the schema types, so count="7" arrives in Lua as an integer.
+[[endpoint]]
+uri = "/demo/echo"
+pre_processors_ignore_default = true
+strict_schema = true
+
+[endpoint.schema.input]
+type = "dict"
+items = {
+    name = { type = "text", required = true, validate = { kind = "and", nested = [
+        { kind = "not_null" },
+        { kind = "range", from = 1, to = 50 },
+    ] } },
+    count = { type = "int" },
+}
+
+[endpoint.resource]
+type = "data_script"
+script = """
+return {
+    name = ctx:get_arg("name"),
+    count = ctx:get_arg("count") or 0,
+    method = ctx:get_request_method(),
+}
+"""
+
+
+# RUNTIME CONFIG (authenticated)
+# Reads custom registry values and a secret without exposing the secret value.
+[[endpoint]]
+uri = "/demo/runtime"
+pre_processors = [
+    { type = "ref", id = "require_auth" },
+]
+
+[endpoint.resource]
+type = "data_script"
+script = """
+local secret = app:get_secret("demo_secret")
+
+return {
+    app_name = app:get_registry_value("app_name"),
+    payment_currency = app:get_registry_value("payment_currency"),
+    secret_configured = secret ~= nil,
+    auth_id = ctx:get_auth_id(),
+    roles = ctx:get_auth_roles(),
+}
+"""

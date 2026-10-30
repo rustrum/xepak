@@ -1,0 +1,88 @@
+# User-facing endpoints.
+
+# WHO AM I
+# data_script returns the identity and roles populated by db_auth.
+[[endpoint]]
+uri = "/me"
+pre_processors = [
+    { type = "ref", id = "require_auth" },
+]
+
+[endpoint.resource]
+type = "data_script"
+script = """
+return {
+    id = ctx:get_auth_id(),
+    roles = ctx:get_auth_roles(),
+    is_admin = ctx:has_auth_role("ADMIN"),
+    is_manager = ctx:has_auth_role("MANAGER"),
+}
+"""
+
+
+# PUBLIC USER PROFILE
+# Only safe columns are selected; email is not exposed publicly.
+[[endpoint]]
+uri = "/users/{user_id:\\d+}"
+pre_processors_ignore_default = true
+single_record_response = true
+
+[endpoint.schema.output]
+type = "dict"
+items = {
+    id = { type = "int" },
+    username = { type = "text" },
+    display_name = { type = "text" },
+    created_at = { type = "int" },
+}
+
+[endpoint.resource]
+type = "query"
+query = """
+SELECT id, username, display_name, created_at
+FROM users
+WHERE id = {{user_id}}
+"""
+
+
+# PUBLIC USER POSTS
+# Path arguments and pagination in one static query.
+[[endpoint]]
+uri = "/users/{user_id:\\d+}/posts"
+pre_processors_ignore_default = true
+pre_processors = [
+    { type = "limit_offset", limit_max_value = 20 },
+]
+
+[endpoint.resource]
+type = "query"
+query = """
+SELECT p.id, p.title, p.content, p.created_at, p.updated_at
+FROM posts p
+WHERE p.user_id = {{user_id}}
+ORDER BY p.created_at DESC
+LIMIT {{-limit-}} OFFSET {{-offset-}}
+"""
+
+
+# ADMIN USER LIST
+# Demonstrates an admin-only authorize rule plus a grouped role aggregate.
+[[endpoint]]
+uri = "/admin/users"
+pre_processors = [
+    { type = "ref", id = "admin_only" },
+    { type = "limit_offset", limit_max_value = 50 },
+]
+
+[endpoint.resource]
+type = "query"
+query = """
+SELECT u.id, u.username, u.email, u.display_name, u.created_at,
+       group_concat(r.name, ',') AS roles
+FROM users u
+LEFT JOIN user_roles ur ON ur.user_id = u.id
+LEFT JOIN roles r ON r.id = ur.role_id
+GROUP BY u.id
+ORDER BY u.id
+LIMIT {{-limit-}} OFFSET {{-offset-}}
+"""

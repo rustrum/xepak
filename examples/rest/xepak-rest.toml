@@ -1,0 +1,25 @@
+# Root configuration for the REST example.
+#
+# The example uses one SQLite database and loads all endpoint specs from ./specs.
+# Authentication is database-backed, so there is no static auth registry here.
+
+port = 8080
+specs_dir = "./specs"
+
+[[storage]]
+type = "sqlite"
+id = ""
+file = "db/xepak-rest.sqlite3"
+create_db = true
+wal = true
+migrations_dir = "migrations"
+
+# Custom registry values are readable from Lua via app:get_registry_value(...).
+[registry]
+app_name = "Xepak REST example"
+payment_currency = "USD"
+
+# Secrets are readable from Lua via app:get_secret(...).
+# In a real deployment use { type = "env", name = "SECRET_ENV_NAME" } instead.
+[registry.secrets]
+demo_secret = { type = "text", value = "this-is-not-a-real-secret" }

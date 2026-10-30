@@ -1,0 +1,137 @@
+# Database-backed authentication and reusable authorization guards.
+#
+# The default pre-processor authenticates every endpoint against SQLite.
+# Public endpoints opt out with `pre_processors_ignore_default = true`.
+
+default_pre_processors = [
+    { type = "ref", id = "db_auth" },
+]
+
+[shared_pre_processors.db_auth]
+type = "storage_authentication"
+# The query must return one row with authenticated user id and a comma-separated list of role names
+# `{{api-key}}` is supplied by the storage_authentication pre-processor.
+query = """
+SELECT u.id AS id, group_concat(r.name, ',') AS roles
+FROM api_keys k
+JOIN users u ON u.id = k.user_id
+JOIN user_roles ur ON ur.user_id = u.id
+JOIN roles r ON r.id = ur.role_id
+WHERE k.api_key = {{api-key}}
+  AND k.revoked_at IS NULL
+GROUP BY u.id
+"""
+cache_ttl_sec = 60
+
+# An empty rules string means "any authenticated user".
+[shared_pre_processors.require_auth]
+type = "authorize"
+rules = ""
+
+[shared_pre_processors.manager_only]
+type = "authorize"
+rules = "MANAGER OR ADMIN"
+
+[shared_pre_processors.admin_only]
+type = "authorize"
+rules = "ADMIN"
+
+# Copy the authenticated identity into normal query arguments so static SQL
+# can use {{auth_user_id}} and Lua can branch on {{is_manager}}.
+[shared_pre_processors.attach_auth_user]
+type = "lua_script"
+script = """
+local id = ctx:get_auth_id()
+if id == nil then
+    error_forbidden("Authentication required")
+end
+
+ctx:set_arg("auth_user_id", id)
+ctx:set_arg("is_manager", ctx:has_auth_role("MANAGER") or ctx:has_auth_role("ADMIN"))
+"""
+
+# Validate payment fields that are not expressible with the schema DSL
+# (status is an enum and currency is a 3-letter code).
+[shared_pre_processors.validate_payment]
+type = "lua_script"
+script = """
+local status = ctx:get_arg("status")
+if status ~= nil then
+    local allowed = { pending = true, paid = true, failed = true, refunded = true }
+    if not allowed[tostring(status)] then
+        error_input("status must be one of: pending, paid, failed, refunded")
+    end
+end
+
+local currency = ctx:get_arg("currency")
+if currency ~= nil and #tostring(currency) ~= 3 then
+    error_input("currency must be a 3-letter code")
+end
+
+local user_id = ctx:get_arg("user_id")
+if user_id ~= nil then
+    local exists = storage_query_value(
+        "SELECT COUNT(*) FROM users WHERE id = {{user_id}}",
+        { user_id = user_id }
+    )
+    if exists ~= 1 then
+        error_input("user_id does not exist")
+    end
+end
+"""
+
+# Guard for updating a post:
+# - the caller must own the post, unless they are a manager or admin
+# - a post can be updated only once every 30 seconds
+[shared_pre_processors.post_update_guard]
+type = "lua_script"
+script = """
+local post_id = ctx:get_arg("post_id")
+local auth_id = ctx:get_auth_id()
+if auth_id == nil then
+    error_forbidden("Authentication required")
+end
+
+local post = storage_query_one(
+    "SELECT user_id, CASE WHEN last_update_at IS NULL OR unixepoch() - last_update_at >= 30 THEN 1 ELSE 0 END AS can_update FROM posts WHERE id = {{post_id}}",
+    { post_id = post_id }
+)
+if post == nil then
+    error_not_found("Post not found")
+end
+
+local is_manager = ctx:has_auth_role("MANAGER") or ctx:has_auth_role("ADMIN")
+if not is_manager and tostring(post.user_id) ~= tostring(auth_id) then
+    error_forbidden("You can update only your own posts")
+end
+
+if post.can_update ~= 1 then
+    error_input("Posts can be updated only once every 30 seconds")
+end
+"""
+
+# Guard for reading a payment:
+# - managers and admins can read any payment
+# - other users can read only payments linked to their own account
+[shared_pre_processors.payment_access_guard]
+type = "lua_script"
+script = """
+local payment_id = ctx:get_arg("payment_id")
+local auth_id = ctx:get_auth_id()
+if auth_id == nil then
+    error_forbidden("Authentication required")
+end
+
+local owner_id = storage_query_value(
+    "SELECT user_id FROM payments WHERE id = {{payment_id}}",
+    { payment_id = payment_id }
+)
+if owner_id == nil then
+    error_not_found("Payment not found")
+end
+
+local is_manager = ctx:has_auth_role("MANAGER") or ctx:has_auth_role("ADMIN")
+if not is_manager and tostring(owner_id) ~= tostring(auth_id) then
+    error_forbidden("You can view only your own payments")
+end
+"""

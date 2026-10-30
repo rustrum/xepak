@@ -15,7 +15,8 @@ pub enum XepakValue {
     /// Null/nothing/undefined type
     Null,
     Boolean(bool),
-    /// Any integer type
+    /// Any integer type.
+    /// Consider the maximum value is a u64 (i128 is just a container here).
     Integer(i128),
     /// Any float type
     Float(f64),

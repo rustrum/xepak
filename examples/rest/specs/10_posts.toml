@@ -1,0 +1,196 @@
+# Public post endpoints and authenticated write endpoints.
+#
+# Reads are public, so they opt out of the default database authentication.
+# Writes keep the default auth pre-processor and add role/ownership guards.
+
+# LIST POSTS (public)
+# Demonstrates a dynamic Lua query builder with optional filters and pagination.
+[[endpoint]]
+uri = "/posts"
+pre_processors_ignore_default = true
+pre_processors = [
+    { type = "limit_offset", limit_max_value = 20 },
+]
+
+[endpoint.schema.input]
+type = "dict"
+items = {
+    author = { type = "text" },
+    q = { type = "text" },
+    limit = { type = "int" },
+    offset = { type = "int" },
+}
+
+[endpoint.resource]
+type = "query_script_lua"
+script = """
+local q = query_builder("SELECT p.id, p.user_id, u.username AS author, p.title, p.content, p.created_at, p.updated_at FROM posts p JOIN users u ON u.id = p.user_id")
+local parts = {}
+
+if ctx:has_arg("author") then
+    table.insert(parts, "u.username = {{author}}")
+end
+if ctx:has_arg("q") then
+    table.insert(parts, "p.title LIKE '%' || {{q}} || '%'")
+end
+
+q:add_joined_parts("WHERE", parts, "AND", "")
+q:add("ORDER BY p.created_at DESC, p.id DESC LIMIT {{-limit-}} OFFSET {{-offset-}}")
+return q:build()
+"""
+
+
+# SEARCH POSTS (public, case-insensitive LIKE)
+# SQLite's `case_sensitive_like` pragma is OFF by default, so plain LIKE is
+# case-insensitive. No LOWER() calls and no extra collation are needed.
+[[endpoint]]
+uri = "/posts/search"
+pre_processors_ignore_default = true
+pre_processors = [
+    { type = "limit_offset", limit_max_value = 20 },
+]
+
+[endpoint.schema.input]
+type = "dict"
+items = {
+    q = { type = "text", required = true, validate = { kind = "and", nested = [
+        { kind = "not_null" },
+        { kind = "range", from = 1, to = 100 },
+    ] } },
+    limit = { type = "int" },
+    offset = { type = "int" },
+}
+
+[endpoint.resource]
+type = "query_script_lua"
+script = """
+local query = tostring(ctx:get_arg("q") or ""):match("^%s*(.-)%s*$")
+if query == "" then
+    error_input("q must not be empty")
+end
+ctx:set_arg("q", query)
+
+local q = query_builder("SELECT p.id, p.user_id, u.username AS author, p.title, p.content, p.created_at, p.updated_at FROM posts p JOIN users u ON u.id = p.user_id")
+q:add("WHERE p.title LIKE '%' || {{q}} || '%' OR p.content LIKE '%' || {{q}} || '%'")
+q:add("ORDER BY p.created_at DESC, p.id DESC LIMIT {{-limit-}} OFFSET {{-offset-}}")
+return q:build()
+"""
+
+
+# GET POST (public)
+[[endpoint]]
+uri = "/posts/{post_id:\\d+}"
+pre_processors_ignore_default = true
+single_record_response = true
+
+[endpoint.resource]
+type = "query"
+query = """
+SELECT p.id, p.user_id, u.username AS author, p.title, p.content,
+       p.created_at, p.updated_at, p.last_update_at
+FROM posts p
+JOIN users u ON u.id = p.user_id
+WHERE p.id = {{post_id}}
+"""
+
+
+# CREATE POST (authenticated)
+# Demonstrates parse_body_args, a shared Lua pre-processor, and an output schema.
+[[endpoint]]
+uri = "/posts/create"
+allow_methods = ["POST"]
+single_record_response = true
+pre_processors = [
+    { type = "ref", id = "require_auth" },
+    { type = "parse_body_args", null_if_absent = ["content"] },
+    { type = "ref", id = "attach_auth_user" },
+]
+
+[endpoint.schema.input]
+type = "dict"
+items = {
+    title = { type = "text", required = true, validate = { kind = "and", nested = [
+        { kind = "not_null" },
+        { kind = "range", from = 3, to = 200 },
+    ] } },
+    content = { type = "text" },
+}
+
+[endpoint.schema.output]
+type = "dict"
+items = {
+    id = { type = "int" },
+    user_id = { type = "int" },
+    title = { type = "text" },
+}
+
+[endpoint.resource]
+type = "query"
+query = """
+INSERT INTO posts (user_id, title, content)
+VALUES ({{auth_user_id}}, {{title}}, COALESCE({{content}}, ''))
+RETURNING id, user_id, title, content, created_at, updated_at
+"""
+
+
+# UPDATE POST (authenticated owner or manager/admin)
+# The Lua guard checks ownership and enforces one update per 30 seconds.
+[[endpoint]]
+uri = "/posts/{post_id:\\d+}/update"
+allow_methods = ["PUT", "PATCH"]
+single_record_response = true
+pre_processors = [
+    { type = "ref", id = "require_auth" },
+    { type = "parse_body_args" },
+    { type = "ref", id = "post_update_guard" },
+]
+
+[endpoint.schema.input]
+type = "dict"
+items = {
+    title = { type = "text", validate = { kind = "and", nested = [
+        { kind = "not_null" },
+        { kind = "range", from = 3, to = 200 },
+    ] } },
+    content = { type = "text" },
+}
+
+[endpoint.resource]
+type = "query_script_lua"
+script = """
+local sets = {}
+
+if ctx:has_arg("title") then
+    table.insert(sets, "title = {{title}}")
+end
+if ctx:has_arg("content") then
+    table.insert(sets, "content = {{content}}")
+end
+if #sets == 0 then
+    error_input("Provide at least one of: title, content")
+end
+
+table.insert(sets, "updated_at = unixepoch()")
+table.insert(sets, "last_update_at = unixepoch()")
+
+return "UPDATE posts SET " .. table.concat(sets, ", ") .. " WHERE id = {{post_id}} RETURNING id, user_id, title, content, created_at, updated_at, last_update_at"
+"""
+
+
+# DELETE POST (manager or admin only)
+# Regular POSTER users are rejected by the authorize pre-processor.
+[[endpoint]]
+uri = "/posts/{post_id:\\d+}/delete"
+allow_methods = ["DELETE"]
+single_record_response = true
+pre_processors = [
+    { type = "ref", id = "manager_only" },
+]
+
+[endpoint.resource]
+type = "query"
+query = """
+DELETE FROM posts
+WHERE id = {{post_id}}
+RETURNING id, user_id, title, created_at
+"""

@@ -1,0 +1,139 @@
+# Payment endpoints.
+#
+# All payment endpoints require authentication. Managers and admins can create
+# payments and see every payment; regular users see only their own payments.
+
+# LIST PAYMENTS
+# Managers see all rows; everyone else sees only rows linked to their user id.
+[[endpoint]]
+uri = "/payments"
+pre_processors = [
+    { type = "ref", id = "require_auth" },
+    { type = "ref", id = "attach_auth_user" },
+    { type = "ref", id = "validate_payment" },
+    { type = "limit_offset", limit_max_value = 50 },
+]
+
+[endpoint.schema.input]
+type = "dict"
+items = {
+    status = { type = "text" },
+    limit = { type = "int" },
+    offset = { type = "int" },
+}
+
+[endpoint.resource]
+type = "query_script_lua"
+script = """
+local q = query_builder("SELECT p.id, p.user_id, u.username AS user, p.amount_cents, p.currency, p.status, p.description, p.created_by, p.created_at FROM payments p JOIN users u ON u.id = p.user_id")
+local parts = {}
+
+if not ctx:get_arg("is_manager") then
+    table.insert(parts, "p.user_id = {{auth_user_id}}")
+end
+if ctx:has_arg("status") then
+    table.insert(parts, "p.status = {{status}}")
+end
+
+q:add_joined_parts("WHERE", parts, "AND", "")
+q:add("ORDER BY p.created_at DESC, p.id DESC LIMIT {{-limit-}} OFFSET {{-offset-}}")
+return q:build()
+"""
+
+
+# GET PAYMENT
+# The guard returns 404 for missing rows and 403 when a regular user tries to
+# read someone else's payment.
+[[endpoint]]
+uri = "/payments/{payment_id:\\d+}"
+single_record_response = true
+pre_processors = [
+    { type = "ref", id = "require_auth" },
+    { type = "ref", id = "payment_access_guard" },
+]
+
+[endpoint.resource]
+type = "query"
+query = """
+SELECT p.id, p.user_id, u.username AS user, p.amount_cents, p.currency,
+       p.status, p.description, p.created_by, p.created_at
+FROM payments p
+JOIN users u ON u.id = p.user_id
+WHERE p.id = {{payment_id}}
+"""
+
+
+# CREATE PAYMENT (manager or admin only)
+# Demonstrates null_if_absent with COALESCE defaults and a Lua field validator.
+[[endpoint]]
+uri = "/payments/create"
+allow_methods = ["POST"]
+single_record_response = true
+pre_processors = [
+    { type = "ref", id = "manager_only" },
+    { type = "parse_body_args", null_if_absent = ["currency", "status", "description"] },
+    { type = "ref", id = "attach_auth_user" },
+    { type = "ref", id = "validate_payment" },
+]
+
+[endpoint.schema.input]
+type = "dict"
+items = {
+    user_id = { type = "int", required = true },
+    amount_cents = { type = "int", required = true, validate = { kind = "range", from = 1, to = 100000000 } },
+    currency = { type = "text" },
+    status = { type = "text" },
+    description = { type = "text" },
+}
+
+[endpoint.schema.output]
+type = "dict"
+items = {
+    id = { type = "int" },
+    user_id = { type = "int" },
+    amount_cents = { type = "int" },
+    currency = { type = "text" },
+    status = { type = "text" },
+}
+
+[endpoint.resource]
+type = "query"
+query = """
+INSERT INTO payments (user_id, amount_cents, currency, status, description, created_by)
+VALUES ({{user_id}}, {{amount_cents}}, COALESCE({{currency}}, 'USD'),
+        COALESCE({{status}}, 'pending'), COALESCE({{description}}, ''),
+        {{auth_user_id}})
+RETURNING id, user_id, amount_cents, currency, status, description, created_by, created_at
+"""
+
+
+# PAYMENT SUMMARY
+# A data_script endpoint that aggregates rows without returning a SQL query.
+[[endpoint]]
+uri = "/payments/summary"
+pre_processors = [
+    { type = "ref", id = "require_auth" },
+]
+
+[endpoint.resource]
+type = "data_script"
+script = """
+local auth_id = ctx:get_auth_id()
+local is_manager = ctx:has_auth_role("MANAGER") or ctx:has_auth_role("ADMIN")
+
+local rows = storage_query(
+    "SELECT status, COUNT(*) AS count, COALESCE(SUM(amount_cents), 0) AS total_cents FROM payments WHERE ({{is_manager}} = 1 OR user_id = {{auth_user_id}}) GROUP BY status ORDER BY status",
+    { is_manager = is_manager, auth_user_id = auth_id }
+)
+
+local total = 0
+for _, row in ipairs(rows) do
+    total = total + (row.total_cents or 0)
+end
+
+return {
+    scope = is_manager and "all" or "own",
+    total_cents = total,
+    by_status = rows,
+}
+"""

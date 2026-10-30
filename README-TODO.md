@@ -1,5 +1,8 @@
 # Next things to do
 
+Auth data should be binded into Input context arguments like `-auth-id-` and `-auth-roles-`.
+Not sure about auth roles how to represent them, but auth id must be.
+
 Make serde to fail in non existing keys appear in DSL.
 
 # In General
