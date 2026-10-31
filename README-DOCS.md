@@ -40,6 +40,10 @@ port = 4321 # 8080 if not defined
 # Directory with specs files
 specs_dir = "./specs" # default value is ./specs - relative to root config folder
 
+# Optional server tuning
+server_workers = 4    # optional: number of actix workers
+server_keep_alive = 0 # optional: keep-alive timeout in seconds, 0 disables (default)
+
 storage = [] # this one requires at least one entry
 
 registry = {} # some k-v registry
@@ -47,8 +51,7 @@ registry = {} # some k-v registry
 
 #### Storage
 
-One day storage section would have multiple DB connections.
-But now you should have only one for SQLite.
+Multiple `[[storage]]` entries are supported; each is identified by `id` (default `""`).
 
 ```toml
 [[storage]]
@@ -398,7 +401,7 @@ The `methods` maps a method name to a method specs that similar to a REST endpoi
 Has properties: `resource`, `schema`, `pre_processors`, `pre_processors_ignore_default`, `single_record_response`.
 
 `strict_schema` is always enforced for RPC methods (cannot be disabled).
-`single_record_response = true` returns an empty object `{}` instead of an error when no record is found.
+`single_record_response = true` returns `null` instead of an error when no record is found.
 
 
 ```toml
@@ -452,9 +455,10 @@ resource = { type = "query", query = "SELECT * FROM posts ORDER BY id LIMIT {{li
 ```
 Additional information:
 
+- Each tool requires `title` and `description`.
 - `annotations` property could have next (optional) flags: `read_only`, `destructive`, `idempotent`, `open_world`
 - `empty_response_text` (optional) is a text returned when a tool produces an empty result; a built-in message is used if not set
-- `tools/call` schema must be only in a form of a `dict`
+- `tools/call` `arguments` may be an object or a positional array; the tool input schema is applied to the value.
 - tool response for now is only in a form of a single content element of type `text` (should not care about it much)
 
 ## JSON/CBOR request and response
@@ -778,7 +782,7 @@ Root level schema expected to be of type `dict` or `tuple`.
 DSL for REST endpoints is very similar to RPC and MCP.
 ```toml
 # ...
-request_type = "POST"
+allow_methods = ["POST"]
 
 # by default it is false
 # if true will allow only "title" and "content" in the input.
@@ -872,7 +876,7 @@ validate = { kind = "and", nested = [
 ### Authentication
 
 Xepak utilize "x-api-key" HTTP header as a main method to authenticate client.
-Fallback to "Authorize: Bearer ..." is available only for JSON-RPC and MCP endpoints.
+Fallback to "Authorization: Bearer ..." is accepted for any POST request when `x-api-key` is absent.
 
 Authentication is handled by pre-processors.
 

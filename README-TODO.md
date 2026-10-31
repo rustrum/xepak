@@ -1,10 +1,15 @@
 # Next things to do
 
+Make serde to fail in non existing keys appear in DSL.
+
 Auth data should be binded into Input context arguments like `-auth-id-` and `-auth-roles-`.
 Not sure about auth roles how to represent them, but auth id must be.
-Figure out can I get rid of multiple priorities for a pre-processors. Add docs to default pre-processors that always added.
 
-Make serde to fail in non existing keys appear in DSL.
+Must add output schema to RPC (not MCP)
+
+Input schema must apply to query string and partially to URI params.
+
+Figure out can I get rid of multiple priorities for a pre-processors. Add docs to default pre-processors that always added.
 
 # In General
 
@@ -12,6 +17,7 @@ Make serde to fail in non existing keys appear in DSL.
 - Should add more input validators
 - Multiple data sources (this could be a killer feature)
 - Can I map SQL error about invalid input to checks to XepakError::Input ?
+- Pre-processors must have configurable priofity of types (normal, high, low) to make possible for some default pre processors to run after the one that defined in entrypoint
 
 ## Scheduled jobs
 

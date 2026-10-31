@@ -287,7 +287,7 @@ pub fn apply_schema(
                     value_tuple[idx] = result;
                     idx += 1;
                 }
-                if !*items_repeat && items.len() > idx && strict {
+                if !*items_repeat && value_tuple.len() > idx && strict {
                     // something still left but we have strict constraint
                     return Err(XepakDataError::Validate(format!(
                         "tuple element is not allowed at {key}[{idx}]"

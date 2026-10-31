@@ -1,6 +1,6 @@
 # Xepak — AI Agent Reference
 
-**Version:** 0.0.8-pre-release | **Commit:** c58ec41
+**Version:** 0.0.8-pre-release | **Commit:** 1a0a815
 
 ---
 
@@ -25,6 +25,8 @@ Request flow: a request arrives → Xepak resolves input into query args → run
 ```toml
 port = 8080                          # optional, default 8080
 specs_dir = "./specs"                # optional, default ./specs (relative to config dir)
+server_workers = 4                   # optional: actix workers
+server_keep_alive = 0                # optional: keep-alive seconds, 0 disables (default)
 
 [[storage]]
 type = "sqlite"
@@ -53,7 +55,7 @@ my_config = 42
 ```
 
 - `[registry]` holds arbitrary data readable from Lua; only `auth` and `secrets` have special meaning.
-- A request authenticates via the `x-api-key` HTTP header (JSON-RPC/MCP also accept `Authorization: Bearer`).
+- A request authenticates via the `x-api-key` HTTP header; `Authorization: Bearer` is accepted for any POST when `x-api-key` is absent.
 
 ## 2. Specs (one or more `.toml` files in `specs_dir`)
 
@@ -119,7 +121,7 @@ rules = "#boss OR (ADMIN AND MANAGER)"
 
 - `parse_body_args` parses only a flat-map body. A positional-array body is already exposed as args `"0"`, `"1"`, ...
 - `storage_authentication`: the query runs with an `{{api-key}}` arg and must return one row with columns `id` (text) and `roles` (comma-separated text). Non-zero `cache_ttl_sec` caches successful auth per key.
-- `limit_offset`: the `limit` arg is capped at `limit_max_value`; an absent or unparseable `limit` becomes `limit_max_value`; an absent `offset` becomes `0`. The validated values are exposed to the resource as `{{-limit-}}` / `{{-offset-}}` and echoed back in the `X-Limit` / `X-Offset` response headers.
+- `limit_offset`: the `limit` arg is capped at `limit_max_value`; an absent or unparseable `limit` becomes `limit_max_value`; an absent `offset` becomes `0`. The validated values are exposed to the resource as `{{-limit-}}` / `{{-offset-}}` and echoed back in the `X-Limit` / `X-Offset` response headers when > 0.
 - `authorize` must run after an authentication pre-processor. An empty `rules` string means "authenticated only".
 
 ### Auth rules syntax
@@ -220,7 +222,7 @@ resource = { type = "query", query = "SELECT * FROM posts WHERE id = {{0}}" }
 ```
 
 - The request `params` pass through the input schema and become body args (JSON array → positional args `0`, `1`, ...). `strict_schema` is always enforced.
-- Response/error format follows JSON-RPC 2.0. With `single_record_response = true`, a missing record yields `{}` (not an error).
+- Response/error format follows JSON-RPC 2.0. With `single_record_response = true`, a missing record yields `null` (not an error).
 
 ### MCP servers (`[[mcp]]`)
 
@@ -247,6 +249,7 @@ schema.input = { type = "dict", items = {
 resource = { type = "query", query = "SELECT * FROM posts ORDER BY id LIMIT {{limit}} OFFSET {{offset}}" }
 ```
 
+- Each tool requires `title` and `description`.
 - `annotations` (optional booleans): `read_only`, `destructive`, `idempotent`, `open_world`.
 - The input schema is exposed to clients as the tool's JSON-Schema `inputSchema`.
 - Supported methods: `initialize`, `notifications/initialized`, `ping`, `tools/list`, `tools/call`. `tools/call` takes `params = { name, arguments }`; `arguments` pass through the tool input schema. A tool response is a single `text` content element.
@@ -506,7 +509,7 @@ JSON-RPC and MCP errors follow their respective protocol standards.
 
 ### Response headers
 
-Paginated responses include `X-Limit` and `X-Offset` (the exact values used). The response `Content-Type` is `application/json` by default, or `application/cbor` when `Accept: application/cbor`.
+Paginated responses include `X-Limit` and `X-Offset` when values are > 0. The response `Content-Type` is `application/json` by default, or `application/cbor` when `Accept: application/cbor`.
 
 ### CLI
 

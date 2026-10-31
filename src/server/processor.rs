@@ -180,6 +180,7 @@ pub fn adjust_priority(priority: u16, position: u16) -> u16 {
 
 /// Handle arguments from query string.
 /// Skip query string args for POST/PUT requests (basically anything that has request body)
+/// This is required pre-processor that is added by default with a highest priority.
 pub struct QueryArgsProcessor {}
 
 #[async_trait(?Send)]

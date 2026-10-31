@@ -160,7 +160,11 @@ pub fn load_conf_file(file_path: &str) -> Result<XepakConf, XepakError> {
     let conf: XepakConf = toml::from_slice(&buf)
         .map_err(|e| XepakError::Cfg(format!("Can't parse file {file_path}: {e}")))?;
 
-    let _ = conf.validate();
+    if !conf.validate() {
+        return Err(XepakError::Cfg(
+            "Configuration validation failed".to_string(),
+        ));
+    }
 
     Ok(conf)
 }

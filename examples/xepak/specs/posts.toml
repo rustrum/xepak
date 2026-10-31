@@ -22,7 +22,7 @@ query = "SELECT * FROM posts LIMIT {{-limit-}} OFFSET {{-offset-}}"
 # Create post
 [[endpoint]]
 uri = "/post"
-request_type = "POST"
+allow_methods = ["POST"]
 # move single record to different level maybe or not ?
 single_record_response = true
 

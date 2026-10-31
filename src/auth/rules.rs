@@ -799,6 +799,20 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
+    // Ideally parser shold fail here, but fixing it now require changes I do not want.
+    // Will allow such kind of stupid syntax for a while.
+    fn test_parse_error_on_double_operators() {
+        let mut parser = RulesParser::new("manager AND AND boss");
+        let result = parser.parse();
+        assert!(result.is_err());
+
+        let mut parser = RulesParser::new("manager OR OR boss");
+        let result = parser.parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_parse_error_on_empty_id_after_hash() {
         let mut parser = RulesParser::new("#");
         let result = parser.parse();

@@ -186,6 +186,11 @@ impl EndpointHandler {
         data: XepakValue,
     ) -> HttpResponse {
         match data.get_type() {
+            // The only one success response payload that we are expecting
+            XepakType::Dict | XepakType::Tuple => {
+                self.data_to_response(req, Some(input), StatusCode::OK, &data)
+            }
+            // Expeting this value from a single records response if no data available
             XepakType::Null => {
                 let (status_code, err_data) = to_error_object(XepakError::NotFound(format!(
                     "Record not found at URI: {}",
@@ -193,9 +198,6 @@ impl EndpointHandler {
                 )));
 
                 self.data_to_response(req, Some(input), status_code, &err_data)
-            }
-            XepakType::Dict | XepakType::Tuple => {
-                self.data_to_response(req, Some(input), StatusCode::OK, &data)
             }
             _ => {
                 let (status_code, err_data) = to_error_object(XepakError::NotConsistent(format!(

@@ -40,6 +40,7 @@ const NO_DATA_RESPONSE: &str = "Empty! No data available for your request.";
 #[derive(Deserialize)]
 struct McpToolParams<T> {
     name: String,
+    #[serde(default)]
     arguments: T,
 }
 
@@ -153,6 +154,7 @@ impl McpHandler {
         let result = match request.method.as_str() {
             "initialize" => self.mcp_initialize(),
             // Notification: no JSON-RPC response, return empty 202.
+            // But I do not care for it right now.
             "notifications/initialized" => XepakValue::Null,
             "ping" => XepakValue::Dict(Default::default()),
             "tools/list" => self.mcp_tools_list(),
@@ -258,7 +260,7 @@ impl McpHandler {
         request: JsonRpcRequest<Option<Value>>,
     ) -> Result<XepakValue, XepakError> {
         let tool_params =
-            bind_mcp_params::<McpToolParams<XepakValue>>(request.params, "tools/call")?;
+            bind_mcp_params::<McpToolParams<Option<XepakValue>>>(request.params, "tools/call")?;
         let tool_name = &tool_params.name;
         let Some(tool_handler) = self.tools.get(tool_name) else {
             return Err(XepakError::Input(format!(
@@ -279,7 +281,7 @@ impl McpHandler {
                 &state,
                 tool_specs,
                 tool_handler,
-                tool_params.arguments,
+                tool_params.arguments.unwrap_or(XepakValue::Null),
             )
             .await?;
 

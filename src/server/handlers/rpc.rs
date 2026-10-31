@@ -123,7 +123,7 @@ impl RpcHandler {
             return rpc_error_response(
                 rpc_request.id,
                 RPC_ERROR_INVALID_REQUEST,
-                "Only supported JSON RPC version = {JSON_RPC_VERSION}".to_string(),
+                format!("Only supported JSON RPC version = {JSON_RPC_VERSION}"),
             );
         }
 

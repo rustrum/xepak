@@ -265,15 +265,10 @@ impl XepakValue {
                 }
             }
             XepakValue::Integer(v) => {
-                if *v > f64::MAX as i128 || *v < f64::MIN as i128 {
-                    return Err(XepakDataError::ConvertValue(
-                        self.get_type(),
-                        TO_TYPE,
-                        format!("Out of range value {v}"),
-                    ));
-                } else {
-                    *v as f64
-                }
+                // This will never panic crash or overflow
+                // because f64::MAX is much bigger than i128::MAX
+                // But we definiely will loose precision.
+                *v as f64
             }
             XepakValue::Float(v) => *v,
             XepakValue::Text(v) => v
@@ -301,7 +296,7 @@ impl XepakValue {
     }
 
     pub fn as_tuple(&self) -> Result<Vec<XepakValue>, XepakDataError> {
-        const TO_TYPE: XepakType = XepakType::Blob;
+        const TO_TYPE: XepakType = XepakType::Tuple;
         Ok(match self {
             XepakValue::Null => Vec::new(),
             XepakValue::Tuple(v) => v.clone(),
