@@ -21,6 +21,7 @@ use crate::{
 
 /// Main configuration file that properties could be overwritten via ENV or not? (TODO).
 #[derive(Builder, Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct XepakConf {
     /// Port to listen on.
     #[serde(default = "default_port")]
@@ -61,6 +62,7 @@ impl XepakConf {
 }
 
 #[derive(Builder, Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct XepakSpecs {
     #[serde(default)]
     pub script: Vec<Script>,
@@ -146,6 +148,7 @@ impl XepakSpecs {
 
 /// LUA script that can be shared across application by its ID
 #[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Script {
     pub id: String,
     pub script: String,

@@ -74,6 +74,7 @@ impl TryFrom<HashMap<String, toml::Value>> for AppRegistry {
 
 /// Structure for the configuration registry "auth" section.
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct AuthRegistrySpecs {
     id: String,
 
@@ -107,7 +108,7 @@ impl AuthRegistrySpecs {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(deny_unknown_fields, tag = "type", rename_all = "snake_case")]
 pub enum SecretsRegistrySpec {
     Text { value: String },
     Env { name: String },

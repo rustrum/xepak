@@ -34,7 +34,7 @@ const PRIORITY_QUERY_ARGS: u16 = PRIORITY_FIRST + 10000;
 
 /// Define request processors variants.
 #[derive(Clone, Debug, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(deny_unknown_fields, tag = "type", rename_all = "snake_case")]
 pub enum PreProcessor {
     /// Reference to shared pre-processor
     Ref {

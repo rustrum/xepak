@@ -105,4 +105,5 @@ impl From<XepakDataError> for XepakError {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct DataSource {}

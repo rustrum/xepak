@@ -14,7 +14,7 @@ pub use value::XepakValue;
 
 /// Represents unified type that is matched with a proper [`XepakValueWrapper`].
 #[derive(Display, Debug, Default, Clone, Copy, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum XepakType {
     /// By default all inputs are handled as text.
     #[default]

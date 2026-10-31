@@ -125,7 +125,7 @@ fn create_parent_dirs(file_path: &Path) -> Result<(), XepakError> {
 }
 
 #[derive(Clone, Debug, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(deny_unknown_fields, tag = "type", rename_all = "snake_case")]
 pub enum StorageSettings {
     Sqlite {
         #[serde(default)]

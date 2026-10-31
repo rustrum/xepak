@@ -291,7 +291,7 @@ pub fn default_xepak() -> XepakValue {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(untagged)]
+#[serde(deny_unknown_fields, untagged)]
 pub enum RpcId {
     Number(i64),
     String(String),
@@ -300,6 +300,7 @@ pub enum RpcId {
 
 /// JSON-RPC 2.0 request envelope.
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct JsonRpcRequest<T> {
     pub jsonrpc: String,
     pub id: Option<RpcId>,

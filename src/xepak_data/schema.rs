@@ -9,7 +9,7 @@ use crate::{
 
 /// Schema variant matching [`XepakValue`] variants.
 #[derive(Debug, Clone, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(deny_unknown_fields, tag = "type", rename_all = "snake_case")]
 pub enum Schema {
     Boolean {
         #[serde(default)]
@@ -147,7 +147,7 @@ impl Schema {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(deny_unknown_fields, tag = "kind", rename_all = "snake_case")]
 pub enum SchemaValidator {
     NotNull,
 

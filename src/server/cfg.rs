@@ -18,7 +18,7 @@ pub struct EndpointSchemas {
 }
 
 #[derive(Clone, Debug, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(deny_unknown_fields, tag = "type", rename_all = "snake_case")]
 pub enum ResourceSpecs {
     Query {
         #[serde(default)]
@@ -42,6 +42,7 @@ pub enum ResourceSpecs {
 
 /// REST endpoint specification linked to some URI.
 #[derive(Builder, Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RestEpSpecs {
     /// URI template for this endpoint
     pub uri: String,
@@ -77,6 +78,7 @@ pub struct RestEpSpecs {
 /// JSON-RPC endpoint specification.
 /// Obvious note - each URI defines different RPC service.
 #[derive(Builder, Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RpcEpSpecs {
     /// URI template for this RPC
     pub uri: String,
@@ -87,6 +89,7 @@ pub struct RpcEpSpecs {
 /// JSON-RPC Method definition.
 /// It is very similar to [`RestEpSpecs`], RPC method ~= REST endpoint.
 #[derive(Builder, Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RpcEpMethodSpecs {
     #[serde(default)]
     pub schema: EndpointSchemas,
@@ -114,6 +117,7 @@ pub struct RpcEpMethodSpecs {
 /// It is stupid, unreasonable, illogical.
 /// This is why Xepak will implement only part of this garbage that is compatible with JSON-RPC.
 #[derive(Builder, Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct McpEpSpecs {
     /// URI template for this RPC
     pub uri: String,
@@ -138,6 +142,7 @@ pub struct McpEpSpecs {
 
 /// MCP tool
 #[derive(Builder, Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct McpEpToolSpecs {
     pub title: String,
 
@@ -162,6 +167,7 @@ pub struct McpEpToolSpecs {
 }
 
 #[derive(Default, Builder, Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct McpToolAnnotations {
     /// tool does not modify state
     pub read_only: Option<bool>,

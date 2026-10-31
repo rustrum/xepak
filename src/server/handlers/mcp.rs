@@ -38,6 +38,7 @@ const PROTOCOL_VERSION: &str = "2024-11-05";
 const NO_DATA_RESPONSE: &str = "Empty! No data available for your request.";
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct McpToolParams<T> {
     name: String,
     #[serde(default)]
