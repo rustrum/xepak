@@ -1,10 +1,7 @@
 # JSON-RPC Todo Example
 
-This example exposes a small todo application over **JSON-RPC 2.0** using Xepak.
-
-There is one HTTP endpoint, `POST /rpc`, and every operation is a JSON-RPC method
-declared in [`specs/rpc.toml`](specs/rpc.toml). All data is stored in SQLite using
-created with [`migrations/*.sql`](./migrations).
+This example exposes a small todo application over **JSON-RPC 2.0** 
+which is served via `http://localhost:8080/rpc`.
 
 ## What it demonstrates
 
@@ -15,25 +12,18 @@ created with [`migrations/*.sql`](./migrations).
 - Config-based API-key authentication with role-based authorization.
 - Exact-phrase search with plain-text input.
 
-## Run the example
+## Justfile tool
 
-To run the `just` recipes, install [just, a command runner](https://github.com/casey/just).
+To execute commands defined in `justfile`
+you have to install [just, a command runner](https://github.com/casey/just).
 
-From this directory:
+Run `just -l` within directory where `justfile` is located to list all available commands.
 
-```bash
-just run
-```
+## Launching server 
 
-Or run the binary directly:
+From the example directory run `just run` or `cargo run --bin xepak -- ./xepak-rpc.toml`.
 
-```bash
-cargo run --bin xepak -- ./xepak-rpc.toml
-```
-
-The server listens on `http://localhost:8080` by default. The SQLite database is
-created at `db/xepak-rpc.sqlite3`, and migrations are applied automatically on
-startup.
+This will start server on `http://localhost:8080`.
 
 ## RPC Methods
 
@@ -92,27 +82,8 @@ curl -sS -X POST http://localhost:8080/rpc \
   -d '{"jsonrpc":"2.0","id":1,"method":"delete_todo","params":{"id":1}}'
 ```
 
-`delete_todo` is protected by two pre-processors:
-
-```toml
-pre_processors = [
-    { type = "config_authentication" },
-    { type = "authorize", rules = "admin" },
-]
-```
-
-`config_authentication` looks the key up in the registry and fails without an
-API key. `authorize` then requires the authenticated user to have the `admin`
-role. Anonymous calls and calls using `user-api-key` are rejected with a
-forbidden error before any SQL is executed.
-
 ## Search semantics
 
 `search_todos` performs an FTS5 exact-phrase search across `title` and `body`.
 We just handle input as exact phrase match for simplicity to avoid complex FTS5 query syntax.
 
-## Notes
-
-- The RPC endpoint accepts HTTP `POST` with a JSON body only.
-- RPC method input is always schema-checked strictly: unknown params are rejected.
-- A missing record from `get_todo`, `update_todo`, or `delete_todo` is returned as an empty result instead of a protocol error.

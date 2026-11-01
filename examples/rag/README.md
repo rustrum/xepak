@@ -71,3 +71,6 @@ Execute `just run` to build/launch Xepak server with the current configuration e
 
 Open another terminal session to execute other `just` commands to query MCP tools.
 
+Keep in mind that default project name that used in just recipes is `xepak`
+you can change it in env variable `MCP_PROJECT`.
+

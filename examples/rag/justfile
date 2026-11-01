@@ -4,7 +4,7 @@
 #   just server=http://localhost:9090 project=alpha add_note "Test" "Data"
 
 server := env_var_or_default("MCP_SERVER", "http://localhost:8080")
-project := env_var_or_default("MCP_PROJECT", "xepak-test-project")
+project := env_var_or_default("MCP_PROJECT", "xepak")
 
 
 # Runs Xepak server (launches in the separate terminal session)

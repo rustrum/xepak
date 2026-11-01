@@ -45,7 +45,9 @@ See Xepak examples:
 
 ## Why Xepak is better
 
-- U
+- Single-Binary Footprint: no heavy runtimes and huge amount of dependencies, which reduce supply-chain security risks.
+- Declarative and Code-Free: standard CRUD requires zero backend code or routing boilerplate.
+- Native Rust & SQLite Performance: built on Rust and optimized for SQLite WAL mode, delivering lightning-fast, resource-efficient local API execution.
 
 
 ## Current project status
