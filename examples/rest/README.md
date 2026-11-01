@@ -55,6 +55,8 @@ Pass the key in the `x-api-key` header.
 
 ## Run the example
 
+To run the `just` recipes, install [just, a command runner](https://github.com/casey/just).
+
 From this directory:
 
 ```bash

@@ -60,7 +60,7 @@ pre_processors = [
     { type = "ref", id = "validate_status" },
 ]
 schema.input = { type = "dict", items = {
-    title = { type = "text", required = true, validate = { kind = "and", nested = [
+    title = { type = "text", required = true, validate = { kind = "and", items = [
         { kind = "not_null" },
         { kind = "range", from = 1, to = 200 },
     ] } },
@@ -93,7 +93,7 @@ pre_processors = [
 ]
 schema.input = { type = "dict", items = {
     id = { type = "int", required = true },
-    title = { type = "text", validate = { kind = "and", nested = [
+    title = { type = "text", validate = { kind = "and", items = [
         { kind = "not_null" },
         { kind = "range", from = 1, to = 200 },
     ] } },
@@ -124,8 +124,14 @@ return "UPDATE todos SET " .. table.concat(sets, ", ") .. " WHERE id = {{id}} RE
 
 
 # DELETE TODO
+# Requires config-based authentication and the "admin" role.
+# Denied for anonymous requests and for authenticated users without that role.
 [rpc.methods.delete_todo]
 single_record_response = true
+pre_processors = [
+    { type = "config_authentication" },
+    { type = "authorize", rules = "admin" },
+]
 schema.input = { type = "dict", items = {
     id = { type = "int", required = true },
 } }
@@ -145,7 +151,7 @@ pre_processors = [
     { type = "limit_offset", limit_max_value = 50 },
 ]
 schema.input = { type = "dict", items = {
-    query = { type = "text", required = true, validate = { kind = "and", nested = [
+    query = { type = "text", required = true, validate = { kind = "and", items = [
         { kind = "not_null" },
         { kind = "range", from = 1, to = 200 },
     ] } },

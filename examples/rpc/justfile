@@ -78,8 +78,8 @@ update_todo id title="" body="" status="":
       -H "Content-Type: application/json" \
       -d "$payload" | jq
 
-# Delete a todo by id.
-delete_todo id:
+# Delete a todo by id. Second arg is the API key: "admin-api-key" or "user-api-key".
+delete_todo id api_key="admin-api-key":
     #!/usr/bin/env sh
     params=$(jq -n --argjson id {{id}} '{id: $id}')
 
@@ -90,6 +90,7 @@ delete_todo id:
 
     curl -sS -X POST "{{server}}/rpc" \
       -H "Content-Type: application/json" \
+      -H "x-api-key: {{api_key}}" \
       -d "$payload" | jq
 
 # Search todos by an exact phrase (case-insensitive, plain text; FTS5-backed).

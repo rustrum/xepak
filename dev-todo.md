@@ -1,9 +1,12 @@
 # Next things to do
 
-Make serde to fail in non existing keys appear in DSL.
-
 Auth data should be binded into Input context arguments like `-auth-id-` and `-auth-roles-`.
 Not sure about auth roles how to represent them, but auth id must be.
+
+Single record response must be configurable for and empty response: 
+
+- response empty body = true to return just empty body 
+- empty response code = HTTP code - to return custom HTTP code on empty body
 
 Must add output schema to RPC (not MCP)
 

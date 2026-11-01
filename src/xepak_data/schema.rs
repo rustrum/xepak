@@ -165,25 +165,25 @@ pub enum SchemaValidator {
 
     /// Combine nested validators via logical AND (all must succeed)
     And {
-        nested: Vec<SchemaValidator>,
+        items: Vec<SchemaValidator>,
     },
 
     /// Combine nested validators via logical OR (at least one must succeed)
     Or {
-        nested: Vec<SchemaValidator>,
+        items: Vec<SchemaValidator>,
     },
 }
 
 impl Default for SchemaValidator {
     fn default() -> Self {
-        Self::And { nested: Vec::new() }
+        Self::And { items: Vec::new() }
     }
 }
 
 #[cfg(test)]
 impl From<Vec<SchemaValidator>> for SchemaValidator {
     fn from(value: Vec<SchemaValidator>) -> Self {
-        SchemaValidator::And { nested: value }
+        SchemaValidator::And { items: value }
     }
 }
 
@@ -440,14 +440,14 @@ pub fn apply_validator(
                 )));
             }
         },
-        SchemaValidator::And { nested } => {
-            for v in nested {
+        SchemaValidator::And { items } => {
+            for v in items {
                 apply_validator(v, key_ref, value)?;
             }
         }
-        SchemaValidator::Or { nested } => {
+        SchemaValidator::Or { items } => {
             let mut last_error = None;
-            for v in nested {
+            for v in items {
                 match apply_validator(v, key_ref, value) {
                     Ok(_) => {
                         return Ok(());

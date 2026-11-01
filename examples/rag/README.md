@@ -63,8 +63,7 @@ Keep in mind that docker must have access to whole directory where root TOML loc
 
 ## How to run/test from sources
 
-You should have `cargo` installed with [just a command runner](https://github.com/casey/just)
-so you can use `justfile` scripts.
+To run the `just` recipes, install [just, a command runner](https://github.com/casey/just).
 
 Clone this repo `cd` to the current example directory and execute `just -l` to list available commands.
 

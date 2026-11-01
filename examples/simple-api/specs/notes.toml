@@ -1,0 +1,97 @@
+[[endpoint]]
+uri = "/note/add"
+allow_methods = ["POST"]
+single_record_response = true
+pre_processors = [
+    { type = "parse_body_args" },
+]
+schema.input = { 
+    type = "dict",
+    items = {
+        title = {
+            type = "text",
+            required = true,
+            # combined validators syntax is a little bit clunky but still understandable
+            validate = {
+                kind = "and",
+                items = [ { kind = "not_null" }, { kind = "range", from = 1, to = 200 } ]
+            }
+        },
+        content = { type = "text", required = true, validate = { kind = "not_null" } },
+    }
+}
+resource = {
+    type = "query",
+    query = "INSERT INTO notes (title, content) VALUES ({{title}}, {{content}}) RETURNING id, title, content, created_at"
+}
+
+
+[[endpoint]]
+uri = "/note/delete/{note_id:\\d+}"
+allow_methods = ["DELETE"]
+resource = {
+    type = "query",
+    query = "DELETE FROM notes WHERE id = {{note_id}} RETURNING *"
+}
+
+
+[[endpoint]]
+uri = "/note/{note_id:\\d+}"
+allow_methods = ["GET"]
+single_record_response = true
+resource = {
+    type = "query",
+    query = "SELECT * FROM notes WHERE id = {{note_id}}"
+}
+
+
+# Just list all notes with pagination
+[[endpoint]]
+uri = "/note/list"
+allow_methods = ["GET"]
+pre_processors = [
+    { type = "limit_offset", limit_max_value = 50 },
+]
+schema.input = {
+    type = "dict",
+    items = {
+        limit = { type = "int" },
+        offset = { type = "int" },
+    }
+}
+resource = {
+    type = "query",
+    query = "SELECT * FROM notes ORDER BY id LIMIT {{-limit-}} OFFSET {{-offset-}}"
+}
+
+
+# Search notes by keyword in title or content
+[[endpoint]]
+uri = "/note/search"
+allow_methods = ["GET"]
+pre_processors = [
+    { type = "limit_offset", limit_max_value = 50 },
+]
+[endpoint.schema.input]
+type = "dict"
+items = {
+    limit = { type = "int" },
+    offset = { type = "int" },
+    query = {
+        type = "text",
+        required = true,
+        validate = {
+            kind = "and",
+            items = [ { kind = "not_null" }, { kind = "range", from = 1, to = 100 } ]
+        }
+    }
+}
+
+[endpoint.resource]
+type = "query"
+query = """
+SELECT * FROM notes
+WHERE title LIKE '%' || {{query}} || '%' OR content LIKE '%' || {{query}} || '%'
+ORDER BY id LIMIT {{-limit-}} OFFSET {{-offset-}}
+"""
+

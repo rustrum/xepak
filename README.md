@@ -37,9 +37,15 @@ Given its current SQLite support, Xepak is ideal for:
 
 See Xepak examples:
 
+- [Simple example](./examples/simple-api/README.md) with basic functionality
 - [REST API server](./examples/rest/README.md) with authentication and authorization
 - [RPC service](./examples/rpc/README.md) with fine grained access conrol
 - [MCP/RAG service](./examples/rag/README.md) with full text search
+
+
+## Why Xepak is better
+
+- U
 
 
 ## Current project status

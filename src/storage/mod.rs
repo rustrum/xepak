@@ -135,9 +135,13 @@ pub enum StorageSettings {
         create_db: bool,
         #[serde(default)]
         wal: bool,
-        #[serde(default)]
+        #[serde(default = "migrations_dir_default")]
         migrations_dir: String,
     },
+}
+
+fn migrations_dir_default() -> String {
+    "./migrations".to_string()
 }
 
 impl StorageSettings {

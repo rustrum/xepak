@@ -855,17 +855,17 @@ Validator entries specs.
 | `range` | `from`, `to` (int) | text length, int/float value, tuple length |
 | `range_float` | `from`, `to` (float) | same as range but with float bounds |
 | `not_null` | — | rejects null/undefined |
-| `and` | `nested` (list of validators) | all must pass |
-| `or` | `nested` (list of validators) | at least one must pass |
+| `and` | `items` (list of validators) | all must pass |
+| `or` | `items` (list of validators) | at least one must pass |
 
-Kind `and` / `or` take a `nested` **array** of validators, which themselves may be `and` / `or` again — so you can build arbitrary trees.
+Kind `and` / `or` take an `items` **array** of validators, which themselves may be `and` / `or` again — so you can build arbitrary trees.
 
 ```toml
 # 1) Single validator — text length must be 5..255
 validate = { kind = "range", from = 5, to = 255 }
 
 # 2) AND — all nested validators must pass (not null AND length 5..255)
-validate = { kind = "and", nested = [
+validate = { kind = "and", items = [
     { kind = "not_null" },
     { kind = "range", from = 5, to = 255 },
 ] }

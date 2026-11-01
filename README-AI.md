@@ -1,6 +1,6 @@
 # Xepak — AI Agent Reference
 
-**Version:** 0.0.8-pre-release | **Commit:** 1a0a815
+**Version:** 0.0.9-pre-release | **Commit:** 1a0a815
 
 ---
 
@@ -164,27 +164,27 @@ items = { id = { type = "int" } }
 | `tuple` | Ordered array; `items` = list of schemas, optional `items_repeat` |
 | `dict` | Key-value map; `items` = name→schema map |
 
-`validate` holds a **single** validator object. Combine with `and`/`or` + a `nested` array (nestable arbitrarily):
+`validate` holds a **single** validator object. Combine with `and`/`or` + an `items` array (nestable arbitrarily):
 
 | `kind` | Fields | Applies to |
 |--------|--------|------------|
 | `range` | `from`, `to` (int) | text length, int/float value, tuple length |
 | `range_float` | `from`, `to` (float) | same, float bounds |
 | `not_null` | — | rejects null/undefined |
-| `and` / `or` | `nested` (list of validators) | all / at least one must pass |
+| `and` / `or` | `items` (list of validators) | all / at least one must pass |
 
 ```toml
 # single validator — text length 5..255
 validate = { kind = "range", from = 5, to = 255 }
 
 # not_null AND length 5..255
-validate = { kind = "and", nested = [
+validate = { kind = "and", items = [
     { kind = "not_null" },
     { kind = "range", from = 5, to = 255 },
 ] }
 
 # OR — an int either 0, or in 10..100
-validate = { kind = "or", nested = [
+validate = { kind = "or", items = [
     { kind = "range", from = 0, to = 0 },
     { kind = "range", from = 10, to = 100 },
 ] }

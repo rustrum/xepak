@@ -1,0 +1,47 @@
+# Xepak simple DSL example
+#
+# Override the server URL:
+#   just server=http://localhost:9090 list_notes
+
+server := env_var_or_default("SIMPLE_API_SERVER", "http://localhost:8080")
+
+# Run the Xepak server with this example.
+run:
+    cargo run --bin xepak -- ./xepak.toml
+
+# Remove the local example database.
+clean:
+    #!/usr/bin/env sh
+    rm -rf ./db/*
+    echo "Cleaned up local database directory."
+
+# Create a note.
+add_note title content:
+    #!/usr/bin/env sh
+    payload=$(jq -n \
+      --arg title {{quote(title)}} \
+      --arg content {{quote(content)}} \
+      '{title: $title, content: $content}')
+
+    curl -sS -X POST "{{server}}/note/add" \
+      -H "Content-Type: application/json" \
+      -d "$payload" | jq
+
+# Get one note by id.
+get_note id:
+    @curl -sS "{{server}}/note/{{id}}" | jq
+
+# List notes with pagination.
+list_notes limit="50" offset="0":
+    @curl -sS "{{server}}/note/list?limit={{limit}}&offset={{offset}}" | jq
+
+# Search notes by keyword in title or content.
+search_notes query limit="50" offset="0":
+    @curl -sS --get "{{server}}/note/search" \
+      --data-urlencode "query={{query}}" \
+      --data-urlencode "limit={{limit}}" \
+      --data-urlencode "offset={{offset}}" | jq
+
+# Delete a note by id.
+delete_note id:
+    @curl -sS -X DELETE "{{server}}/note/delete/{{id}}" | jq

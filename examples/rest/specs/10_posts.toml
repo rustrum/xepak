@@ -53,7 +53,7 @@ pre_processors = [
 [endpoint.schema.input]
 type = "dict"
 items = {
-    q = { type = "text", required = true, validate = { kind = "and", nested = [
+    q = { type = "text", required = true, validate = { kind = "and", items = [
         { kind = "not_null" },
         { kind = "range", from = 1, to = 100 },
     ] } },
@@ -109,7 +109,7 @@ pre_processors = [
 [endpoint.schema.input]
 type = "dict"
 items = {
-    title = { type = "text", required = true, validate = { kind = "and", nested = [
+    title = { type = "text", required = true, validate = { kind = "and", items = [
         { kind = "not_null" },
         { kind = "range", from = 3, to = 200 },
     ] } },
@@ -148,7 +148,7 @@ pre_processors = [
 [endpoint.schema.input]
 type = "dict"
 items = {
-    title = { type = "text", validate = { kind = "and", nested = [
+    title = { type = "text", validate = { kind = "and", items = [
         { kind = "not_null" },
         { kind = "range", from = 3, to = 200 },
     ] } },

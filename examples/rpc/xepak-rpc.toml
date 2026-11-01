@@ -1,8 +1,14 @@
-# Root configuration for the JSON-RPC todo example.
-
 [[storage]]
 type = "sqlite"
 file = "db/xepak-rpc.sqlite3"
 create_db = true
 wal = true
 migrations_dir = "migrations"
+
+# API keys for config-based authentication.
+# Both keys are intentionally trivial so the example is easy to try.
+[registry]
+auth = [
+    { id = "admin", key = "admin-api-key", from_env = false, roles = [ "admin" ] },
+    { id = "user", key = "user-api-key", from_env = false, roles = [ "user" ] },
+]

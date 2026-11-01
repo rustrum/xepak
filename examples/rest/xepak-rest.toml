@@ -1,7 +1,5 @@
-# Root configuration for the REST example.
-#
 # The example uses one SQLite database and loads all endpoint specs from ./specs.
-# Authentication is database-backed, so there is no static auth registry here.
+# Authentication is database-backed.
 
 port = 8080
 specs_dir = "./specs"
