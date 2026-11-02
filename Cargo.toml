@@ -12,13 +12,13 @@ members = [
 ]
 
 [workspace.package]
-version = "0.0.9-pre-release"
+version = "0.0.9-rc"
 edition = "2024"
 homepage = "https://github.com/rustrum/xepak"
 repository = "https://github.com/rustrum/xepak.git"
 license-file = "LICENSE-TERMS"
-description = "DSL based REST API server will be here"
-keywords = ["api", "rest", "db", "proxy", "sql"]
+description = "Declarative server builder for REST, RPC, MCP. SQLite-based, focused on local and private deployments."
+keywords = ["api", "rest", "db", "mcp", "sql"]
 
 [workspace.dependencies]
 base64 = "0.23.1"
@@ -63,7 +63,7 @@ getopt3 = { version = "2.6.1", optional = true }
 mlua = { version = "0.12.2", features = ["lua55", "vendored", "async"] }
 moka = { version = "0.12.16", features = ["future"] }
 indexmap = { version="2.14.2", features = ["serde"] }
-reqwest = { version = "0.13.5", features = ["json"] }
+reqwest = { version = "0.13.5", features = ["json", "rustls"] }
 sqlx = { version = "0.9", features = ["runtime-tokio", "sqlite"] }
 sqlx-core = "0.9"
 strum = { version = "0.28.0", features = ["derive"] }
