@@ -4,9 +4,6 @@
 # data_script returns the identity and roles populated by db_auth.
 [[endpoint]]
 uri = "/me"
-pre_processors = [
-    { type = "ref", id = "require_auth" },
-]
 
 [endpoint.resource]
 type = "data_script"

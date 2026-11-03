@@ -7,15 +7,16 @@ Do not forget there is an [AI focused docs](./README-AI.md) built by AI for AI t
 ## CLI Usage
 
 ```bash
-xepak [-p PORT] [-l LOG_LEVEL] <config_file>
+xepak [-j] [-l LOG_LEVEL] <config_file>
 
 Options:
-  -p PORT        Port to listen on (env: XEPAK_PORT)
   -l LOG_LEVEL   Tracing filter directive (e.g. "debug", "info,sqlx=debug", "error,xepak=debug", etc.)
+  -j             Enables log output in JSON format
 
-Env vars:
-  XEPAK_PORT     Port (used if -p not provided)
+Env vars (lower priority than CLI args):
+  XEPAK_LISTEN   String with a HOST:PORT to listen to (localhost:8080)
   XEPAK_CONFIG   Path to config file (used if no positional arg)
+  XEPAK_LOG_JSON If defined with 1|y|yes|true|on - enables log output in JSON 
 ```
 
 ## Configuration
@@ -34,19 +35,18 @@ All relative file paths in configuration are based on directory where root TOML 
 
 Root config quick overview.
 ```toml
-# Application port
-port = 4321 # 8080 if not defined
-
 # Directory with specs files
 specs_dir = "./specs" # default value is ./specs - relative to root config folder
-
-# Optional server tuning
-server_workers = 4    # optional: number of actix workers
-server_keep_alive = 0 # optional: keep-alive timeout in seconds, 0 disables (default)
 
 storage = [] # this one requires at least one entry
 
 registry = {} # some k-v registry
+
+# Optional server tuning
+[server]
+listen = "localhost:8080" # HOST:PORT to listen to (default value)
+keep_alive = 0            # keep-alive timeout in seconds, 0 disables (default)
+workers = 4               # optional: number of actix workers
 ```
 
 #### Storage
@@ -95,7 +95,7 @@ auth = [
     { id = "boss", key = "BossKEY", roles = [ "ADMIN", "MANAGER" ] },
     { id = "manager", key = "ManagerKEY", roles = [ "MANAGER", ] },
     { id = "user", key = "UserKEY" },
-    # empty id is used for anonymous auth if it is enabled
+    # entry with empty key is used for anonymous auth (it must have empty id too)
     { id = "", key = "", roles = [ "anonymous" ] },
     # no need to store actual API keys in TOML - you can load them from ENV variables
     { id = "hacker", key = "ENV_VARIABLE_WITH_THE_KEY", from_env = true },
@@ -238,8 +238,9 @@ return query:build()
 """
 ```
 
-Another type of resource is a `data_script` which passes any response from Lua to client as is.
-You can make API respond with any arbitrary data of any shape.
+Another type of resource is a `data_script` which returns data produced by Lua directly, without a DB query.
+The returned value is still a regular response payload, so for REST it must be an object or an array.
+`data_source` is accepted for `data_script` specs but ignored (no DB is used).
 
 ```toml
 [[endpoint]]
@@ -403,6 +404,10 @@ Has properties: `resource`, `schema`, `pre_processors`, `pre_processors_ignore_d
 `strict_schema` is always enforced for RPC methods (cannot be disabled).
 `single_record_response = true` returns `null` instead of an error when no record is found.
 
+All JSON-RPC responses are sent with HTTP `200`; failures are reported inside the JSON-RPC envelope with the
+codes `-32700` (parse error), `-32600` (invalid request), `-32601` (method not found), `-32602` (invalid params),
+`-32603` (internal error), `-32043` (forbidden) and `-32044` (not found).
+
 
 ```toml
 [[rpc]]
@@ -431,7 +436,8 @@ Contains properties:`resource`, `schema`, `pre_processors`, `pre_processors_igno
 Core MCP functionality is generated automatically: `initialize`, `notifications/initialized`, `ping`, `tools/list`, `tools/call`.
 The `tools/list` response (including each tool's input schema) is generated automatically from your tool definitions.
 
-Notice! 🫵 You must define input schema for your tools! MCP specs require it.
+Notice! 🫵 You should define input schema for your tools. `schema` itself is optional and defaults to an empty one,
+but then the tool exposes an empty object schema to MCP clients, so agents cannot learn the expected arguments.
 
 ```toml
 [[mcp]]
@@ -459,7 +465,8 @@ Additional information:
 - `annotations` property could have next (optional) flags: `read_only`, `destructive`, `idempotent`, `open_world`
 - `empty_response_text` (optional) is a text returned when a tool produces an empty result; a built-in message is used if not set
 - `tools/call` `arguments` may be an object or a positional array; the tool input schema is applied to the value.
-- tool response for now is only in a form of a single content element of type `text` (should not care about it much)
+- the server reports MCP protocol version `2024-11-05` in the `initialize` response
+- tool response is a single content element of type `text` in LLM friendly format.
 
 ## JSON/CBOR request and response
 
@@ -487,10 +494,10 @@ REST error responses always have this structure:
 | Code | HTTP Status | Triggered by |
 |------|-------------|--------------|
 | `not_found` | 404 | Record not found, or Lua `error_not_found()` |
-| `bad_request` | 400 | Input validation failure, schema errors, Lua `error_input()` |
+| `bad_request` | 400 | Input validation failure, schema errors, request method not in `allow_methods`, missing SQL argument, Lua `error_input()` |
 | `forbidden` | 403 | Auth/authorization failures, Lua `error_forbidden()` |
 | `internal_error` | 500 | Server errors, Lua `error_server()` |
-| `unknown_error` | 520 | Unhandled exceptions |
+| `unknown_error` | 520 | Unhandled exceptions; the response has **no `message` field** (includes plain Lua `error()` and non-object/array REST results) |
 
 JSON-RPC and MCP error responses follow their respective protocol standards.
 
@@ -509,7 +516,7 @@ Memorize that the request context holds:
 - querystring as a key-value pairs
 - deserialized POST/PUT/PATCH payload as key-value or index based array/tuple
 - any arbitrary key-value data
-- auth data: client_id, roles
+- for authenticated requests `-auth-id-` argument is added
 - limit/offset for paginated queries
 
 Note: query-string arguments are parsed only for bodyless requests (e.g. GET). For POST/PUT/PATCH they are ignored.
@@ -544,7 +551,7 @@ ctx:get_request_method()
 
 -- Arguments
 ctx:has_arg("user_id") -- true if arg exists
-ctx:get_arg("user_id") -- return arg value
+ctx:get_arg("user_id") -- return arg value (nil when the arg is absent)
 ctx:set_arg("user_id", user.id) -- set custom argument
 
 -- Authentication data (if available)
@@ -623,7 +630,8 @@ storage_query("SELECT * FROM users WHERE id={{id}}", {id = 42})
 -- Query single row: returns Lua table (map) or nil
 storage_query_one("SELECT * FROM users WHERE id={{id}}", {id = 42})
 
--- Query single value (first column of first row): returns scalar or nil
+-- Query single value (first column of first row): returns scalar
+-- (fails if there is no row or the row has more than one column)
 storage_query_value("SELECT COUNT(*) FROM users", {})
 ```
 Note that `storage_query*` always runs against the **default** data source (`""`)
@@ -896,7 +904,7 @@ auth = [
     { id = "user", key = "UserKEY", from_env = false },
     # see how keys can be loaded from ENV variables
     { id = "hacker", key = "ENV_VARIABLE_TO_LOAD_KEY_FROM", from_env = true },
-    # record with empty id will be used for anonymous auth
+    # record with empty key (and empty id) will be used for anonymous auth
     { id = "", key = "", roles = [ "unknown"] },
 ]
 ```

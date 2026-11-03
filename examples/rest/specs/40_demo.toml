@@ -54,9 +54,6 @@ return {
 # Reads custom registry values and a secret without exposing the secret value.
 [[endpoint]]
 uri = "/demo/runtime"
-pre_processors = [
-    { type = "ref", id = "require_auth" },
-]
 
 [endpoint.resource]
 type = "data_script"

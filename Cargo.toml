@@ -12,12 +12,12 @@ members = [
 ]
 
 [workspace.package]
-version = "0.0.9-rc"
+version = "0.0.10-rc"
 edition = "2024"
 homepage = "https://github.com/rustrum/xepak"
 repository = "https://github.com/rustrum/xepak.git"
 license-file = "LICENSE-TERMS"
-description = "Declarative server builder for REST, RPC, MCP. SQLite-based, focused on local and private deployments."
+description = "Declarative server builder for REST, RPC, MCP. SQLite-based, TOML-backed DSL with optional Lua scripting."
 keywords = ["api", "rest", "db", "mcp", "sql"]
 
 [workspace.dependencies]
@@ -70,7 +70,7 @@ strum = { version = "0.28.0", features = ["derive"] }
 thiserror = "2.0.21"
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
 
 
 [dev-dependencies]

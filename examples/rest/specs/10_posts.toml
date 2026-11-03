@@ -101,7 +101,6 @@ uri = "/posts/create"
 allow_methods = ["POST"]
 single_record_response = true
 pre_processors = [
-    { type = "ref", id = "require_auth" },
     { type = "parse_body_args", null_if_absent = ["content"] },
     { type = "ref", id = "attach_auth_user" },
 ]
@@ -128,7 +127,7 @@ items = {
 type = "query"
 query = """
 INSERT INTO posts (user_id, title, content)
-VALUES ({{auth_user_id}}, {{title}}, COALESCE({{content}}, ''))
+VALUES ({{-auth-id-}}, {{title}}, COALESCE({{content}}, ''))
 RETURNING id, user_id, title, content, created_at, updated_at
 """
 
@@ -140,7 +139,6 @@ uri = "/posts/{post_id:\\d+}/update"
 allow_methods = ["PUT", "PATCH"]
 single_record_response = true
 pre_processors = [
-    { type = "ref", id = "require_auth" },
     { type = "parse_body_args" },
     { type = "ref", id = "post_update_guard" },
 ]

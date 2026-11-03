@@ -1,8 +1,10 @@
 # The example uses one SQLite database and loads all endpoint specs from ./specs.
 # Authentication is database-backed.
 
-port = 8080
 specs_dir = "./specs"
+
+[server]
+listen = "localhost:8080"
 
 [[storage]]
 type = "sqlite"

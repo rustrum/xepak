@@ -14,7 +14,7 @@ FROM alpine:latest AS runner
 COPY --from=builder /build/target/release/xepak /bin/
 
 EXPOSE 8080
-
+ENV XEPAK_LISTEN=0.0.0.0:8080
 ENV RUST_LOG=info,xepak=info
 
-ENTRYPOINT ["/bin/xepak", "-p", "8080"]
+ENTRYPOINT ["/bin/xepak"]

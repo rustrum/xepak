@@ -50,7 +50,10 @@ pub async fn init_storage_connectors(
                 } else {
                     let db_file = normalize_config_path(conf_dir, file);
                     create_parent_dirs(&db_file)?;
-                    tracing::info!("Init SQLite storage \"{id}\" using path \"{db_file:?}\"");
+                    tracing::info!(
+                        "Using SQLite storage \"{id}\" with path \"{}\"",
+                        db_file.to_str().unwrap_or_default()
+                    );
 
                     let options = SqliteConnectOptions::new()
                         .filename(db_file)
@@ -66,7 +69,7 @@ pub async fn init_storage_connectors(
                 };
 
                 if !migrations_dir.is_empty() {
-                    tracing::info!("Applying migrations from: {migrations_dir}");
+                    tracing::debug!("Applying migrations from: {migrations_dir}");
                     let migrations_path = normalize_config_path(conf_dir, migrations_dir);
                     migrate_storage(&pool, &migrations_path).await?;
                 }

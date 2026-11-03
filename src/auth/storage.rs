@@ -13,7 +13,8 @@ use crate::{
     xepak_data::XepakValue,
 };
 
-/// Authorize based on a plain token saved in the storage.
+/// Authenticate based on a plain token saved in the storage.
+/// Enrich context with auth data (id, roles).
 pub struct StorageAuthenticationProcessor {
     priority: u16,
 

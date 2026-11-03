@@ -23,11 +23,6 @@ GROUP BY u.id
 """
 cache_ttl_sec = 60
 
-# An empty rules string means "any authenticated user".
-[shared_pre_processors.require_auth]
-type = "authorize"
-rules = ""
-
 [shared_pre_processors.manager_only]
 type = "authorize"
 rules = "MANAGER OR ADMIN"
@@ -36,17 +31,11 @@ rules = "MANAGER OR ADMIN"
 type = "authorize"
 rules = "ADMIN"
 
-# Copy the authenticated identity into normal query arguments so static SQL
-# can use {{auth_user_id}} and Lua can branch on {{is_manager}}.
+# Enrich normal query with "is_manager" argument to use in SQL.
+# This is just a silly example but it shows some Xepak capabilites.
 [shared_pre_processors.attach_auth_user]
 type = "lua_script"
 script = """
-local id = ctx:get_auth_id()
-if id == nil then
-    error_forbidden("Authentication required")
-end
-
-ctx:set_arg("auth_user_id", id)
 ctx:set_arg("is_manager", ctx:has_auth_role("MANAGER") or ctx:has_auth_role("ADMIN"))
 """
 
@@ -122,16 +111,16 @@ if auth_id == nil then
     error_forbidden("Authentication required")
 end
 
-local owner_id = storage_query_value(
+local owner = storage_query_one(
     "SELECT user_id FROM payments WHERE id = {{payment_id}}",
     { payment_id = payment_id }
 )
-if owner_id == nil then
+if owner == nil then
     error_not_found("Payment not found")
 end
 
 local is_manager = ctx:has_auth_role("MANAGER") or ctx:has_auth_role("ADMIN")
-if not is_manager and tostring(owner_id) ~= tostring(auth_id) then
+if not is_manager and tostring(owner.user_id) ~= tostring(auth_id) then
     error_forbidden("You can view only your own payments")
 end
 """

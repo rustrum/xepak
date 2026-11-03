@@ -19,6 +19,9 @@ pub const ARG_NAME_LIMIT: &str = "-limit-";
 /// Arg name to hold already validated offset value
 pub const ARG_NAME_OFFSET: &str = "-offset-";
 
+/// Arg name to hold current authorized user ID
+pub const ARG_AUTH_ID: &str = "-auth-id-";
+
 /// Contains aggregated/formatted input from request that will be used to query resource.
 /// Input is updated/extended during processors execution.
 /// Also it could be updated from resource script before executing output query.
@@ -230,7 +233,10 @@ impl RequestInput {
     }
 
     pub fn set_auth(&mut self, id: String, roles: HashSet<String>) {
-        self.auth = Arc::new(Some((XepakValue::Text(id), roles)))
+        let auth_id = XepakValue::Text(id);
+        // Saving to argument for easy access via SQL
+        self.set_arg(ARG_AUTH_ID, auth_id.clone());
+        self.auth = Arc::new(Some((auth_id, roles)))
     }
 
     pub fn is_authenticated(&self) -> bool {

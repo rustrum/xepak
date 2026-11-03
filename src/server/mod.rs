@@ -6,7 +6,6 @@ pub mod processor;
 pub mod registry;
 
 use std::collections::{HashMap, HashSet};
-use std::net::Ipv4Addr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -34,9 +33,6 @@ const OFFSET_HEADER: &str = "X-Offset";
 const LIMIT_HEADER: &str = "X-Limit";
 pub const CONTENT_TYPE_CBOR: &str = "application/cbor";
 pub const CONTENT_TYPE_JSON: &str = "application/json";
-
-// Keep alive timout in seconds (TODO should make it configurable).
-const KEEP_ALIVE_TIMEOUT: u64 = 15;
 
 #[derive(Clone)]
 pub struct XepakAppData {
@@ -85,10 +81,8 @@ pub async fn init_server(
     config: XepakConf,
     specs: XepakSpecs,
 ) -> Result<Server, XepakError> {
-    let port = config.port;
-
     // Required to use with sqlx::Any connector
-    sqlx::any::install_default_drivers();
+    // sqlx::any::install_default_drivers();
 
     let storage_links = init_storage_connectors(&conf_dir, &config.storage).await?;
 
@@ -154,17 +148,17 @@ pub async fn init_server(
             })
             .wrap(Logger::default())
     })
-    .bind((Ipv4Addr::UNSPECIFIED, port))
+    .bind(config.server.listen)
     .map_err(Arc::new)?;
 
-    let keep_alive = if config.server_keep_alive == 0 {
+    let keep_alive = if config.server.keep_alive == 0 {
         KeepAlive::Disabled
     } else {
-        KeepAlive::Timeout(Duration::from_secs(KEEP_ALIVE_TIMEOUT))
+        KeepAlive::Timeout(Duration::from_secs(config.server.keep_alive as u64))
     };
     let server = server.keep_alive(keep_alive);
 
-    let server = if let Some(workers) = config.server_workers {
+    let server = if let Some(workers) = config.server.workers {
         server.workers(workers.get() as usize).run()
     } else {
         server.run()

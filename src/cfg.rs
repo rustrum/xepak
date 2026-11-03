@@ -19,23 +19,14 @@ use crate::{
     storage::StorageSettings,
 };
 
-/// Main configuration file that properties could be overwritten via ENV or not? (TODO).
+/// Xepak configuration entrypoint.
+/// Configuration file directives has lower priority compared with ENV variables and CLI args.
 #[derive(Builder, Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct XepakConf {
-    /// Port to listen on.
-    #[serde(default = "default_port")]
-    pub port: u16,
-
-    /// Amount of actix web workers to spawn.
-    /// Use if only you know what you are doing.
+    /// Server configuration.
     #[serde(default)]
-    pub server_workers: Option<NonZeroU16>,
-
-    /// Keep alive timeout in seconds for server requests.
-    /// Disabled if zero (default value).
-    #[serde(default)]
-    pub server_keep_alive: u16,
+    pub server: XepakServerConf,
 
     /// Path to the directory with specs.
     #[serde(default = "default_specs_dir")]
@@ -47,6 +38,35 @@ pub struct XepakConf {
 
     #[serde(default)]
     pub registry: HashMap<String, toml::Value>,
+}
+
+/// Server configuration.
+#[derive(Builder, Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct XepakServerConf {
+    /// HOST:PORT to listen to.
+    #[serde(default = "default_listen")]
+    pub listen: String,
+
+    /// Keep alive timeout in seconds for server requests.
+    /// Disabled if zero (default value).
+    #[serde(default)]
+    pub keep_alive: u16,
+
+    /// Amount of actix web workers to spawn.
+    /// Use if only you know what you are doing.
+    #[serde(default)]
+    pub workers: Option<NonZeroU16>,
+}
+
+impl Default for XepakServerConf {
+    fn default() -> Self {
+        Self {
+            listen: default_listen(),
+            keep_alive: 0,
+            workers: None,
+        }
+    }
 }
 
 impl XepakConf {
@@ -204,8 +224,8 @@ pub fn load_specs_from_dir(dir_path: PathBuf) -> Result<XepakSpecs, XepakError> 
     Ok(result)
 }
 
-fn default_port() -> u16 {
-    8080
+fn default_listen() -> String {
+    "localhost:8080".to_string()
 }
 
 fn default_specs_dir() -> PathBuf {

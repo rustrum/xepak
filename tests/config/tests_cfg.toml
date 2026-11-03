@@ -1,7 +1,7 @@
-port = 4321
-
-server_keep_alive = 5
-server_workers = 1
+[server]
+listen = "localhost:4321"
+keep_alive = 5
+workers = 1
 
 [[storage]]
 type = "sqlite"

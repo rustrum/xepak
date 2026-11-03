@@ -1,13 +1,19 @@
 use std::{io, path::PathBuf, sync::Arc};
 
+use tracing::level_filters::LevelFilter;
 use xepak::{
     XepakError,
     cfg::{XepakConf, load_conf_file, load_specs_from_dir},
     server::init_server,
 };
 
-const ENV_PORT: &str = "XEPAK_PORT";
+/// Port to run application on
+const ENV_LISTEN: &str = "XEPAK_LISTEN";
 
+/// Enables JSON logging if defined with: 1|y|true
+const ENV_LOG_JSON: &str = "XEPAK_LOG_JSON";
+
+/// Path to config file
 const ENV_CONFIG_PATH: &str = "XEPAK_CONFIG";
 
 #[actix_web::main]
@@ -17,16 +23,7 @@ async fn main() -> Result<(), XepakError> {
 
     let args = update_from_env(args);
 
-    let filter = if let Some(log_level) = &args.log {
-        tracing_subscriber::EnvFilter::builder()
-            .with_default_directive(tracing::level_filters::LevelFilter::ERROR.into())
-            .parse(log_level)
-            .map_err(|e| XepakError::Cfg(e.to_string()))?
-    } else {
-        tracing_subscriber::EnvFilter::from_default_env()
-    };
-
-    tracing_subscriber::fmt().with_env_filter(filter).init();
+    init_logger(&args)?;
 
     let Some(file_path) = &args.config_file else {
         return Err(XepakError::Cfg(
@@ -62,37 +59,61 @@ async fn main() -> Result<(), XepakError> {
     Ok(())
 }
 
+fn init_logger(args: &AppArgs) -> Result<(), XepakError> {
+    let filter = if let Some(log_level) = &args.log {
+        tracing_subscriber::EnvFilter::builder()
+            .with_default_directive(tracing::level_filters::LevelFilter::WARN.into())
+            .parse(log_level)
+            .map_err(|e| XepakError::Cfg(e.to_string()))?
+    } else {
+        tracing_subscriber::EnvFilter::builder()
+            .with_default_directive(LevelFilter::INFO.into())
+            .from_env_lossy()
+    };
+
+    if matches!(args.log_json, Some(true)) {
+        tracing_subscriber::fmt()
+            .json()
+            .with_env_filter(filter)
+            .init();
+    } else {
+        tracing_subscriber::fmt().with_env_filter(filter).init();
+    }
+    Ok(())
+}
+
 #[derive(Default)]
 struct AppArgs {
-    port: Option<u16>,
+    listen: Option<String>,
     log: Option<String>,
+    log_json: Option<bool>,
     config_file: Option<String>,
 }
 
 impl AppArgs {
+    /// Overwrites [`XepakConf`] with [`AppArgs`] values.
     fn apply_to_config(&self, mut config: XepakConf) -> XepakConf {
-        if let Some(port) = self.port {
-            config.port = port
+        if let Some(listen) = &self.listen {
+            config.server.listen = listen.clone();
         }
-
         config
     }
 }
 
 fn parse_cli_args() -> io::Result<AppArgs> {
-    let cli = getopt3::new(getopt3::hideBin(std::env::args()), "p:l:");
+    let cli = getopt3::new(getopt3::hideBin(std::env::args()), "jl:");
     match cli {
         Ok(opts) => {
             let mut args: AppArgs = Default::default();
-            if let Some(port_str) = opts.options.get(&'p') {
-                let port_num = port_str
-                    .parse::<u16>()
-                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
-                args.port = Some(port_num);
-            }
 
+            // LOG filter
             if let Some(log_str) = opts.options.get(&'l') {
                 args.log = Some(log_str.clone())
+            }
+
+            // LOG in JSON
+            if opts.has('j') {
+                args.log_json = Some(true);
             }
 
             args.config_file = opts.arguments.first().cloned();
@@ -104,15 +125,20 @@ fn parse_cli_args() -> io::Result<AppArgs> {
 }
 
 fn update_from_env(mut args: AppArgs) -> AppArgs {
-    if args.port.is_none()
-        && let Some(pn) = std::env::var(ENV_PORT).ok().map(|p| p.parse::<u16>())
-    {
-        match pn {
-            Ok(p) => args.port = Some(p),
-            Err(e) => tracing::error!("Can't parse port number: {}", e),
-        }
+    if args.listen.is_none() {
+        args.listen = std::env::var(ENV_LISTEN).ok();
     }
 
+    if args.log_json.is_none() {
+        let env_val = std::env::var(ENV_LOG_JSON)
+            .ok()
+            .unwrap_or_default()
+            .to_lowercase();
+        args.log_json = match env_val.trim() {
+            "1" | "y" | "yes" | "true" | "on" => Some(true),
+            _ => Some(false),
+        };
+    }
     if args.config_file.is_none() {
         args.config_file = std::env::var(ENV_CONFIG_PATH).ok();
     }

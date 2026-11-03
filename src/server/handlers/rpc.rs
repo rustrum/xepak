@@ -22,17 +22,32 @@ use crate::{
 
 pub const JSON_RPC_VERSION: &str = "2.0";
 
+/// JSON-RPC Parse error
+pub const RPC_ERROR_PARSE: isize = -32700;
+
+/// JSON-RPC Invalid Request
 pub const RPC_ERROR_INVALID_REQUEST: isize = -32600;
 
+/// JSON-RPC Method not found
 pub const RPC_ERROR_METHOD_NOT_FOUND: isize = -32601;
 
+/// JSON-RPC Invalid params
 pub const RPC_ERROR_INVALID_PARAMS: isize = -32602;
 
+/// JSON-RPC Internal error
 pub const RPC_ERROR_INTERNAL: isize = -32603;
 
-pub const RPC_ERROR_FORBIDDEN: isize = -32403;
+/// Custom error - access to resource forbidden.
+/// Value is inside custom err range -32000 to -32099.
+pub const RPC_ERROR_FORBIDDEN: isize = -32043;
 
-pub const RPC_ERROR_PARSE: isize = -32700;
+/// Custom error - resource not found (should not appear).
+/// Value is inside custom err range -32000 to -32099.
+pub const RPC_ERROR_NOT_FOUND: isize = -32044;
+
+const PARAMS_KEY: &str = ".rpc_params";
+
+const METHOD_NOT_FOUND: &str = "method not found";
 
 #[derive(Clone)]
 struct RpcMethodHandler {
@@ -143,14 +158,14 @@ impl RpcHandler {
     ) -> Result<XepakValue, XepakError> {
         let Some(specs) = self.specs.methods.get(&request.method) else {
             return Err(XepakError::Input(format!(
-                "method not found: {}",
-                request.method
+                "{}: {}",
+                METHOD_NOT_FOUND, request.method
             )));
         };
         let Some(handler) = self.methods.get(&request.method) else {
             return Err(XepakError::Input(format!(
-                "handler method not found: {}",
-                request.method
+                "handler {}: {}",
+                METHOD_NOT_FOUND, request.method
             )));
         };
 
@@ -187,7 +202,7 @@ impl RpcHandler {
         );
         let body = Bytes::new();
         if let Some(params_value) = params {
-            input.body_args = input.apply_schema_to(".params", params_value, true)?;
+            input.body_args = input.apply_schema_to(".rpc_params", params_value, true)?;
         }
         for p in handler.pre_processors.as_ref() {
             p.handle(req, state, &body, &mut input).await?;
@@ -250,11 +265,17 @@ pub fn rpc_error_response(id: Option<RpcId>, code: isize, message: String) -> Ht
 
 pub fn error_to_rpc_response(id: Option<RpcId>, error: XepakError) -> HttpResponse {
     match error {
-        XepakError::NotFound(msg) => rpc_error_response(id, RPC_ERROR_METHOD_NOT_FOUND, msg),
+        // NotFound error should not appear in RPC context but I still map it
+        // Why? Maybe I should remove it all?
+        XepakError::NotFound(msg) => rpc_error_response(id, RPC_ERROR_NOT_FOUND, msg),
         XepakError::Input(msg) => {
             let msg = msg.to_string();
-            let code = if msg.contains("method not") {
+            // TODO: think about better error mapping in the future
+            // I do not like this substring search a little
+            let code = if msg.contains(METHOD_NOT_FOUND) {
                 RPC_ERROR_METHOD_NOT_FOUND
+            } else if msg.contains(PARAMS_KEY) {
+                RPC_ERROR_INVALID_PARAMS
             } else {
                 RPC_ERROR_INVALID_REQUEST
             };

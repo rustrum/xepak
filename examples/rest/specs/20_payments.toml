@@ -8,7 +8,6 @@
 [[endpoint]]
 uri = "/payments"
 pre_processors = [
-    { type = "ref", id = "require_auth" },
     { type = "ref", id = "attach_auth_user" },
     { type = "ref", id = "validate_payment" },
     { type = "limit_offset", limit_max_value = 50 },
@@ -29,7 +28,7 @@ local q = query_builder("SELECT p.id, p.user_id, u.username AS user, p.amount_ce
 local parts = {}
 
 if not ctx:get_arg("is_manager") then
-    table.insert(parts, "p.user_id = {{auth_user_id}}")
+    table.insert(parts, "p.user_id = {{-auth-id-}}")
 end
 if ctx:has_arg("status") then
     table.insert(parts, "p.status = {{status}}")
@@ -48,7 +47,6 @@ return q:build()
 uri = "/payments/{payment_id:\\d+}"
 single_record_response = true
 pre_processors = [
-    { type = "ref", id = "require_auth" },
     { type = "ref", id = "payment_access_guard" },
 ]
 
@@ -102,7 +100,7 @@ query = """
 INSERT INTO payments (user_id, amount_cents, currency, status, description, created_by)
 VALUES ({{user_id}}, {{amount_cents}}, COALESCE({{currency}}, 'USD'),
         COALESCE({{status}}, 'pending'), COALESCE({{description}}, ''),
-        {{auth_user_id}})
+        {{-auth-id-}})
 RETURNING id, user_id, amount_cents, currency, status, description, created_by, created_at
 """
 
@@ -112,18 +110,16 @@ RETURNING id, user_id, amount_cents, currency, status, description, created_by, 
 [[endpoint]]
 uri = "/payments/summary"
 pre_processors = [
-    { type = "ref", id = "require_auth" },
+    { type = "ref", id = "attach_auth_user" },
 ]
 
 [endpoint.resource]
 type = "data_script"
 script = """
-local auth_id = ctx:get_auth_id()
-local is_manager = ctx:has_auth_role("MANAGER") or ctx:has_auth_role("ADMIN")
-
+local is_manager = ctx:get_arg("is_manager")
 local rows = storage_query(
     "SELECT status, COUNT(*) AS count, COALESCE(SUM(amount_cents), 0) AS total_cents FROM payments WHERE ({{is_manager}} = 1 OR user_id = {{auth_user_id}}) GROUP BY status ORDER BY status",
-    { is_manager = is_manager, auth_user_id = auth_id }
+    { is_manager = is_manager, auth_user_id = ctx:get_auth_id() }
 )
 
 local total = 0
