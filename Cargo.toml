@@ -17,7 +17,7 @@ edition = "2024"
 homepage = "https://github.com/rustrum/xepak"
 repository = "https://github.com/rustrum/xepak.git"
 license-file = "LICENSE-TERMS"
-description = "Declarative server builder for REST, RPC, MCP. SQLite-based, TOML-backed DSL with optional Lua scripting."
+description = "Declarative REST,RPC,MCP server builder. TOML-backed DSL with optional Lua scripting. SQLite-based."
 keywords = ["api", "rest", "db", "mcp", "sql"]
 
 [workspace.dependencies]

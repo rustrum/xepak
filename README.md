@@ -56,6 +56,9 @@ The first MVP is almost here! 🥳 No breaking changes expecting.
 
 Need to polish the documentation and add more usage examples.
 
+Project is following [zer0ver](https://0ver.org/) versioning for now.
+So there are no plans for 1.x.x release at all.
+
 
 ## Project Documentation
 
@@ -119,6 +122,46 @@ Simple but usable authentication and authorization functionality available:
  - complex auth logic could be done by a LUA pre-processor
  - API keys can be provided in TOML file ENV variable or in DB
 
+
+## Install and run Xepak
+
+### Build from sources via cargo
+
+If you have `cargo` installed, run `cargo install xepak`.
+After that you will have `xepak` binary in your `$PATH`.
+
+### Docker image
+
+Docker container avilable as `ghcr.io/rustrum/xepak:latest`.
+In order to run docker container you have to mount scpecification directory into it
+and provide a path to root configuration TOML inside mounted directory.
+
+Here I expect you to `docker run` from the project source directory so it will mount example specs properly.
+
+```sh
+docker run --rm -tp 8080:8080 \
+-v $(pwd)/examples/simple-api:/xepak \
+-e XEPAK_CONFIG=/xepak/xepak.toml \
+ghcr.io/rustrum/xepak:latest
+```
+
+### AUR repository for Arch, Manjaro, Omarchy etc.
+
+Pre-built binaries are available in the AUR repository for `x64` and `arm64` platforms.
+
+```sh
+yay -S xepak
+```
+
+### Homebrew for Mac and Linux
+
+It contains binaries for arm64 Mac and arm64/x64 Linux.
+
+```sh
+brew tap rustrum/releases # add the tap to xepak releases
+brew trust rustrum/releases # you can trust me for sure
+brew install xepak # this will install the binary
+```
 ## License
 
 This product distributed under MIT license BUT only under certain conditions that are listed in the LICENSE-TERMS file.
