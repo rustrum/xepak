@@ -5,6 +5,3 @@ CREATE TABLE notes (
     created_at INTEGER NOT NULL DEFAULT (unixepoch())
 ) STRICT;
 
--- Explicit index so the primary-key lookup index is visible in SQLite.
-CREATE UNIQUE INDEX notes_id_idx ON notes (id);
-

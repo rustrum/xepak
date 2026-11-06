@@ -208,7 +208,8 @@ pub fn to_error_object(err: XepakError) -> (StatusCode, XepakValue) {
             result.insert("code".to_string(), "forbidden".into());
             result.insert("message".to_string(), msg.into());
         }
-        _ => {
+        err => {
+            tracing::warn!("Unknown error {err}");
             result.insert("code".to_string(), "unknown_error".into());
         }
     }

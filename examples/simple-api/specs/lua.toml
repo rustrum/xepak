@@ -1,0 +1,69 @@
+# LUA endpoints are meant for simple load testing
+# The point here is to add additional logic to make request processing slower
+
+[[endpoint]]
+uri = "/lua/data"
+allow_methods = ["POST", "GET"]
+pre_processors = [
+    { type = "parse_body_args" },
+]
+schema.input = { 
+    type = "dict",
+    items = {
+        name = { type = "text" },
+        number = { type = "int" },
+    }
+}
+
+[endpoint.resource]
+type = "data_script"
+script = """
+return {
+    input_name    = ctx:get_arg("name") or "NOT!SET",
+    input_number  = ctx:get_arg("number") or -42
+}
+"""
+
+
+# Adding data into DB via GET request
+# for better compatiblity with load tests tool
+[[endpoint]]
+uri = "/lua/add"
+schema.input = { 
+    type = "dict",
+    items = {
+        title = {
+            type = "text",
+            required = true,
+            validate = {
+                kind = "and",
+                items = [ { kind = "not_null" }, { kind = "range", from = 1, to = 200 } ]
+            }
+        },
+        content = { type = "text", required = true, validate = { kind = "not_null" } },
+    }
+}
+
+[endpoint.resource]
+type = "query_script_lua"
+# Don't do this in prod - just dumb logic to use some CPU cycles
+script = """
+local q = query_builder("INSERT INTO notes (title, content)")
+q:add("VALUES ({{title}}, {{content}})")
+q:add("RETURNING id, title, content, created_at")
+return q:build()
+"""
+
+[[endpoint]]
+uri = "/lua/note/{note_id:\\d+}"
+allow_methods = ["GET"]
+single_record_response = true
+
+[endpoint.resource]
+type = "query_script_lua"
+# Don't do this in prod - just dumb logic to use some CPU cycles
+script = """
+local q = query_builder("SELECT * FROM notes")
+q:add("WHERE id = {{note_id}}")
+return q:build()
+"""

@@ -9,6 +9,10 @@ server := env_var_or_default("SIMPLE_API_SERVER", "http://localhost:8080")
 run:
     cargo run --bin xepak -- ./xepak.toml
 
+# Run server on a particular CPU core using `taskset`
+run_on_core core="0":
+   taskset -c {{core}}  cargo run --bin xepak -- -l warn ./xepak.toml
+
 # Remove the local example database.
 clean:
     #!/usr/bin/env sh
@@ -45,3 +49,28 @@ search_notes query limit="50" offset="0":
 # Delete a note by id.
 delete_note id:
     @curl -sS -X DELETE "{{server}}/note/delete/{{id}}" | jq
+
+# Truncate WAL
+wal_truncate:
+    @curl -sS "{{server}}/wal/truncate" | jq
+
+# Run load tests for LUA data endpoint
+load_test_ldata request_total="10000":
+    oha -n {{request_total}} -c 25 --urls-from-file ./oha/lua-data.txt
+
+# Run load tests for LUA add endpoint
+load_test_ladd request_total="10000":
+    oha -n {{request_total}} -c 25 --urls-from-file ./oha/lua-add.txt
+
+# Run load tests for LUA get note endpoint (require at least 1000 DB records)
+load_test_lget request_total="10000":
+    oha -n {{request_total}} -c 25 --urls-from-file ./oha/lua-note.txt
+
+# Run load tests for add endpoint
+load_test_add request_total="10000":
+    oha -n {{request_total}} -c 25 --urls-from-file ./oha/note-add.txt
+
+# Run load tests for simple get endpoint (require at least 1000 DB records)
+load_test_get request_total="10000":
+    oha -n {{request_total}} -c 25 --urls-from-file ./oha/note-get.txt
+

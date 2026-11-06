@@ -1,0 +1,12 @@
+http://localhost:8080/lua/data?name=john+smith&number=33
+http://localhost:8080/lua/data?name=jane+doe&number=7
+http://localhost:8080/lua/data?name=alice+smith&number=101
+http://localhost:8080/lua/data?name=bob+jones&number=42
+http://localhost:8080/lua/data?name=maria+garcia&number=18
+http://localhost:8080/lua/data?name=li+wei&number=999
+http://localhost:8080/lua/data?name=ahmed+ali&number=5
+http://localhost:8080/lua/data?name=sarah+connor&number=2024
+http://localhost:8080/lua/data?name=peter+pan&number=12
+http://localhost:8080/lua/data?name=emma+watson&number=88
+http://localhost:8080/lua/data?name=carlos+santana&number=3
+http://localhost:8080/lua/data?name=yuki+tanaka&number=456

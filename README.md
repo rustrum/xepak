@@ -25,6 +25,14 @@ Xepak is a DSL configurable REST,JSON-RPC,MCP service that runs against SQL DB. 
 **Why focus on SQLite?** Because it is amazing and extremely fast DB.
 Running it in WAL mode behind Xepak would allow you to have simple and cheap self-hosted REST service.
 
+Project is following [zer0ver](https://0ver.org/) versioning for now.
+So there are no plans for 1.x.x release at all.
+
+## Project status
+
+The first MVP is here! 🥳
+Project is stable and ready for the first users.
+
 ## How can I use it now?
 
 Given its current SQLite support, Xepak is ideal for:
@@ -49,18 +57,7 @@ See Xepak examples:
 - Declarative and Code-Free: standard CRUD requires zero backend code or routing boilerplate.
 - Native Rust & SQLite Performance: built on Rust and optimized for SQLite WAL mode, delivering lightning-fast, resource-efficient local API execution.
 
-
-## Current project status
-
-The first MVP is almost here! 🥳 No breaking changes expecting.
-
-Need to polish the documentation and add more usage examples.
-
-Project is following [zer0ver](https://0ver.org/) versioning for now.
-So there are no plans for 1.x.x release at all.
-
-
-## Project Documentation
+## Documentation
 
 ### 📕 For human beings
 
@@ -162,6 +159,20 @@ brew tap rustrum/releases # add the tap to xepak releases
 brew trust rustrum/releases # you can trust me for sure
 brew install xepak # this will install the binary
 ```
+
+## Performance
+
+I haven't run proper performance tests but you can look into [simple API example](./examples/simple-api/)
+which does provide simple tests scenarios for text queries and the same stuff wrapped in LUA scripts.
+
+On a single core you can expect something like 300-400 select/insert queries/sec.
+Two-four cores could boost performance to 1000-2000 qps.
+
+LUA script makes things slower but not so much.
+The main bottleneck here is SQLite.
+Data roundtrip via LUA script without touching DB is much faster than running raw SQL queries.
+
+
 ## License
 
 This product distributed under MIT license BUT only under certain conditions that are listed in the LICENSE-TERMS file.

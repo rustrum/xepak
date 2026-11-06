@@ -1,6 +1,8 @@
 [[endpoint]]
 uri = "/note/add"
-allow_methods = ["POST"]
+# GET option was added for load tests only
+# So basically you can add record using query string arguments too
+allow_methods = ["POST", "GET"]
 single_record_response = true
 pre_processors = [
     { type = "parse_body_args" },
@@ -64,7 +66,6 @@ resource = {
     query = "SELECT * FROM notes ORDER BY id LIMIT {{-limit-}} OFFSET {{-offset-}}"
 }
 
-
 # Search notes by keyword in title or content
 [[endpoint]]
 uri = "/note/search"
@@ -95,3 +96,11 @@ WHERE title LIKE '%' || {{query}} || '%' OR content LIKE '%' || {{query}} || '%'
 ORDER BY id LIMIT {{-limit-}} OFFSET {{-offset-}}
 """
 
+# Run WAL truncate
+[[endpoint]]
+uri = "/wal/truncate"
+single_record_response = true
+resource = {
+    type = "query",
+    query = "PRAGMA wal_checkpoint(TRUNCATE)"
+}

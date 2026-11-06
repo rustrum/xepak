@@ -74,3 +74,8 @@ curl -sS --get http://localhost:8080/note/search \
 curl -sS -X DELETE http://localhost:8080/note/delete/1
 ```
 
+## Simple load tests
+
+`justfile` includes several simple scenarios for a load tests against current configuration.
+You must install [Ohayou](https://github.com/hatoo/oha) to run these benchmarks.
+

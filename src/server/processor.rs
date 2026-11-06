@@ -200,6 +200,7 @@ impl PreProcessorHandler for QueryArgsProcessor {
             return Ok(());
         }
         let qstring = req.uri().query().unwrap_or_default();
+        tracing::trace!("Query string: {qstring}");
         let query_args =
             if let Ok(qa) = serde_urlencoded::from_str::<IndexMap<String, XepakValue>>(qstring) {
                 qa
@@ -208,6 +209,7 @@ impl PreProcessorHandler for QueryArgsProcessor {
                 Default::default()
             };
 
+        tracing::trace!("Query args: {query_args:?}");
         let qa_value = XepakValue::from(query_args);
 
         input.get_args = input.apply_schema_to("GET", qa_value, true)?;

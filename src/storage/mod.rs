@@ -57,10 +57,13 @@ pub async fn init_storage_connectors(
 
                     let options = SqliteConnectOptions::new()
                         .filename(db_file)
+                        .pragma("cache_size", "-100000")
                         .create_if_missing(*create_db);
 
                     let options = if *wal {
-                        options.journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
+                        options
+                            .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
+                            .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
                     } else {
                         options
                     };
