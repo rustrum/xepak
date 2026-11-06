@@ -38,7 +38,7 @@ jobs:
 
           # macOS ARM64 (Apple Silicon)
           - target: aarch64-apple-darwin
-            runner: macos-14
+            runner: macos-15
             # macOS does not support static CRT linking
             rustflags: ''
             apt_packages: ''
