@@ -1,6 +1,6 @@
 # Xepak — AI Agent Reference
 
-**Version:** 0.0.10-rc | **Commit:** 338d32f
+**Version:** 0.1.0 | **Commit:** 02c9781
 
 ---
 
@@ -106,7 +106,7 @@ rules = "#boss OR (ADMIN AND MANAGER)"
 ```
 
 Endpoint fields: `uri` (required), `resource` (required), `allow_methods`, `strict_schema` (default `false`), `single_record_response` (default `false`), `pre_processors`, `pre_processors_ignore_default` (default `false`), `schema.input`, `schema.output`.
-Duplicate `uri` across `[[endpoint]]`/`[[rpc]]` logs a warning (last registration effectively wins). A shared pre-processor of type `ref` is a config error.
+Duplicate `uri` across `[[endpoint]]`/`[[rpc]]` only logs a warning (one definition wins, merge order is unspecified) — keep URIs unique. A shared pre-processor of type `ref` is a config error.
 
 ### How request input becomes query args
 
@@ -141,8 +141,8 @@ REST only returns objects/arrays: a `data_script` returning a scalar/text → `5
 
 - Default pre-processors run first (in order), then endpoint pre-processors (in order); all are stably ordered by position.
 - `parse_body_args` runs only for POST/PUT/PATCH; an empty body leaves args untouched. `null_if_absent` sets missing keys to `null`.
-- `config_authentication`: no key + `anonymous_auth = true` → authenticated as id `""` with the roles of the registry entry whose key is `""`. No key + `anonymous_auth = false` → `403 Authentication failed! API key is not provided.` Unknown key → `403 Authentication failed.`
-- `storage_authentication`: must find a custom header/token key; absent → `403 No API key`. The query runs with arg `{{api-key}}` and must return one row with columns `id` (text) and `roles` (comma-separated text, trimmed and uppercased). No row → `403 Wrong API key or something`. `cache_ttl_sec > 0` caches the result per key.
+- `config_authentication`: no key + `anonymous_auth = true` → authenticated as id `""` with the roles of the registry entry whose key is `""`. No key + `anonymous_auth = false` → `403 Authentication failed! API key is not provided.` Unknown key → `403 Authentication failed!`.
+- `storage_authentication`: must find a custom header/token key; absent → `403 No API key`. The query runs with arg `{{api-key}}` and must return one row with columns `id` (text) and `roles` (comma-separated text, trimmed and uppercased). No row → `403 Wrong API key or something`. Results are always cached per key; `cache_ttl_sec` sets the TTL (default `0` → 60 s).
 - `limit_offset`: reads `limit`/`offset` args, clamps `limit` to `limit_max_value` (absent/unparseable → `limit_max_value`), absent/unparseable `offset` → `0`, then sets `-limit-`/`-offset-`. Setting `limit_arg_name = ""` (or `offset_arg_name = ""`) disables that arg entirely.
 - `authorize` must run after an authentication pre-processor: not authenticated → `403 Not authenticated`; empty `rules` → authenticated-only; failed match → `403 Not authorized to perform request! Auth id: <id>`.
 
@@ -164,7 +164,7 @@ Only one operator type per group; mix via nesting: `admin OR (manager AND (billi
 
 ### Schema validation
 
-`schema.input` and `schema.output` share one structure. Root must be `dict` or `tuple`. An omitted schema means "no conversion, no validation".
+`schema.input` and `schema.output` share one structure. The root schema is normally a `dict` (named args) or `tuple` (positional args). An omitted schema means "no conversion, no validation".
 
 ```toml
 [endpoint.schema.input]
@@ -267,8 +267,8 @@ resource = { type = "query", query = "SELECT * FROM posts WHERE id = {{0}}" }
 
 | Error code | Meaning |
 |-----------|---------|
-| `-32700` | Parse error (invalid JSON, unknown envelope field, non-object body) |
-| `-32600` | Invalid request (bad `jsonrpc` version, non-POST method, unknown method, input error not matching other codes) |
+| `-32700` | Parse error (invalid JSON, missing or unknown envelope fields) |
+| `-32600` | Invalid request (non-object body, bad `jsonrpc` version, non-POST method, other input errors) |
 | `-32601` | Method not found |
 | `-32602` | Invalid params (input schema rejected `params`) |
 | `-32603` | Internal error (`internal_error`, `unknown_error`) |
@@ -284,8 +284,8 @@ URI path params in `uri` (e.g. `/mcp/rag/{project_name}`) are captured and expos
 ```toml
 [[mcp]]
 uri = "/mcp"
-name = "Posts server"                 # required; serverInfo.name
-instructions = "Access to posts data" # required; returned by initialize
+name = "Posts server"                 # required; server display name
+instructions = "Access to posts data" # required; server instructions text
 server_version = "1.0.0"              # optional
 empty_response_text = "No data found" # optional; default "Empty! No data available for your request."
 
@@ -300,25 +300,13 @@ schema.input = { type = "dict", items = {
 resource = { type = "query", query = "SELECT * FROM posts ORDER BY id LIMIT {{limit}} OFFSET {{offset}}" }
 ```
 
-- Methods: `initialize` (returns `protocolVersion: "2024-11-05"`, `instructions`, `serverInfo{name,version}`, `capabilities.tools.listChanged: false`), `notifications/initialized` (returns `null`), `ping` (returns `{}`), `tools/list`, `tools/call`.
-- `tools/list` item: `name`, `title` (omitted when empty), `description`, `inputSchema` (JSON-Schema built from `schema.input`), `annotations` mapped to `readOnlyHint`/`destructiveHint`/`idempotentHint`/`openWorldHint` (only set flags emitted).
-- `inputSchema` mapping: `dict`→`object`+`properties`+`required`, `tuple`→`array`+`items`, `text`→`string`, `int`→`integer`, `float`→`number`, `boolean`→`boolean`, `blob`→`object`; `range`/`range_float`→`minimum`/`maximum`.
-- `tools/call` requires `params = { name, arguments }`; `arguments` may be an object or array and is validated against the tool input schema (always strict). Missing `params`/`name` → JSON-RPC error.
-- Tool execution errors (validation, auth, SQL) are returned as a **successful** JSON-RPC result with `isError: true` and one `text` element containing the error message.
-- Successful result: `{ "isError": false, "content": [ { "type": "text", "text": "<markdown>" } ] }` — always exactly one text element:
-  - array result → heading `# Result details`, then `total-records-fetched: N`, optional `with-offset: N`, `with-limit: N` and a note when `N == limit`, then a `# Record <i>` section per row with `column: value` lines (blob → `BASE64: ...`, multi-line values use YAML-like `|` blocks).
-  - object/scalar result → the JSON text (plain strings are passed as-is).
-  - empty result → `empty_response_text`.
+- Xepak provides core MCP methods according to MCP specification.
+- Toll response are shaped to be AI friendly and are meant to consume only by MCP clients.
 
 ```jsonc
-// request (POST /mcp)
+// POST /mcp
 { "jsonrpc": "2.0", "id": 1, "method": "tools/call",
   "params": { "name": "list_posts", "arguments": { "limit": 2, "offset": 0 } } }
-
-// result  (HTTP 200)
-{ "jsonrpc": "2.0", "id": 1, "result": { "isError": false, "content": [
-  { "type": "text", "text":
-    "# Result details\ntotal-records-fetched: 2\nwith-offset: 0\nwith-limit: 2\nnote: Records count equals to limit. More data could be available to retreive.\n\n# Record 1\nid: 1\ntitle: First post\n\n# Record 2\nid: 2\ntitle: Second post\n" } ] } }
 ```
 
 ---
@@ -376,7 +364,7 @@ storage_query_value("SELECT COUNT(*) FROM users", {})               -- first col
 
 ```lua
 app:cache_get("key")                 -- value or nil
-app:cache_set("key", "value")        -- default TTL (5 min), cache holds 10k keys
+app:cache_set("key", "value")        -- TTL 60 s (default), cache holds 10k keys
 app:get_registry_value("my_config")  -- custom registry value or nil
 app:get_secret("secret1")            -- secret string or nil
 ```
@@ -575,8 +563,8 @@ script = "return { id = ctx:get_auth_id(), roles = ctx:get_auth_roles() }"
 | `not_found` | 404 | No record with `single_record_response`, Lua `error_not_found()`, or `null` REST result |
 | `bad_request` | 400 | Input/schema validation, method not allowed, missing SQL arg, Lua `error_input()` |
 | `forbidden` | 403 | Auth/authorization failure, Lua `error_forbidden()` |
-| `internal_error` | 500 | Server/storage/serialization error, Lua `error_server()` |
-| `unknown_error` | 520 | Unhandled error; **no `message` field** (includes plain Lua `error()` and non-object/array REST results) |
+| `internal_error` | 500 | Server-side decode/conversion error, Lua `error_server()`, response serialization failure (plain-text body) |
+| `unknown_error` | 520 | Unhandled error; **no `message` field** (includes storage/SQL failures, plain Lua `error()`, and non-object/array REST results) |
 
 JSON-RPC and MCP use JSON-RPC error envelopes (see [JSON-RPC endpoints](#json-rpc-endpoints-rpc) / [MCP servers](#mcp-servers-mcp)).
 

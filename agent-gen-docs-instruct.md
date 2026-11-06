@@ -63,6 +63,7 @@ I will validate that updated `README-AI.md`:
 - contains no new errors
 - stays user-perspective (no architecture, no internal type/value model)
 - is compressed (no duplicated info, token-efficient)
+- does not describe the standard MCP wire format (method results, response schemas, protocol versions)
 
 ## Fix errors in `README-DOCS.md` (human-oriented docs)
 
@@ -80,6 +81,7 @@ Docs header must contain project version from `Cargo.toml` and latest git commit
 
 - **Self-contained.** No external links, no "see other docs". Everything an agent needs to write valid config and interpret responses lives here.
 - **No internals.** Omit architecture, design rationale, and implementation details.
+- **Skip MCP wire format.** MCP is an external standard: never describe its standard method results, response schemas, `inputSchema` mapping, content blocks, or protocol versions. Document only Xepak-specific MCP configuration, routing, and deviations.
 - **Dense, not terse.** Prefer tables, schemas, and bullets over prose. Cut filler, but never cut an example or constraint to save tokens.
 - **Examples generalize, don't copy.** Provide the minimal composable set: one happy path, one edge case, one error response. Each shows explicit input -> output.
 - **Be explicit.** State types, formats, defaults, allowed values, and error codes. No hedging.

@@ -177,7 +177,7 @@ Resource will produce data output based on computed input with user input.
 
 The basic resource type is `query`.
 It is just an SQL string with named arguments in it.
-Argument names match the ones from URI path, query string, or keys from object sent in POST/PUT payload.
+Argument names match the ones from URI path, query string, or keys from object sent in POST/PUT/PATCH payload.
 
 ```toml
 [[endpoint]]
@@ -463,7 +463,7 @@ Additional information:
 
 - Each tool requires `title` and `description`.
 - `annotations` property could have next (optional) flags: `read_only`, `destructive`, `idempotent`, `open_world`
-- `empty_response_text` (optional) is a text returned when a tool produces an empty result; a built-in message is used if not set
+- `empty_response_text` (optional, server-level) is a text returned when a tool produces an empty result; a built-in message is used if not set
 - `tools/call` `arguments` may be an object or a positional array; the tool input schema is applied to the value.
 - the server reports MCP protocol version `2024-11-05` in the `initialize` response
 - tool response is a single content element of type `text` in LLM friendly format.
@@ -482,7 +482,7 @@ For example, blob is raw bytes in CBOR instead of a base64-encoded string in JSO
 
 ### Error responses
 
-REST error responses always have this structure:
+REST error responses use this structure:
 
 ```json
 {
@@ -496,8 +496,10 @@ REST error responses always have this structure:
 | `not_found` | 404 | Record not found, or Lua `error_not_found()` |
 | `bad_request` | 400 | Input validation failure, schema errors, request method not in `allow_methods`, missing SQL argument, Lua `error_input()` |
 | `forbidden` | 403 | Auth/authorization failures, Lua `error_forbidden()` |
-| `internal_error` | 500 | Server errors, Lua `error_server()` |
-| `unknown_error` | 520 | Unhandled exceptions; the response has **no `message` field** (includes plain Lua `error()` and non-object/array REST results) |
+| `internal_error` | 500 | Server-side decode/conversion errors, Lua `error_server()`, response serialization failure (plain-text body) |
+| `unknown_error` | 520 | Unhandled exceptions; the response has **no `message` field** (includes storage/SQL failures, plain Lua `error()` and non-object/array REST results) |
+
+`unknown_error` omits `message`; a response-serialization failure returns plain text with HTTP 500.
 
 JSON-RPC and MCP error responses follow their respective protocol standards.
 
@@ -698,7 +700,7 @@ local bytes = b:as_bytes()
 ### Error handling
 
 Some additional functionality exposed to Lua could fail/panic during execution.
-By default it would lead to exiting Lua script and failing with 5xx HTTP error.
+By default it would lead to exiting Lua script and failing the request (HTTP 520 for REST; a JSON-RPC error for RPC/MCP).
 
 To handle such errors in Lua you must use `xpcall`.
 
@@ -777,7 +779,7 @@ The input schema (conversion + validation) is applied as arguments are parsed, b
 The output schema, if set, is applied last — after the resource has produced its data.
 
 Supported schema types are: `text`, `boolean`, `int`, `float`, `blob`, `tuple`, `dict`.
-Each element can be marked as a `required` and have one or more validators.
+Each element can be marked as `required` and carry a `validate` rule (single validator, combinable via `and` / `or`).
 Elements of type `dict` and `tuple` support nested elements in `items` property.
 
 Schema definition is hierarchical and can be applied to any type of input.
