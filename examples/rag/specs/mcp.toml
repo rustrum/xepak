@@ -105,8 +105,8 @@ items = {
 type = "query_script_lua"
 script = """
 local q = query_builder("SELECT id, title, content, created_at FROM notes")
-q:add("WHERE project_name = {{project_name}}")
-q:add("ORDER BY created_at DESC LIMIT {{-limit-}} OFFSET {{-offset-}}")
+q:append("WHERE project_name = {{project_name}}")
+q:append("ORDER BY created_at DESC LIMIT {{-limit-}} OFFSET {{-offset-}}")
 return q:build()
 """
 
@@ -218,9 +218,9 @@ local where_parts = {"project_name = {{project_name}}"}
 if ctx:has_arg("status") then
     table.insert(where_parts, "status = {{status}}")
 end
-q:add_joined_parts("WHERE", where_parts, "AND", "")
+q:append_combined_parts("WHERE", where_parts, "AND", "")
 
-q:add("ORDER BY updated_at DESC LIMIT {{-limit-}} OFFSET {{-offset-}}")
+q:append("ORDER BY updated_at DESC LIMIT {{-limit-}} OFFSET {{-offset-}}")
 return q:build()
 """
 
@@ -275,9 +275,9 @@ items = {
 type = "query_script_lua"
 script = """
 local q = query_builder("SELECT n.id, n.title, snippet(notes_fts, -1, '<mark>', '</mark>', '...', 64) as snippet, rank")
-q:add("FROM notes_fts JOIN notes n ON n.id = notes_fts.rowid")
-q:add("WHERE notes_fts.project_name = {{project_name}} AND notes_fts MATCH {{query}}")
-q:add("ORDER BY rank LIMIT {{-limit-}} OFFSET {{-offset-}}")
+q:append("FROM notes_fts JOIN notes n ON n.id = notes_fts.rowid")
+q:append("WHERE notes_fts.project_name = {{project_name}} AND notes_fts MATCH {{query}}")
+q:append("ORDER BY rank LIMIT {{-limit-}} OFFSET {{-offset-}}")
 return q:build()
 """
 
@@ -307,8 +307,8 @@ items = {
 type = "query_script_lua"
 script = """
 local q = query_builder("SELECT a.id, a.milestone, snippet(actions_fts, -1, '<mark>', '</mark>', '...', 64) as snippet, rank")
-q:add("FROM actions_fts JOIN actions a ON a.id = actions_fts.rowid")
-q:add("WHERE actions_fts.project_name = {{project_name}} AND actions_fts MATCH {{query}}")
-q:add("ORDER BY rank LIMIT {{-limit-}} OFFSET {{-offset-}}")
+q:append("FROM actions_fts JOIN actions a ON a.id = actions_fts.rowid")
+q:append("WHERE actions_fts.project_name = {{project_name}} AND actions_fts MATCH {{query}}")
+q:append("ORDER BY rank LIMIT {{-limit-}} OFFSET {{-offset-}}")
 return q:build()
 """

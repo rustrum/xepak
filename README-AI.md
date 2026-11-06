@@ -344,14 +344,14 @@ Lua values map to/from the internal model as: `nil`→null, boolean, number (int
 
 ### Query builder
 
-Parts are joined in call order with single spaces, so add `WHERE` **before** `LIMIT`. The base string must not already contain a `WHERE`. `add_joined_parts` is a no-op when its parts table is empty.
+Parts are joined in call order with single spaces, so add `WHERE` **before** `LIMIT`. The base string must not already contain a `WHERE`. `append_combined_parts` is a no-op when its parts table is empty.
 
 ```lua
 local q = query_builder("SELECT * FROM posts")
 local parts = {}
 if ctx:has_arg("author") then table.insert(parts, "username = {{author}}") end
-q:add_joined_parts("WHERE", parts, "AND", "")   -- (prefix, parts, separator, suffix)
-q:add("LIMIT {{-limit-}} OFFSET {{-offset-}}")
+q:append_combined_parts("WHERE", parts, "AND", "")   -- (prefix, parts, separator, suffix)
+q:append("LIMIT {{-limit-}} OFFSET {{-offset-}}")
 return q:build()
 ```
 
@@ -462,9 +462,9 @@ local q = query_builder("SELECT * FROM posts")
 if ctx:has_arg("author") then
     local a = ctx:get_arg("author")
     if #a < 3 then error_input("author must be at least 3 characters") end
-    q:add_joined_parts("WHERE", {"username = {{author}}"}, "AND", "")
+    q:append_combined_parts("WHERE", {"username = {{author}}"}, "AND", "")
 end
-q:add("LIMIT {{-limit-}} OFFSET {{-offset-}}")
+q:append("LIMIT {{-limit-}} OFFSET {{-offset-}}")
 return q:build()
 """
 ```

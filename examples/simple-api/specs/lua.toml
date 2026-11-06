@@ -49,8 +49,8 @@ type = "query_script_lua"
 # Don't do this in prod - just dumb logic to use some CPU cycles
 script = """
 local q = query_builder("INSERT INTO notes (title, content)")
-q:add("VALUES ({{title}}, {{content}})")
-q:add("RETURNING id, title, content, created_at")
+q:append("VALUES ({{title}}, {{content}})")
+q:append("RETURNING id, title, content, created_at")
 return q:build()
 """
 
@@ -64,6 +64,6 @@ type = "query_script_lua"
 # Don't do this in prod - just dumb logic to use some CPU cycles
 script = """
 local q = query_builder("SELECT * FROM notes")
-q:add("WHERE id = {{note_id}}")
+q:append("WHERE id = {{note_id}}")
 return q:build()
 """

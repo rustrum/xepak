@@ -251,12 +251,12 @@ impl LuaQueryBuilder {
         })
     }
 
-    fn add(_: &Lua, this: &mut Self, part: String) -> mlua::Result<()> {
+    fn append(_: &Lua, this: &mut Self, part: String) -> mlua::Result<()> {
         this.query.push(part);
         Ok(())
     }
 
-    fn add_joined_parts(
+    fn append_combined_parts(
         _: &Lua,
         this: &mut Self,
         (prefix, parts_table, separator, suffix): (String, Table, String, String),
@@ -288,8 +288,8 @@ impl LuaQueryBuilder {
 
 impl UserData for LuaQueryBuilder {
     fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method_mut("add", Self::add);
-        methods.add_method_mut("add_joined_parts", Self::add_joined_parts);
+        methods.add_method_mut("append", Self::append);
+        methods.add_method_mut("append_combined_parts", Self::append_combined_parts);
         methods.add_method("build", Self::build);
     }
 }

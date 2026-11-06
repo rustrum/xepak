@@ -1,5 +1,5 @@
 <p align="center" width="100%" style="text-align:center">
-<img src="./xepak.svg" alt="Xepak REST,RPC,MCP bulder for your DB" width="60%"/>
+<img src="./xepak.svg" alt="Xepak REST,RPC,MCP builder for your DB" width="60%"/>
 </p>
 
 <p align="center" width="100%" style="text-align:center">
@@ -15,7 +15,7 @@
 
 ## TL;DR
 
-Imagine PostgREST but instead of Haskell with PL/SQL it is based on Rust with LUA and focused on Sqlite (and other DBs).
+Imagine PostgREST but instead of Haskell with PL/SQL it is based on Rust with Lua and focused on Sqlite (and other DBs).
 
 
 ## Summary
@@ -37,7 +37,7 @@ Project is stable and ready for the first users.
 
 Given its current SQLite support, Xepak is ideal for:
 
-- 👨🏻‍💻 **rapid prototyping:** quickly buid a stateful API without writing backend boilerplate
+- 👨🏻‍💻 **rapid prototyping:** quickly build a stateful API without writing backend boilerplate
 - 🌐 **self-hosted services:** running on your own hardware or VMs with zero cloud dependency, ensuring you retain full ownership of your data
 - 📟 **edge computing and IoT:** deploying a lightweight, high-performance API on a Raspberry Pi or other embedded devices
 - 💻 **local-first applications:** serving as a sync layer or API for desktop applications that store data locally
@@ -47,7 +47,7 @@ See Xepak examples:
 
 - [Simple example](./examples/simple-api/README.md) with basic functionality
 - [REST API server](./examples/rest/README.md) with authentication and authorization
-- [RPC service](./examples/rpc/README.md) with fine grained access conrol
+- [RPC service](./examples/rpc/README.md) with fine grained access control
 - [MCP/RAG service](./examples/rag/README.md) with full text search
 
 
@@ -63,7 +63,7 @@ See Xepak examples:
 
 Available in the [README-DOCS](./README-DOCS.md).
 
-### 🤖 AI fiendly docs
+### 🤖 AI friendly docs
 
 If you are identifying yourself as an AI/LLM agent
 or you think that you are a human who want to make AI agent to use Xepak efficiently
@@ -88,22 +88,22 @@ All configuration is just a set of TOML files.
 I'm doing my best to have the most simple DSL syntax if possible.
 
 Basic endpoint response is a data returned from an SQL query.
-Query could be defined as a sting or as script that builds query as an output.
+Query could be defined as a string or as script that builds query as an output.
 
-### LUA scripting
+### Lua scripting
 
-The main goal for using LUA is to forget about clunky Pl/SQL.
-I hope that LUA will be much easier to write and maintain.
+The main goal for using Lua is to forget about clunky Pl/SQL.
+I hope that Lua will be much easier to write and maintain.
 
-With LUA you can:
+With Lua you can:
   - rate-limit DB updates using recorded timestamps
   - filter out results based on user configuration from DB
   - validate input data before executing INSERT
   - do fancy access control
-  - output arbitrary LUA table in JSON/CBOR format
+  - output arbitrary Lua table in JSON/CBOR format
   - and many more
 
-Also I have something in my mind for the future where LUA could do very fancy things.
+Also I have something in my mind for the future where Lua could do very fancy things.
 
 ### JSON + CBOR
 
@@ -116,7 +116,7 @@ Simple but usable authentication and authorization functionality available:
 
  - authenticate by API key in headers
  - you can use authorization expressions based on role/id
- - complex auth logic could be done by a LUA pre-processor
+ - complex auth logic could be done by a Lua pre-processor
  - API keys can be provided in TOML file ENV variable or in DB
 
 
@@ -129,8 +129,8 @@ After that you will have `xepak` binary in your `$PATH`.
 
 ### Docker image
 
-Docker container avilable as `ghcr.io/rustrum/xepak:latest`.
-In order to run docker container you have to mount scpecification directory into it
+Docker container available as `ghcr.io/rustrum/xepak:latest`.
+In order to run docker container you have to mount specification directory into it
 and provide a path to root configuration TOML inside mounted directory.
 
 Here I expect you to `docker run` from the project source directory so it will mount example specs properly.
@@ -163,14 +163,14 @@ brew install xepak # this will install the binary
 ## Performance
 
 I haven't run proper performance tests but you can look into [simple API example](./examples/simple-api/)
-which does provide simple tests scenarios for text queries and the same stuff wrapped in LUA scripts.
+which does provide simple tests scenarios for text queries and the same stuff wrapped in Lua scripts.
 
-On a single core you can expect something like 300-400 select/insert queries/sec.
-Two-four cores could boost performance to 1000-2000 qps.
+On a single core you can expect something like 300-400 select/insert req/sec.
+Two-four cores could boost performance to 1000-2000 req/sec.
 
-LUA script makes things slower but not so much.
+Lua script makes things slower but not so much.
 The main bottleneck here is SQLite.
-Data roundtrip via LUA script without touching DB is much faster than running raw SQL queries.
+Data roundtrip via Lua script without touching DB is much faster than running raw SQL queries.
 
 
 ## License

@@ -34,8 +34,8 @@ if ctx:has_arg("status") then
     table.insert(parts, "p.status = {{status}}")
 end
 
-q:add_joined_parts("WHERE", parts, "AND", "")
-q:add("ORDER BY p.created_at DESC, p.id DESC LIMIT {{-limit-}} OFFSET {{-offset-}}")
+q:append_combined_parts("WHERE", parts, "AND", "")
+q:append("ORDER BY p.created_at DESC, p.id DESC LIMIT {{-limit-}} OFFSET {{-offset-}}")
 return q:build()
 """
 

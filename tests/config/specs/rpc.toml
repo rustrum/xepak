@@ -66,8 +66,8 @@ for _, field in ipairs(fields_display) do
     end
 end
 
-query:add_joined_parts("", parts, ",", "");
-query:add("FROM posts WHERE id = {{0}}");
+query:append_combined_parts("", parts, ",", "");
+query:append("FROM posts WHERE id = {{0}}");
 
 return query:build();
 """

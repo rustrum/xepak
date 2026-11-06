@@ -26,7 +26,7 @@ pre_processors = [
 type = "query_script_lua"
 script = """
 local query = query_builder("SELECT * FROM alltypes");
-query:add("LIMIT {{-limit-}} OFFSET {{-offset-}}");
+query:append("LIMIT {{-limit-}} OFFSET {{-offset-}}");
 return query:build();
 """
 

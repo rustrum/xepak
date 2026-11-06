@@ -34,8 +34,8 @@ if ctx:get_arg("status") ~= nil then
     table.insert(where_parts, "status = {{status}}")
 end
 
-q:add_joined_parts("WHERE", where_parts, "AND", "")
-q:add("ORDER BY updated_at DESC, id DESC LIMIT {{-limit-}} OFFSET {{-offset-}}")
+q:append_combined_parts("WHERE", where_parts, "AND", "")
+q:append("ORDER BY updated_at DESC, id DESC LIMIT {{-limit-}} OFFSET {{-offset-}}")
 return q:build()
 """ }
 
@@ -170,14 +170,14 @@ query = string.gsub(query, '"', '""')
 ctx:set_arg("query", '"' .. query .. '"')
 
 local q = query_builder("SELECT t.id, t.title, t.body, t.status, t.created_at, t.updated_at")
-q:add("FROM todos_fts JOIN todos t ON t.id = todos_fts.rowid")
+q:append("FROM todos_fts JOIN todos t ON t.id = todos_fts.rowid")
 
 local where_parts = { "todos_fts MATCH {{query}}" }
 if ctx:get_arg("status") ~= nil then
     table.insert(where_parts, "t.status = {{status}}")
 end
 
-q:add_joined_parts("WHERE", where_parts, "AND", "")
-q:add("ORDER BY todos_fts.rank LIMIT {{-limit-}} OFFSET {{-offset-}}")
+q:append_combined_parts("WHERE", where_parts, "AND", "")
+q:append("ORDER BY todos_fts.rank LIMIT {{-limit-}} OFFSET {{-offset-}}")
 return q:build()
 """ }

@@ -34,8 +34,8 @@ if ctx:has_arg("q") then
     table.insert(parts, "p.title LIKE '%' || {{q}} || '%'")
 end
 
-q:add_joined_parts("WHERE", parts, "AND", "")
-q:add("ORDER BY p.created_at DESC, p.id DESC LIMIT {{-limit-}} OFFSET {{-offset-}}")
+q:append_combined_parts("WHERE", parts, "AND", "")
+q:append("ORDER BY p.created_at DESC, p.id DESC LIMIT {{-limit-}} OFFSET {{-offset-}}")
 return q:build()
 """
 
@@ -71,8 +71,8 @@ end
 ctx:set_arg("q", query)
 
 local q = query_builder("SELECT p.id, p.user_id, u.username AS author, p.title, p.content, p.created_at, p.updated_at FROM posts p JOIN users u ON u.id = p.user_id")
-q:add("WHERE p.title LIKE '%' || {{q}} || '%' OR p.content LIKE '%' || {{q}} || '%'")
-q:add("ORDER BY p.created_at DESC, p.id DESC LIMIT {{-limit-}} OFFSET {{-offset-}}")
+q:append("WHERE p.title LIKE '%' || {{q}} || '%' OR p.content LIKE '%' || {{q}} || '%'")
+q:append("ORDER BY p.created_at DESC, p.id DESC LIMIT {{-limit-}} OFFSET {{-offset-}}")
 return q:build()
 """
 

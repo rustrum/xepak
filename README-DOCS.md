@@ -230,10 +230,10 @@ if ctx:has_arg("pass") then
 end
 
 -- cool function that joins parts with prefix WHERE and delimiter OR 
-query:add_joined_parts("WHERE", parts, "OR", "");
+query:append_combined_parts("WHERE", parts, "OR", "");
 
 -- just append new SQL portion to builder
-query:add("LIMIT {{-limit-}} OFFSET {{-offset-}}")
+query:append("LIMIT {{-limit-}} OFFSET {{-offset-}}")
 return query:build()
 """
 ```
@@ -383,7 +383,7 @@ items = {
 type = "query_script_lua"
 script = """
 local q = query_builder("SELECT id, title, content, created_at FROM notes")
-q:add("ORDER BY created_at DESC LIMIT {{-limit-}} OFFSET {{-offset-}}")
+q:append("ORDER BY created_at DESC LIMIT {{-limit-}} OFFSET {{-offset-}}")
 return q:build()
 """
 ```
@@ -585,10 +585,10 @@ end
 -- adding to query string with prefix "WHERE"
 -- where_parts elements joined with separator "OR"
 -- also you can add suffix here too
-query:add_joined_parts("WHERE", where_parts, "OR", "")
+query:append_combined_parts("WHERE", where_parts, "OR", "")
 
 -- now add just a regular static query suffix
-query:add("LIMIT {{-limit-}} OFFSET {{-offset-}}")
+query:append("LIMIT {{-limit-}} OFFSET {{-offset-}}")
 
 -- building final query and returning it from script
 return query:build()
@@ -719,7 +719,7 @@ local success, result = xpcall(
 
 if not success then
     -- success = false means second argument is a value returned from an error handler
-    log_info("LUA HTTP failed " .. result)
+    log_info("Lua HTTP failed " .. result)
 end
 ```
 
@@ -730,7 +730,7 @@ Project is using dynamic type value wrapper `XepakValue`
 which can be Map, Tuple, Integer, Float, Blob, etc.
 
 `XepakValue` transcends all environments and data formats.
-It is used to serialize/deserialize data to JSON/CBOR, represents DB output, TOML configuration records, cached values and variables inside LUA VM.
+It is used to serialize/deserialize data to JSON/CBOR, represents DB output, TOML configuration records, cached values and variables inside Lua VM.
 
 | XepakType | JSON | CBOR | SQLite | Lua |
 |-----------|------|------|--------|-----|
@@ -760,7 +760,7 @@ Compared to JSON, `XepakValue`:
  - align with SQLite type system
  - support binary data (represented as base64 in JSON)
  - has schema and value validators
- - do not loose type in complex data flows: CBOR -> JSON -> SQL -> LUA -> CBOR
+ - do not loose type in complex data flows: CBOR -> JSON -> SQL -> Lua -> CBOR
  - can convert JSON string representation to proper data format
  - ...
  - could have new types later: (date, decimal, etc.)
