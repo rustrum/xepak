@@ -165,8 +165,8 @@ brew install xepak # this will install the binary
 I haven't run proper performance tests but you can look into [simple API example](./examples/simple-api/)
 which does provide simple tests scenarios for text queries and the same stuff wrapped in Lua scripts.
 
-On a single core you can expect something like 300-400 select/insert req/sec.
-Two-four cores could boost performance to 1000-2000 req/sec.
+On a single core you can expect something like 500-900 req/sec.
+Two-four cores could boost performance to 2000-3500 req/sec.
 
 Lua script makes things slower but not so much.
 The main bottleneck here is SQLite.

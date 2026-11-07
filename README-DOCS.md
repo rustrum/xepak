@@ -64,8 +64,8 @@ wal = true                       # enable WAL mode
 ```
 
 **Important Note!** SQL migration files must follow sqlx migrator rules.
-All these scripts must be stored in files with names using the format <VERSION>_<DESCRIPTION>.sql,
-where <VERSION> is a string that can be parsed into i64 and its value is greater than zero, and <DESCRIPTION> is a string.
+All these scripts must be stored in files with names using the format VERSION_DESCRIPTION.sql,
+where VERSION is a string that can be parsed into i64 and its value is greater than zero, and DESCRIPTION is a string.
 
 #### Registry
 
@@ -172,11 +172,10 @@ pre_processors_ignore_default = false
 
 Resource is the core concept to fetch data from DB.
 It works the same for REST, JSON-RPC and MCP.
-Resource will produce data output based on computed input with user input.
-
+Resource will produce data output based on input context.
 
 The basic resource type is `query`.
-It is just an SQL string with named arguments in it.
+It is just an SQL string with named arguments.
 Argument names match the ones from URI path, query string, or keys from object sent in POST/PUT/PATCH payload.
 
 ```toml
