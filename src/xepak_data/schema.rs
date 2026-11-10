@@ -381,7 +381,7 @@ pub fn apply_validator(
             }
             XepakValue::Float(value) => {
                 let v = *value;
-                if v < (*from as f64) || v > (*to as f64) {
+                if v.is_nan() || (v < (*from as f64) || v > (*to as f64)) {
                     return Err(XepakDataError::Validate(format!(
                         "Element \"{key_ref}\" value {v} is not within a range {from}..={to}"
                     )));

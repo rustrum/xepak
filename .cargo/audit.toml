@@ -1,5 +1,9 @@
 [advisories]
 ignore = [
+    #SQLX
+    #`libsqlite3-sys` via C SQLite CVE-2026-119375
+    # require transitive dependency bump
+    "RUSTSEC-2026-0459",
     #Actix
     "RUSTSEC-2025-0009",
     "RUSTSEC-2025-0010",

@@ -1,38 +1,39 @@
+#  My thoughts in general
+
+- Should add more input validators
+- Multiple data sources (this could be a killer feature)
+- Can I map SQL error about invalid input to XepakError::Input ?
+- Think about renaming endpoint "resource"?
+
 # Next things to do
 
-Auth data should be binded into Input context arguments like `-auth-id-` and `-auth-roles-`.
-Not sure about auth roles how to represent them, but auth id must be.
+## Fixes
+
+Bump `sqlx` when it will be ready to fix SQLite related CVE.
+
+## Pre-processors ordering
+
+Pre-processors must have configurable priofity of types (normal, high, low) to make possible for some default pre processors to run after the one that defined in entrypoint
+
+## Configuration
 
 Single record response must be configurable for and empty response: 
 
 - response empty body = true to return just empty body 
 - empty response code = HTTP code - to return custom HTTP code on empty body
 
+## Schema improvements
+
 Must add output schema to RPC (not MCP)
 
 Input schema must apply to query string and partially to URI params.
 
-Figure out can I get rid of multiple priorities for a pre-processors. Add docs to default pre-processors that always added.
+## Scheduled jobs (new feature)
 
-# In General
-
-- Should I rename endpoint "resource"?
-- Should add more input validators
-- Multiple data sources (this could be a killer feature)
-- Can I map SQL error about invalid input to checks to XepakError::Input ?
-- Pre-processors must have configurable priofity of types (normal, high, low) to make possible for some default pre processors to run after the one that defined in entrypoint
-
-## Scheduled jobs
-
-This is important because it would allow to do:
+Would allow to do:
 
 - embeddings indexing for vector search
 - offload long executions that require external services calls
-
-# Blob type updates (later)
-
-Should probably wrap inner value in Arc to prevent cloning big Vec<u8>
-Must think from the perspective of file uploads.
 
 ## File upload/serve functionality (next release)
 
@@ -49,13 +50,18 @@ Must think from the perspective of file uploads.
 
 Idea! Wrap input reader (to do not read all) instead of using blob. 
 
+# Do later
 
-# DB named arg improvements (next release)
+## DB named arg improvements
 
 Add support for nested fields and array indexes like `{{[0].name}}` if top level input is array.
 
+## Blob type updates
 
-# Sqlite Vector support (later)
+Should probably wrap inner value in Arc to prevent cloning big Vec<u8>
+Must think from the perspective of file uploads.
+
+## Sqlite Vector support
 
 It is possible using sqlite-vec but unfortunately it is an experimental
 library and it does not support indexing.
@@ -64,17 +70,17 @@ It is more reasonable to support PostgreSQL first.
 
 # Optimizations
 
-## Request input
+## Request input (postponed)
 
-RequestInput is cloned into Lua so custom arguments now inside Arch<Mutex<Map>>.
-Access to RequestInput should be sequential, read only for most cases.
-So it is not clear should I optimize something here or not.
+RequestInput is cloned into Lua.
+This is why custom arguments are in Arch<Mutex<Map>>.
+Access to request is sequential but I dunno is it worth to optimize something.
 
 I was thinking about using ArcSwap instead but it could be overkill.
-MutexGuard also does not look as a reasonable solution.
+MutexGuard does not look as a reasonable solution too.
 
 
-## CORS processing
+## CORS processing (later)
 
 Not implemented.
 **Do not want to do it right now** 
@@ -91,4 +97,5 @@ This is a standard header. If your API is configured for CORS, the browser will 
 api-key or x-api-key:
 These are considered non-standard custom headers. When a browser sees a custom header, it always triggers a CORS preflight request.
 
-The Trap: If your server-side CORS policy does not explicitly list api-key in its Access-Control-Allow-Headers list, the browser will block the request entirely. 
+The Trap:
+If your server-side CORS policy does not explicitly list **x-api-key** in its Access-Control-Allow-Headers list, the browser will block the request entirely. 
